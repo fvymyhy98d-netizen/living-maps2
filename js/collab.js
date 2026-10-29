@@ -501,13 +501,15 @@ window.LMCollab = (function () {
   }
   function banStateFor(dev) {
     dev = dev || me;
-    let site = false, admin = false, by = '';
+    let site = false, admin = false, manual = false, auto = false, by = '';
+    const now = Date.now();
     banList().forEach(function (en) {
       if (!en || !entryHit(en, dev)) return;
-      if (en.scope === 'site') { site = true; by = en.name || en.by || ''; }
-      if (en.scope === 'admin') { admin = true; by = en.name || en.by || ''; }
+      if (en.auto && en.until && en.until < now) return; /* 自动限时条目过期后自动失效（防把人永久锁死） */
+      if (en.scope === 'site') { site = true; if (!en.auto) { manual = true; by = en.name || en.by || ''; } }
+      if (en.scope === 'admin') { admin = true; if (!en.auto) { manual = true; by = en.name || en.by || ''; } else auto = true; }
     });
-    return { site: site, admin: admin, by: by };
+    return { site: site, admin: admin, manual: manual, auto: auto, by: by };
   }
   function signPayload(entry, s) {
     return window.LMStore.sha256Hex(s + '|lm-ban-v1|' + [entry.id || '', entry.fp || '', entry.scope || '', entry.ts || 0].join('|'));
@@ -603,6 +605,43 @@ window.LMCollab = (function () {
     cb.bans = (Array.isArray(cb.bans) ? cb.bans : []).filter(function (e2) { return !(entryHit(e2, { id: devId, fp: devFp }) && e2.scope === scope); });
     LMApp.commit({ msg: '已解除屏蔽（' + (scope === 'admin' ? '管理员入口' : '网页访问') + '）' });
     setTimeout(enforceBans, 100);
+  }
+  /* ---------- 密码试错自动限时限制（banSelf） ----------
+     与手动 banDevice 的三点不同：① 允许对本机生效（绕过「不能屏蔽本机」守卫——
+     手动通道仍禁止屏蔽本机，防止误操作把自己踢出）；② 签名密钥在登录回调里是异步写入的，
+     这里轮询等待最多 3 秒；③ 条目带 auto:1 + until 过期时间（默认 30 分钟自动失效），
+     且根管理员登录成功时会被自动清除（clearAutoBan）——保证 root 永远不会被锁死在门外 */
+  function banSelf(ms) {
+    if (!window.LMApp || !LMApp.state.admin || !window.LMStore) return Promise.resolve(false);
+    return waitBanKey(30).then(function (s) {
+      if (!s) return false;
+      const entry = { id: me.id, fp: me.fp, scope: 'admin', name: me.name, by: me.name, ts: Date.now(), auto: 1, until: Date.now() + (ms || 1800000), why: '多次密码错误自动限制' };
+      return signPayload(entry, s).then(function (sig) {
+        entry.sig = sig;
+        const cfg = LMApp.state.content.config = LMApp.state.content.config || {};
+        const cb = cfg.collab = cfg.collab || {};
+        cb.bans = Array.isArray(cb.bans) ? cb.bans : [];
+        cb.bans = cb.bans.filter(function (e2) { return !(entryHit(e2, { id: me.id, fp: me.fp }) && e2.scope === 'admin'); });
+        cb.bans.push(entry);
+        LMApp.commit({ msg: '本设备因 1 小时内多次密码错误，被自动限时限制管理员入口 30 分钟（根管理员可提前解禁）' });
+        return true;
+      });
+    }).catch(function () { return false; });
+  }
+  function waitBanKey(tries) { /* 登录回调里密钥是异步写入 sessionStorage 的，轮询等它就绪 */
+    const s = banSecret();
+    if (s) return Promise.resolve(s);
+    if (tries <= 0) return Promise.resolve('');
+    return new Promise(function (res) { setTimeout(function () { res(waitBanKey(tries - 1)); }, 100); });
+  }
+  function clearAutoBan() { /* root 登录成功：清掉本机的自动限时条目（手动屏蔽不受影响） */
+    const cfg = LMApp.state.content && LMApp.state.content.config;
+    const cb = cfg && cfg.collab;
+    if (!cb || !Array.isArray(cb.bans)) return 0;
+    const before = cb.bans.length;
+    cb.bans = cb.bans.filter(function (e2) { return !(e2 && e2.auto && entryHit(e2, { id: me.id, fp: me.fp })); });
+    if (cb.bans.length !== before) LMApp.commit({ msg: '根管理员登录成功，已自动解除本设备的限时限制' });
+    return before - cb.bans.length;
   }
   /* ---------- 对外：本地保存后广播（app.js commit 调用） ---------- */
   function publish(content) {
@@ -896,6 +935,8 @@ window.LMCollab = (function () {
     banStateFor: banStateFor,
     banDevice: banDevice,
     unbanDevice: unbanDevice,
+    banSelf: banSelf,
+    clearAutoBan: clearAutoBan,
     dcSend: dcSend,
     lockBlock: function (el) { /* 点选块：外人锁着时静默不抢锁（浏览/选中不受影响），只有真正输入才会弹协商框 */
       try {

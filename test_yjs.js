@@ -188,5 +188,17 @@ T('Toast 手机端不遮屏：宽度上限 min(86vw, 420px)，多行圆角 14px'
 T('409 冲突尾随重推：拉最新后 6 秒重试一次（防最后一笔只留本机），防覆盖守卫仍然生效',
   col.indexOf('GH._409T') > 0 && col.indexOf('}, 6000);') > 0);
 
+/* ---------- 8) 自动限时限制（banSelf）修复：三拦截全部打通 + 防锁死 ---------- */
+console.log('【8】密码试错自动限时限制（走通 + 防锁死）');
+T('banSelf 专用通道：绕过「不能屏蔽本机」守卫 + 轮询等签名密钥（waitBanKey 最多 3 秒）',
+  col.indexOf('function banSelf(') > 0 && col.indexOf('function waitBanKey(') > 0
+    && col.indexOf('waitBanKey(30)') > 0 && col.indexOf("if (devId === me.id || devFp === me.fp)") > 0);
+T('自动限时条目带 auto:1 + until（默认 30 分钟），过期自动失效（banStateFor 过滤）',
+  col.indexOf('auto: 1, until:') > 0 && col.indexOf('1800000') > 0
+    && col.indexOf('until < now') > 0);
+T('root 防锁死：仅自动限时条目放行 root 登录（manual 标志区分手动屏蔽），登录成功自动清除（clearAutoBan）',
+  col.indexOf('manual: manual') > 0 && appSrc.indexOf('bs.auto && !bs.manual') > 0
+    && col.indexOf('function clearAutoBan(') > 0 && appSrc.indexOf('clearAutoBan()') > 0);
+
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

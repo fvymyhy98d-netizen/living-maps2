@@ -822,9 +822,17 @@ window.LMApp = (function () {
                 try { sessionStorage.setItem('lm_ban_key', k); } catch (e2) { /* noop */ }
               }).catch(function () { /* noop */ });
             }
+            /* 屏蔽名单检查：管理员级屏蔽挡登录；但「根管理员 + 仅自动限时条目」放行——
+               root 密码验证通过即本人，登录流程里会自动清除限时条目（防 root 被自己锁死）；
+               手动屏蔽（另一台管理员设备有意加的）对 root 依然生效，需在别台解禁 */
             if (window.LMCollab && LMCollab.banStateFor().admin) {
-              toast('⛔ 本设备已被限制进入管理模式（设备号 #' + LMCollab.shortId(LMCollab.me().id) + '）');
-              return;
+              const bs = LMCollab.banStateFor();
+              if (r.root && bs.auto && !bs.manual) {
+                /* 仅自动限时：放行，交给登录成功流程清除 */
+              } else {
+                toast('⛔ 本设备已被限制进入管理模式（设备号 #' + LMCollab.shortId(LMCollab.me().id) + (bs.auto ? '，限时限制将在 30 分钟内自动解除' : '') + '）');
+                return;
+              }
             }
             sessionStorage.removeItem('lm_fail_n');
             sessionStorage.setItem('lm_admin', '1');
@@ -833,18 +841,20 @@ window.LMApp = (function () {
             LMEditor.closeModal();
             render();
             toast('管理模式已开启：直接点击文字就能修改（像 Word 一样），改动自动保存');
-            /* 密码试错自动入黑名单：本机 1 小时内 ≥5 次密码错误 → 登录成功这一刻也自动限制
-               本设备的管理员入口（banDevice 由本机合法签名，其他设备会认可并同步）；
-               根管理员可在 ⚙ 协作与设备 里解禁。根管理员身份豁免（自己忘了密码不把自己锁死） */
+            /* 密码试错自动限时限制：本机 1 小时内 ≥5 次密码错误 → 登录成功这一刻自动限制
+               本设备管理员入口 30 分钟（banSelf 专用通道：等签名密钥就绪、允许作用于本机、
+               条目带 until 自动过期）；根管理员登录成功会自动清除本机限时条目（防锁死），
+               普通管理员被限制后可由根管理员在 ⚙ 协作与设备 里提前解禁 */
             try {
               const fh = JSON.parse(localStorage.getItem('lm_fail_hist') || '[]')
                 .filter(function (t2) { return Date.now() - t2 < 3600000; });
               if (fh.length >= 5 && window.LMCollab) {
-                if (!r.root && LMCollab.banDevice && LMCollab.me) {
-                  LMCollab.banDevice(LMCollab.me().id, LMCollab.me().fp, 'admin', LMCollab.me().name);
-                  toast('⛔ 本设备 1 小时内密码错误 ' + fh.length + ' 次，已自动限制管理员入口（根管理员可在「协作与设备」解禁）');
+                if (!r.root && LMCollab.banSelf) {
+                  LMCollab.banSelf(1800000);
+                  toast('⛔ 本设备 1 小时内密码错误 ' + fh.length + ' 次，管理员入口将被限制 30 分钟（根管理员可提前解禁）');
                 } else if (r.root) {
-                  toast('⚠️ 本设备 1 小时内密码错误 ' + fh.length + ' 次（根管理员身份不受自动限制）');
+                  const cleared = LMCollab.clearAutoBan ? LMCollab.clearAutoBan() : 0;
+                  toast('⚠️ 本设备 1 小时内密码错误 ' + fh.length + ' 次（根管理员身份不受限' + (cleared ? '，已自动清除本机限时限制' : '') + '）');
                 }
                 localStorage.removeItem('lm_fail_hist');
               }
