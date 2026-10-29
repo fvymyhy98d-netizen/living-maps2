@@ -754,6 +754,9 @@ body.mobile-view .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 /* —— 块工具条（悬停在手机上不存在：点选块后出现，靠已选中态展示） —— */
 body.mobile-view .block-tools{gap:4px}
 body.mobile-view .block-tools button{width:27px;height:27px;font-size:12px}
+/* ★ 手机没有 hover：块工具条（上移/下移/删除/并排勾选…）常显，不依赖悬停或选中态；
+   多选模式（multi-mode）的 display:none !important 仍优先生效，勾选时自动隐藏 */
+body.admin.mobile-view .block-wrap .block-tools{display:flex}
 body.mobile-view .free-box .block-tools{max-width:calc(100vw - 20px)}
 body.mobile-view .free-box{padding:10px 12px}
 /* —— 手机端管理模式：顶部 Word 工具条 —— */
@@ -761,6 +764,10 @@ body.mobile-view #editBar{left:6px;right:6px;transform:none;width:auto;max-width
   flex-wrap:wrap;justify-content:center;gap:2px;padding:5px 6px}
 body.mobile-view .tb-btn{height:28px;min-width:28px;padding:0 7px;font-size:12.5px}
 body.mobile-view .tb-lab{font-size:10px}
+/* ★ 手机端按钮组自身也要允许换行：旧版 .tb-grp{flex:none} 内部不换行，整组远超屏宽后被
+   justify-content:center 居中裁切 —— 两端按钮（撤销/格式刷/加粗…与颜色/高亮/跳转…）
+   全部落到可视区外，用户只看到中间一截（X₂ 左边「格式刷全都看不到」的根因） */
+body.mobile-view .tb-grp{flex-wrap:wrap;justify-content:center;flex:1 1 100%;min-width:0}
 /* 格式刷气泡：改挂到底部（避开换行后更高的工具条），贴在管理条上方 */
 body.mobile-view #brushPop{left:8px;right:8px;transform:none;top:auto;bottom:96px;max-width:none;flex-wrap:wrap}
 body.mobile-view #brushPop::before{display:none}
@@ -768,6 +775,14 @@ body.mobile-view #brushPop::before{display:none}
 body.mobile-view #adminBar{bottom:12px;gap:6px;padding:7px;border-radius:20px}
 body.mobile-view #adminBar .btn{font-size:12px;padding:7px 10px}
 body.mobile-view .bar-tip{display:none}
+/* ★ 手机端管理条默认收起：只显示一个圆形把手，点一下展开全部工具（同步/页面管理/历史…），
+   再点收起 —— 一长排按钮常驻太占屏。电脑端把手不渲染、布局行为完全不变 */
+.bar-toggle{display:none;width:36px;height:36px;border-radius:50%;border:0;background:var(--blue);color:#fff;
+  font-size:16px;align-items:center;justify-content:center;cursor:pointer;flex:none;
+  box-shadow:0 4px 14px rgba(0,113,227,.35)}
+body.mobile-view #adminBar .bar-toggle{display:flex}
+body.mobile-view #adminBar:not(.open) .btn,body.mobile-view #adminBar:not(.open) .save-dot{display:none}
+body.mobile-view #adminBar.open{flex-direction:column;align-items:stretch;max-width:min(86vw,420px);max-height:56vh;overflow:auto}
 /* —— 弹窗 / 气泡 / 输入 —— */
 body.mobile-view .popover{max-width:92vw}
 body.mobile-view .modal-card{padding:18px;max-height:88vh}

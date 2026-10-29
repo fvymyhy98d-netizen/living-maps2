@@ -128,6 +128,9 @@ T('MQTT 定向握手 topic（/to/<peerId>）与口令派生房间（防猜）',
 T('MQTT 多 broker 全连（握手帧三路广播 + 帧唯一号去重 + 单路断开不掉线）',
   tcb.indexOf('mqs.push(mq)') > 0 && tcb.indexOf('function mqPublish') > 0 && tcb.indexOf('sigSeen') > 0
     && tcb.indexOf('function mqDown') > 0 && tcb.indexOf('payload.n =') > 0);
+T('mqs 声明先于 bootMQTT() 调用（var 提升陷阱：旧版声明在调用之后，bootMQTT 一进来 mqs.push 就是 undefined → 手机无痕首载必现「协同初始化失败 (reading push)」）',
+  tcb.indexOf('var mqs = [], mqUp = 0') > -1 && tcb.indexOf('bootMQTT();') > -1
+    && tcb.indexOf('var mqs = [], mqUp = 0') < tcb.indexOf('bootMQTT();'));
 T('yjs-config.js broker 池三供应商（EMQX 中国/国际 + HiveMQ），tcb/signalMode 已删',
   cfg.indexOf('broker-cn.emqx.io') > 0 && cfg.indexOf('broker.emqx.io') > 0 && cfg.indexOf('broker.hivemq.com') > 0 && cfg.indexOf('signalMode') < 0 && cfg.indexOf('tcb:') < 0);
 T('ycollab.js 传递 brokers 给传输层',

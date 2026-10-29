@@ -55,6 +55,11 @@
     var lastOff = '';      /* signaling-off 去重（防重连风暴刷屏） */
     var mq = null, myPeer = '', topic = '';
     var mqPing = null, mqSweep = null;
+    /* ★ mqs 必须在 bootMQTT() 被调用（下方 start 流程）之前完成赋值 —— 旧版把它声明在
+       函数体后部（bootMQTT 定义旁边），var 声明提升但赋值不提升：bootMQTT() 一进来就执行
+       mqs.push(mq)，此时 mqs 还是 undefined → 「Cannot read properties of undefined
+       (reading 'push')」→ 协同初始化失败降级。电脑端靠旧缓存一直没暴露，手机无痕首载必现 */
+    var mqs = [], mqUp = 0; /* 多 broker 全连：同时连池内所有公共 broker */
     var api = {
       awareness: awareness,
       getPeerPCs: function () { return Object.keys(conns).map(function (k) { return conns[k].pc; }); },
@@ -204,7 +209,6 @@
     return api;
 
     /* ---------- MQTT 信令：公共 Broker 池（EMQX 中国/国际 + HiveMQ，免费匿名） ---------- */
-    var mqs = [], mqUp = 0; /* 多 broker 全连：同时连池内所有公共 broker */
     function bootMQTT() {
       if (!window.mqtt || typeof window.mqtt.connect !== 'function') { status('error', 'MQTT 库未加载（lib/mqtt.js）'); return; }
       /* ★ 全连而非单点选台：握手帧向所有已连接 broker 三路广播。

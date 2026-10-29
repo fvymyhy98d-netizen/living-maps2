@@ -55,6 +55,11 @@ window.LMApp = (function () {
     hist.ptr = p;
     state.content = JSON.parse(hist.arr[hist.ptr]);
     LMStore.saveLocal(state.content);
+    /* ★ 撤销结果立即写入 Y.Doc（IDB 持久化 + 远端设备同步收敛）。旧版漏了这一步：
+       ymap 里还留着重撤销前的内容，任何 applyKeys 重放（重连 / 离线恢复 / 对端广播 /
+       协同重试重启）都会把刚撤销的格式「复活」，与之后的新编辑叠加——
+       「明明撤回了，撤掉的样式和新改的样式同时出现」就是它 */
+    try { if (window.LMYCollab && LMYCollab.pushLocal) LMYCollab.pushLocal(state.content); } catch (eY) { /* noop */ }
     const y = window.scrollY;
     render(true);
     window.scrollTo(0, y);
@@ -69,6 +74,7 @@ window.LMApp = (function () {
     hist.ptr = p;
     state.content = JSON.parse(hist.arr[hist.ptr]);
     LMStore.saveLocal(state.content);
+    try { if (window.LMYCollab && LMYCollab.pushLocal) LMYCollab.pushLocal(state.content); } catch (eY2) { /* noop */ } /* 同 undo：重做结果也要全网收敛 */
     const y = window.scrollY;
     render(true);
     window.scrollTo(0, y);

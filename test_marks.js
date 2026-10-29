@@ -47,6 +47,11 @@ eq('nest-grad-fs',
 eq('nest-fs-grad',
   inlineFmt('@@13,@@grad1,企业@@@@'),
   '<span style="font-size:13px"><span class="grad grad-1">企业</span></span>');
+/* 8) 高亮 == 内嵌套加粗：md.js 里加粗等先渲染、== 后渲染 —— 编辑器放宽「选区内完整标记
+   共存」的前提就是这条渲染能力（选区跨加粗边界上高亮/颜色不再静默回退整段） */
+eq('hl-with-bold',
+  inlineFmt('==普通**加粗**普通=='),
+  '<mark>普通<strong>加粗</strong>普通</mark>');
 eq('nest-fs-color',
   inlineFmt('@@13,@@#f00,红@@字@@'),
   '<span style="font-size:13px"><span style="color:#f00">红</span>字</span>');

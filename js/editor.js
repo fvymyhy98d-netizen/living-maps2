@@ -669,6 +669,7 @@ window.LMEditor = (function () {
       document.body.appendChild(bar);
     }
     bar.innerHTML = ''
+      + '<button class="bar-toggle" type="button" title="收起 / 展开管理工具（手机端）">🛠️</button>'
       + '<span class="bar-tip">✏️ 点击文字直接修改</span>'
       + '<span class="save-dot" id="saveDot">自动保存已开启</span>'
       + '<button class="btn btn-primary" data-panel="sync" type="button">☁️ 同步到 GitHub</button>'
@@ -677,6 +678,13 @@ window.LMEditor = (function () {
       + '<button class="btn btn-mini" data-panel="hist" type="button">🕘 历史版本</button>'
       + '<button class="btn btn-mini" data-panel="backup" type="button">💾 备份 / 恢复</button>'
       + '<button class="btn btn-mini" data-panel="password" type="button">🔑 修改密码</button>';
+    if (!bar.dataset.init) {
+      bar.dataset.init = '1';
+      /* 手机端默认收起（只显示 🛠️ 把手，点一下展开）；电脑端常开展开态，行为不变 */
+      bar.classList.toggle('open', !document.body.classList.contains('mobile-view'));
+    }
+    const btog = bar.querySelector('.bar-toggle');
+    if (btog) btog.addEventListener('click', function () { bar.classList.toggle('open'); });
   }
   document.addEventListener('click', function (e) {
     const p = e.target.closest('[data-panel]');
@@ -1822,10 +1830,12 @@ window.LMEditor = (function () {
     return true;
   }
   /* ★ 安全规则（配合 applyInlineSwatchBlock）：
-     - 选区与任何标记「骑跨」→ 回退整段（绝不产生坏源码 / 游离标记）
+     - 选区与任何标记「骑跨」→ 回退整段（绝不产生坏源码 / 游离标记）；加粗等 SYM 标记
+       骑跨时先把选区扩展到完整包含该标记再包裹（见 applyInlineSwatchBlock 开头）
      - 选区紧贴 == / @@ 标记但不是完整包裹 → 回退整段（标记配对会被换位打散）
      - 颜色/渐变包最外层（md.js 最后处理 @@），内部完整标记对可共存；
-       高亮 == 在 md.js 里先于加粗等处理 → 选区内含其它标记时一律回退整段 */
+       高亮 == 在 md.js 里晚于加粗等处理（加粗/斜体等先渲染、== 后渲染），== 内嵌套标记
+       正常解析 —— 选区内完整包含的标记可共存（旧版一律回退整段是过虑，已放宽） */
   /* 从 t 的 [s,e) 里剥掉指定类型的标记 token（返回新文本与平移后的坐标） */
   function stripToks(t, toks, s, e, types) {
     const rm = toks.filter(function (k) { return types.indexOf(k.t) >= 0 && k.a >= s && k.b <= e; })
@@ -1855,9 +1865,19 @@ window.LMEditor = (function () {
     const vis = w.map.map(function (i2) { return t.charAt(i2); }).join('');
     const vi = vis.indexOf(needle);
     if (vi < 0) return false;
-    const s0 = w.map[vi];
-    const e0 = w.map[vi + needle.length - 1] + 1; /* ★ 最后一个选中字符的源结尾（紧贴其后的闭合 @@/== 才能被边界检测到） */
+    let s0 = w.map[vi];
+    let e0 = w.map[vi + needle.length - 1] + 1; /* ★ 最后一个选中字符的源结尾（紧贴其后的闭合 @@/== 才能被边界检测到） */
     const SYM = ['hl', 'bold', 'em', 'u', 's', 'sup', 'sub'];
+    /* ★ 选区边界切在加粗/斜体/高亮等标记中间（如从加粗词中间开始拖选）→ 自动扩展到完整
+       包含该标记。旧版不扩展：跨着标记边界的选区一律静默 return false 交给整段
+       applyStyle ——「选中带加粗的词再高亮，整个文本框都被高亮」「跨加粗/非加粗设色失败」
+       两个 bug 都从这里来。@@ 颜色标记骑跨仍保守拒绝（其开标记带色值前缀，扩展会把标记
+       语法卷进新包裹产生坏源码）。md.js 渲染加粗/斜体等先于 ==、@@ 自内向外循环，
+       扩展后 == / @@ 内嵌套加粗等标记都能正常解析 */
+    w.toks.forEach(function (k) {
+      if (SYM.indexOf(k.t) < 0) return;
+      if (k.b > s0 && k.a < e0 && (k.a < s0 || k.b > e0)) { s0 = Math.min(s0, k.a); e0 = Math.max(e0, k.b); }
+    });
     const inter = w.toks.filter(function (k) { return k.b > s0 && k.a < e0; }); /* 与选区相交的标记 */
     const touchHl = w.toks.some(function (k) { /* 紧贴选区边界的 ==/@@（非完整包裹）→ 配对会被打散 */
       if (k.a >= s0 && k.b <= e0) return false;
@@ -1885,8 +1905,13 @@ window.LMEditor = (function () {
         nt = stripToks(t, w.toks, s0, e0, ['hl']).text;
         msg = '已清除高亮（仅选中文字）';
       } else {
-        if (inter.length || touchHl || splitSym) return false; /* 选区内/贴任何标记 → 回退整段，绝不出坏源码 */
-        nt = t.slice(0, s0) + '==' + t.slice(s0, e0) + '==' + t.slice(e0);
+        /* 与颜色/渐变分支同一保守策略：骑跨任何标记（一半在内一半在外）→ 回退整段；
+           完整包含在选区内的标记可共存 —— md.js 里加粗等先渲染、== 后渲染，
+           == 内的加粗/斜体正常解析；只剥选区内完整的旧颜色/旧高亮（== 里不能再套 ==） */
+        if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false;
+        if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return false;
+        const r = stripToks(t, w.toks, s0, e0, ['@@o', '@@c', 'hl']);
+        nt = r.text.slice(0, r.s) + '==' + r.text.slice(r.s, r.e) + '==' + r.text.slice(r.e);
         msg = '已高亮选中文字';
       }
     } else {
@@ -2088,7 +2113,7 @@ window.LMEditor = (function () {
     return hit || { label: m2[1] };
   }
   /* 选区记忆：点工具栏按钮等操作把选区清掉时，「来源」仍能用上一次拖选的话 */
-  let lastSelInfo = { text: '', bi: null };
+  let lastSelInfo = { text: '', bi: null, cell: null };
   document.addEventListener('selectionchange', function () {
     if (!window.LMApp || !LMApp.state.admin) return;
     const sel = window.getSelection();
@@ -2101,7 +2126,11 @@ window.LMEditor = (function () {
       const hw = (hn.nodeType === 1 ? hn : hn.parentNode).closest('.block-wrap[data-idx]');
       if (hw) bi = +hw.getAttribute('data-idx');
     } catch (e) { /* noop */ }
-    lastSelInfo = { text: t, bi: bi };
+    /* 连格子坐标一起记：表格里选字后点 ⇄，选区被按钮清掉时 selCell() 拿不到格子，
+       兜底恢复时需要这份坐标（否则表格里的字当起点/终点永远报错） */
+    let cell = null;
+    try { const cc = selCell(); if (cc) cell = { r: (cc.r == null ? -1 : cc.r), c: cc.c }; } catch (e2) { /* noop */ }
+    lastSelInfo = { text: t, bi: bi, cell: cell };
   });
   /* 统一取「当前选区文字」：点工具栏按钮 / 展开下拉等动作常把选区清掉（浏览器失焦行为），
      此时回退到 selectionchange 记住的上一次拖选文字（同块内才可信）——
@@ -2234,6 +2263,24 @@ window.LMEditor = (function () {
      · 建立 = 起点文字包 [[j:ID,…]] 行内标记（回到那页渲染成绿色虚线可点字）+ 全站映射表 state.content.jumps
      · 规则：同一起点只能有一个终点（重复建立 = 更新目标 → 天然不存在“一跳多”）；多个起点指向同一终点（多跳一）允许
      · 访客点起点文字平滑滚到终点块并闪光；管理员模式 Ctrl/Cmd+点 试跳（普通点击仍是编辑） */
+  /* 表格单元格里按可见文字定位格子（r=-1 → 表头）：点 ⇄ 按钮瞬间选区被清、selCell()
+     拿不到格子时，用「选过的文字」反查它落在哪一格 —— 表格里的字当跳转起点/终点不再失败 */
+  function findCellByText(page, bi, needle) {
+    const b = page && page.blocks ? page.blocks[bi] : null;
+    if (!b || b.type !== 'table') return null;
+    const probe = function (src) {
+      if (typeof src !== 'string' || !src) return false;
+      try { return !!srcSpanOf(src.replace(/\u00A0/g, ' '), needle); } catch (e0) { return false; }
+    };
+    const hs = Array.isArray(b.headers) ? b.headers : [];
+    for (let c = 0; c < hs.length; c++) { if (probe(hs[c])) return { r: -1, c: c }; }
+    const rows = Array.isArray(b.rows) ? b.rows : [];
+    for (let r = 0; r < rows.length; r++) {
+      const row = Array.isArray(rows[r]) ? rows[r] : [];
+      for (let c2 = 0; c2 < row.length; c2++) { if (probe(row[c2])) return { r: r, c: c2 }; }
+    }
+    return null;
+  }
   function jumpPageLabel(pid) {
     const p = (LMApp.state.content.pages || []).find(function (x) { return x.id === pid; });
     return p ? (p.label || p.title || p.id) : (pid === 'home' ? '首页' : pid);
@@ -2261,7 +2308,7 @@ window.LMEditor = (function () {
       }
     } catch (e3) { /* noop */ }
     const hadText = !!(needle && needle.trim());
-    if (!hadText && lastSelInfo.text) { needle = lastSelInfo.text; bi = lastSelInfo.bi; } /* 选区被清掉 → 用记住的 */
+    if (!hadText && lastSelInfo.text) { needle = lastSelInfo.text; bi = lastSelInfo.bi; if (!cell) cell = lastSelInfo.cell || null; } /* 选区被清掉 → 用记住的（含格子坐标） */
     needle = String(needle || '').replace(/\u00A0/g, ' ').trim();
     if (!needle) return null; /* 没有任何选区 → 返回 null：⇄ 气泡照常打开（管理已有跳转 / 取消 / 新建），不再卡死 */
     if (bi == null) return { err: '这里选不了起点：请点进正文内容块（段落 / 标题 / 提示框 / 表格 / 文本框），在里面选中文字' };
@@ -2270,9 +2317,14 @@ window.LMEditor = (function () {
     const isTbl = blk.type === 'table';
     if (!isTextType(blk) && !isTbl) return { err: '这种块暂不支持跳转起点（支持：段落 / 标题 / 提示框 / 文本框 / 表格单元格）' };
     if (blk.type === 'md') return { err: 'Markdown 块暂不支持点选建立跳转（请改用普通文字块）' };
+    if (isTbl && !cell) {
+      /* 手机上点 ⇄ 按钮的瞬间选区被清 → selCell() 返回 null → 按记住的文字反查所在格子 */
+      const fc = findCellByText(page, bi, needle);
+      if (fc) cell = fc;
+    }
     if (isTbl && !cell) return { err: '表格块请直接在某个单元格里选中文字，再点 ⇄ 跳转' };
     if (needle.length > 80) return { err: '跳转文字请选短一点（≤80 字的关键词）' };
-    return { page: page.id, bi: bi, text: needle, cell: cell };
+    return { page: page.id, bi: bi, text: needle, cell: cell, fb: !hadText }; /* fb=用了记忆选区（可能已失效，定位失败时提示语更明确） */
   }
   /* 在块/单元格源码里定位选区文字（可见字符 → 源下标映射）。返回 {at,end,seg} 或 {err}：
      · 加粗/斜体/高亮/颜色/渐变等格式标记可以与跳转共存（md.js 先渲染格式再渲染跳转）
@@ -2295,9 +2347,20 @@ window.LMEditor = (function () {
     const info = jumpSelInfo();
     if (info && info.err) { LMApp.toast(info.err); return; }
     if (info) {
-      const cur = pageOf().blocks[info.bi];
-      const chk = jumpSpanOf(String(cur.text || '').replace(/\u00A0/g, ' '), info.text);
-      if (chk.err) { LMApp.toast(chk.err); return; }
+      /* ★ 表格块没有 .text 字段（内容在 headers/rows 里）—— 旧版对表格取 cur.text 得到空串，
+         jumpSpanOf 必然「定位不到」→ 表格里的字永远建不成跳转起点/终点。改走 cellSrcOf 取单元格源码 */
+      const curp = pageOf();
+      let srcTxt;
+      if (info.cell) {
+        const cs = cellSrcOf(curp, info.bi, info.cell);
+        if (!cs) { LMApp.toast('那个单元格不存在了，请重新选择'); return; }
+        srcTxt = String(cs.get() || '');
+      } else {
+        const cur = curp.blocks[info.bi];
+        srcTxt = String((cur && cur.text) || '');
+      }
+      const chk = jumpSpanOf(srcTxt.replace(/\u00A0/g, ' '), info.text);
+      if (chk.err) { LMApp.toast(info.fb ? '刚才选中的文字已失效（点按钮/切页会清掉选区），请重新拖选后再点 ⇄' : chk.err); return; }
       if (!pend.from) {
         pend.from = info; /* 记完起点就收起：用户去别处选终点（气泡不开 = 自动关） */
         renderToolbar(); /* ⇄ 按钮亮起「等终点」状态，一眼可见记上了 */
