@@ -493,6 +493,7 @@ window.LMEditor = (function () {
      不是机械的 ±40px。全程不重渲染、只改 style.top → 换位走 CSS 过渡（平滑滑动），也不会触发旧“飞升” */
   function freeJump(page, i, dir) {
     const b = page.blocks[i]; if (!b || !b.free) return;
+    if (b.free.g != null) { LMApp.toast('并排的块请在本行内左右拖动微调（↑↓ 整格移动会拆散并排行；要拆散请用「取消并排」）'); return; }
     const col = document.querySelector('.blocks'); if (!col) return;
     const me = col.querySelector('.block-wrap[data-idx="' + i + '"]');
     if (!me) return;
@@ -581,14 +582,53 @@ window.LMEditor = (function () {
     if (!isFinite(top)) top = 40;
     const n = idxs.length, GPP = 16 / cw * 100;
     const wPct = (100 - GPP * (n - 1)) / n;
+    const gid = 'g' + Date.now().toString(36); /* 并排组标记：后台记住这几个块是并排过的（取消并排/行内拖动约束都靠它） */
     idxs.forEach(function (i, k) {
       const b = page.blocks[i];
-      b.free = { x: Math.round(k * (wPct + GPP) * 10) / 10, y: Math.round(top), w: Math.round(wPct * 10) / 10 };
+      const gw0 = Math.min(100, Math.max(20, Math.round(+b.width) || 100)); /* 「正确的宽度」= 该块并排前的宽度 */
+      const x0 = Math.round(k * (wPct + GPP) * 10) / 10;
+      b.free = { x: x0, y: Math.round(top), w: Math.round(wPct * 10) / 10,
+        g: gid, gi: k, gn: n, gw: gw0, gx0: x0 };
       delete b.hAlign; delete b.width;
     });
     exitMulti();
     renderToolbar(); /* ★ 立即熄灭 ☑、撤掉「▦ 并排」按钮（不等整页重绘），勾选模式就此结束 */
     LMApp.applyEdit('已并排排列，并已自动退出勾选模式（☑ 已熄灭、绿勾已清；要再排就再点 ☑）');
+  }
+  /* 「取消并排」：把并排组还原成普通内容块 —— 不恢复并排前的位置（文档流自然顺序，
+     避免与后续修改冲突），宽度恢复各自并排前的「正确宽度」；按原并排顺序上下排列：
+     第 1 块（原最左）贴页面左缘，最后 1 块（原最右）贴页面右缘，中间块按顺序排；
+     顺序之后用块工具条 ⠿ 拖拽手动调。只能整组取消：勾选的块必须同组且一个不少
+     （拆一半会留下残组，组内互相吸附/不互推的逻辑就坏了） */
+  function pickFullGroup() {
+    const page = pageOf(); if (!page) return null;
+    const idxs = tb.multiSel.slice().sort(function (a, b) { return a - b; }).filter(function (i) {
+      return page.blocks[i] && page.blocks[i].free && page.blocks[i].free.g;
+    });
+    if (idxs.length < 2) return null;
+    const g = page.blocks[idxs[0]].free.g;
+    if (idxs.some(function (i) { return page.blocks[i].free.g !== g; })) return null; /* 跨组混选 */
+    const gn = +page.blocks[idxs[0]].free.gn || idxs.length;
+    if (idxs.length !== gn) return null; /* 组没选全 */
+    return { page: page, idxs: idxs, g: g, gn: gn };
+  }
+  function canUnarrange() { try { return !!pickFullGroup(); } catch (e) { return false; } }
+  function doUnarrange() {
+    const picked = pickFullGroup();
+    if (!picked) { LMApp.toast('要取消并排，请先点 ☑ 勾选模式，把这一组的所有并排块都选上'); return; }
+    const page = picked.page;
+    const items = picked.idxs.map(function (i) { return page.blocks[i]; })
+      .sort(function (a, c) { return (+a.free.gi || 0) - (+c.free.gi || 0); }); /* 按并排时的左右顺序 */
+    const n = items.length;
+    items.forEach(function (b, k) {
+      b.width = Math.min(100, Math.max(20, Math.round(+b.free.gw) || 100)); /* 恢复「正确的宽度」 */
+      if (n >= 2 && k === n - 1 && b.width < 100) b.wAlign = 'right'; /* 原最右的块贴页面右缘 */
+      else if (b.wAlign) delete b.wAlign;
+      delete b.free; /* 解除并排：回到文档流自然顺序位置（上一个、下一个），不回到并排前的旧位置 */
+    });
+    exitMulti();
+    renderToolbar();
+    LMApp.applyEdit('已取消并排：' + n + ' 个块恢复标准宽度、按顺序上下排列（第 1 块贴左、最后 1 块贴右）；要调前后顺序用块工具条的 ⠿ 拖拽');
   }
   /* 退出勾选模式：状态 + 视觉标记（块右上角绿色 ✓）一并清理 —— 修复“退出后勾选标记不消失” */
   function exitMulti() {
@@ -1208,6 +1248,7 @@ window.LMEditor = (function () {
       + '<button class="tb-btn" data-tb="clear" tabindex="-1" title="清除格式">⌫</button>'
       + '<button class="tb-btn' + (tb.multi ? ' on' : '') + '" data-tb="multi" tabindex="-1" title="并排排列：先点我进入勾选模式，再点选 2-4 个内容块，然后点「▦ 并排」">☑</button>'
       + (tb.multi ? '<button class="tb-btn wide primary" data-tb="arrange" tabindex="-1" title="把勾选的块并排成一排：上下对齐、左右留缝、高度随内容">▦ 并排 ' + tb.multiSel.length + '</button>' : '')
+      + (tb.multi && canUnarrange() ? '<button class="tb-btn wide" data-tb="unarrange" tabindex="-1" title="解除这组并排：恢复各自的标准宽度、按原顺序上下排列（第 1 块贴左、最后 1 块贴右）">⌫ 取消并排</button>' : '')
       + '<span class="tb-div"></span>'
       + tbSelect('font', '字体', FONTS, (s.font || '') === '' ? '' : s.font)
       + tbSelect('fs', '字号', SIZES.map(function (v) { return [v, v === '' ? '字号' : v]; }), s.fs == null ? '' : String(s.fs))
@@ -2976,6 +3017,7 @@ window.LMEditor = (function () {
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
           const A = boxes[i], B = boxes[j];
+          if (A.b.free.g != null && A.b.free.g === B.b.free.g) continue; /* 同一并排组的框同处一行：拼位过程不互推（防「松手时行被拆散、下方乱跳」） */
           if (A.y + A.h <= B.y + 0.5) continue; /* A 完全在 B 上方，无重叠 */
           const ax = A.x / 100 * colW, aw = A.wp / 100 * colW;
           const bx = B.x / 100 * colW, bw = B.wp / 100 * colW;
@@ -3031,7 +3073,19 @@ window.LMEditor = (function () {
     let lastX = e.clientX, lastY = e.clientY;
     const sc = edgeScroller(apply);
     function apply() {
-      b.free.x = Math.round(clamp(fx0 + (lastX - x0) / colW * 100, 0, 96) * 10) / 10;
+      let nx = Math.round(clamp(fx0 + (lastX - x0) / colW * 100, 0, 96) * 10) / 10;
+      /* ★ 并排组内的框：只在本行内左右滑动（y 锁定在组行上）——
+         行不被拆散、下方内容的让位基线稳定，松手不再「跳来跳去」；
+         拖近组内原始位置（±1.5%）自动吸附，轻松「拼回去」。
+         只是拖动约束，🔒 YIELD-V4 让位引擎一字未动 */
+      if (b.free.g != null) {
+        if (b.free.gx0 != null && Math.abs(nx - b.free.gx0) <= 1.5) nx = b.free.gx0;
+        b.free.x = nx;
+        wrap.style.left = b.free.x + '%';
+        if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout(); /* 🔒 锁定接入点②：每帧直调 */
+        return;
+      }
+      b.free.x = nx;
       b.free.y = Math.max(0, Math.round(fy0 + (lastY - y0) + sc.comp()));
       wrap.style.left = b.free.x + '%';
       wrap.style.top = b.free.y + 'px';
@@ -3840,6 +3894,7 @@ window.LMEditor = (function () {
         break;
       }
       case 'arrange': doArrange(); break;
+      case 'unarrange': doUnarrange(); break;
       case 'aleft': applyStyle('align', 'left'); break;
       case 'acenter': applyStyle('align', 'center'); break;
       case 'aright': applyStyle('align', 'right'); break;

@@ -320,9 +320,10 @@ window.LMApp = (function () {
         + '<span class="fb-hd" data-h="e" title="调宽"></span><span class="fb-hd" data-h="w" title="调宽"></span>'
         + '<span class="fb-hd" data-h="s" title="调高"></span><span class="fb-hd" data-h="se" title="拖角调整大小"></span>';
     } else if (b.type !== 'image' && b.width != null) {
-      /* Word 式四角拖宽：非图片块记录 width%（让位间距由 adjustFreeLayout 动态计算，不持久化） */
+      /* Word 式四角拖宽：非图片块记录 width%（让位间距由 adjustFreeLayout 动态计算，不持久化）；
+         wAlign='right'：取消并排时「原最右的块贴页面右缘」（宽度不足整行时 margin-left:auto 右对齐） */
       const wp = Math.min(100, Math.max(20, Math.round(+b.width) || 100));
-      if (wp < 100) wrapSt += 'width:' + wp + '%;';
+      if (wp < 100) wrapSt += 'width:' + wp + '%;' + (b.wAlign === 'right' ? 'margin-left:auto;' : '');
     }
     return '<div class="' + wrapCls + '" data-page="' + esc(pageId) + '" data-idx="' + i + '"' + (wrapSt ? ' style="' + wrapSt + '"' : '') + '>'
       + tools + wrapX + '<div class="block-body">' + inner + '</div></div>';

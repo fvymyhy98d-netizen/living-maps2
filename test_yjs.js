@@ -196,6 +196,27 @@ T('Toast 手机端不遮屏：宽度上限 min(86vw, 420px)，多行圆角 14px'
 T('409 冲突尾随重推：拉最新后 6 秒重试一次（防最后一笔只留本机），防覆盖守卫仍然生效',
   col.indexOf('GH._409T') > 0 && col.indexOf('}, 6000);') > 0);
 
+/* ---------- 9) 并排组：行内拖动不跳 / 取消并排 ---------- */
+const edt2 = srcOf('js/editor.js');
+console.log('【9】并排组记忆 / 行内拖动不跳 / 取消并排');
+T('并排时写入组标记：free.g/gi/gn/gw（正确宽度=并排前宽度）/gx0（吸附锚点）',
+  edt2.indexOf('g: gid, gi: k, gn: n, gw: gw0, gx0: x0') > 0
+    && edt2.indexOf('「正确的宽度」= 该块并排前的宽度') > 0);
+T('行内拖动不跳：组框 y 锁定（只在本行左右滑）+ 拖近原始位置 ±1.5% 自动吸附「拼回去」',
+  edt2.indexOf('if (b.free.g != null) {') > 0 && edt2.indexOf('Math.abs(nx - b.free.gx0) <= 1.5') > 0
+    && edt2.indexOf('wrap.style.top = b.free.y') > 0);
+T('组内互不推挤：resolveFreeOverlaps 跳过同一并排组的框对（松手不再拆散行、下方不乱跳）',
+  edt2.indexOf('A.b.free.g != null && A.b.free.g === B.b.free.g') > 0);
+T('↑↓ 整格移动对并排块拦截（防拆散行），提示用「取消并排」',
+  edt2.indexOf('function freeJump(page, i, dir)') > 0
+    && edt2.indexOf('并排的块请在本行内左右拖动微调') > 0);
+T('取消并排：pickFullGroup 校验同组且全选（跨组/选不全不可取消）+ doUnarrange 恢复正确宽度 + 末块贴右（wAlign）',
+  edt2.indexOf('function pickFullGroup(') > 0 && edt2.indexOf('组没选全') > 0
+    && edt2.indexOf('function doUnarrange(') > 0 && edt2.indexOf("b.wAlign = 'right'") > 0
+    && edt2.indexOf("data-tb=\"unarrange\"") > 0 && edt2.indexOf("case 'unarrange': doUnarrange();") > 0);
+T('取消并排渲染：wAlign=right 的窄块 margin-left:auto 贴页面右缘（app.js 渲染层支持，无 wAlign 行为不变）',
+  appSrc.indexOf("b.wAlign === 'right' ? 'margin-left:auto;' : ''") > 0);
+
 /* ---------- 8) 自动限时限制（banSelf）修复：三拦截全部打通 + 防锁死 ---------- */
 console.log('【8】密码试错自动限时限制（走通 + 防锁死）');
 T('banSelf 专用通道：绕过「不能屏蔽本机」守卫 + 轮询等签名密钥（waitBanKey 最多 3 秒）',
