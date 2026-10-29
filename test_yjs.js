@@ -147,6 +147,10 @@ T('登录后补启动协同通道：registerAdminTransports 幂等（__bc 防重
   col.indexOf('function registerAdminTransports(') > 0 && col.indexOf('__bc') > 0
     && col.indexOf('startAsAdmin: registerAdminTransports') > 0
     && appSrc.indexOf('LMCollab.startAsAdmin') > 0 && col.indexOf('eG1') > 0);
+T('降级可观测 + 自愈：初始化失败 Console.error 留痕 + toast 带具体异常 + 失败后自动重试 2 次（60 秒间隔）',
+  src.indexOf("console.error('[LMY-collab] 协同网络初始化失败") > 0
+    && src.indexOf('String((eBoot && eBoot.message) || eBoot).slice(0, 80)') > 0
+    && src.indexOf('function scheduleRetry(') > 0 && src.indexOf('bootTries >= 2') > 0);
 T('团队 Token 保险箱：AES-256-GCM + PBKDF2（store 加解密导出，明文 Token 不进界面/内容/云端）',
   sto.indexOf('encryptForTeam') > 0 && sto.indexOf('decryptForTeam') > 0
     && sto.indexOf('AES-GCM') > 0 && sto.indexOf('PBKDF2') > 0);

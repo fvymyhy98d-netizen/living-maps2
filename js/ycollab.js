@@ -23,6 +23,8 @@
       presence: function () { return []; },
       pushLocal: function () { /* 未启用 */ }
     };
+    /* 降级必须留痕：Console 记录完整信息（含堆栈），方便远程排查「协同初始化失败」类问题 */
+    try { console.warn('[LMY-collab] 已降级为离线模式：', msg || ''); } catch (eW0) { /* noop */ }
     if (msg) { try { if (window.LMApp) LMApp.toast('⚠ ' + msg); } catch (e) { /* noop */ } }
   }
   window.LMYCollab = {
@@ -271,9 +273,21 @@
       };
       try { if (window.LMCollab && LMCollab.paintChip) LMCollab.paintChip(); } catch (e7) { /* noop */ }
       toast('🟢 实时协同已就绪（Yjs Mesh）：自动直连 / TURN 兜底 / 离线可用');
-    } catch (eBoot) { stub('协同网络初始化失败，已降级：本机互连 + 云端照常'); }
+    } catch (eBoot) {
+      /* 初始化失败不再静默吞掉异常：Console 记录完整堆栈 + toast 显示具体原因，
+         并允许有限次自动重试（偶发时序问题一次失败不该永久降级） */
+      try { console.error('[LMY-collab] 协同网络初始化失败：', eBoot && (eBoot.stack || eBoot.message) || eBoot); } catch (eE0) { /* noop */ }
+      stub('协同网络初始化失败（' + String((eBoot && eBoot.message) || eBoot).slice(0, 80) + '）——已降级：本机互连 + 云端照常');
+      scheduleRetry();
+    }
   }
-  var booted = false;
+  var booted = false, bootTries = 0;
+  function scheduleRetry() { /* 失败后有限次重试（60 秒间隔）：偶发的库加载/初始化时序问题可自愈 */
+    if (bootTries >= 2) return;
+    bootTries++;
+    booted = false;
+    setTimeout(function () { try { boot(); } catch (eR0) { /* noop */ } }, 60000);
+  }
   function boot() {
     if (booted) return; booted = true;
     loadAll().then(function () {
@@ -292,8 +306,16 @@
         setTimeout(function () {
           try { applyKeys(allKeys(), '离线恢复'); } catch (eR) { /* noop */ }
         }, 60);
-      } catch (e) { stub('本地持久化初始化失败，已降级：本机互连 + 云端照常'); }
-    }, function () { stub('实时协同库（Yjs）加载失败，已降级：本机互连 + 云端照常'); });
+      } catch (e) {
+        try { console.error('[LMY-collab] 本地持久化初始化失败：', e && (e.stack || e.message) || e); } catch (eE1) { /* noop */ }
+        stub('本地持久化初始化失败（' + String((e && e.message) || e).slice(0, 80) + '）——已降级：本机互连 + 云端照常');
+        scheduleRetry();
+      }
+    }, function (eL) {
+      try { console.error('[LMY-collab] 协同库加载失败：', eL && (eL.message || eL) || eL); } catch (eE2) { /* noop */ }
+      stub('实时协同库（Yjs）加载失败——已降级：本机互连 + 云端照常');
+      scheduleRetry();
+    });
   }
   /* 访客极简：未登录管理员的设备不启动实时协同（不连信令、不显示在线模块），只保留云端只读轮询；
      管理员登录成功后由 app.js 调用 window.LMYCollabStart() 按需启动（登录前加载的仅为降级桩，不产生任何连接） */
