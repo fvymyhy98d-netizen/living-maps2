@@ -12,8 +12,8 @@ window.LMApp = (function () {
      即使整份代码被公开，从这份拉伸哈希反推密码的成本也被放大了数万倍 */
   const MASTER_AUTH = {
     v: 2, iters: 60000,
-    salt: 'b75f1e0c93a24d6e8c4f17ab2d95e608',
-    hash: '3210a1bd747faffd48b5d9610eb25638fe3b40f3d4e7d4e0e083dcc8db69e213'
+    salt: '4580218c326409846b91b430901b680a',
+    hash: '3b8c87323db231ff7849b9e57012e9ad65b8c42d9eec416eb4e0c75ced63e562'
   };
 
   /* ---------- 文档历史：撤销 / 重做（最多 60 步，本次打开页面期间有效） ---------- */

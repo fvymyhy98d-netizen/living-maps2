@@ -36,12 +36,12 @@ window.SITE_CONTENT = {
   },
   "config": {
     "admin": {
-      "hint": "密码已于 2026/10/29 19:20:59 修改",
+      "hint": "密码已于 2026/10/29 20:05 由仓库管理员重置（忘记密码应急）",
       "auth": {
         "v": 2,
         "iters": 60000,
-        "salt": "34af1bcb67bd07fdc68c038299484bc9",
-        "hash": "75ff483e94e32482e32f686800a288bc158628d7262e099a15beac702a4228f8"
+        "salt": "98163396dcdd9f82eddad2f084d3f506",
+        "hash": "f691b3bc3a1a55fd4ca6ecd30e6c76e45c4e8187af2be90ac7c9935cba980c89"
       }
     },
     "footer": {
@@ -49,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793281135992,
+      "syncTs": 1793284735992,
       "roster": {}
     }
   },
