@@ -49,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793275500565,
+      "syncTs": 1793275572742,
       "roster": {}
     }
   },
@@ -532,7 +532,10 @@ window.SITE_CONTENT = {
         {
           "type": "md",
           "text": "# 身价爱好",
-          "_ts": 1793275417692
+          "_ts": 1793275572729,
+          "style": {
+            "grad": "2"
+          }
         },
         {
           "type": "hr"
@@ -549,10 +552,11 @@ window.SITE_CONTENT = {
           "items": [
             {
               "label": "善加好",
-              "url": "httpjgreigeirgno"
+              "url": "httpjgreigeirgno",
+              "id": "r1"
             }
           ],
-          "seq": 0
+          "seq": 1
         }
       ]
     }
