@@ -189,6 +189,27 @@ window.LMCollab = (function () {
       try { localStorage.setItem(ROSTER_KEY, JSON.stringify(mine)); } catch (e2) { /* noop */ }
     } catch (e) { /* noop */ }
   }
+  /* ---------- 改动动态（WPS 式「谁改了什么」流水）----------
+     块级 _t 时间戳（后写优先的落款）就是天然的 diff 依据：合并前后比页面签名，
+     变了的页面进流水（最多 12 条），显示在协同比章面板 —— 不新增任何传输内容 */
+  var feed = [];
+  function pushFeed(by, page) {
+    feed.unshift({ ts: Date.now(), by: String(by || '其他设备'), page: String(page || '') });
+    if (feed.length > 12) feed.length = 12;
+    try {
+      const panNow = document.getElementById(PANEL_ID);
+      if (panNow && panNow.classList.contains('show')) renderPanel();
+    } catch (e) { /* noop */ }
+  }
+  function pushFeedFrom(before, after, by) {
+    const sigOf = function (p) { return ((p && p.blocks) || []).map(function (b) { return (b && b._t) || 0; }).join(',') + '|' + ((p && p.title) || ''); };
+    const oldSig = {};
+    ((before && before.pages) || []).forEach(function (p) { if (p && p.id) oldSig[p.id] = sigOf(p); });
+    ((after && after.pages) || []).forEach(function (p) {
+      if (!p || !p.id) return;
+      if (oldSig[p.id] !== sigOf(p)) pushFeed(by, p.title || p.id);
+    });
+  }
   function doApply(c, ts, by) {
     bump(ts);
     /* 讨论区保护：远端整包覆盖前，把本机还没广播出去的新发言并进去（id 并集 + 墓碑），防止丢评论 */
@@ -199,11 +220,13 @@ window.LMCollab = (function () {
     } catch (e0) { /* noop */ }
     rosterFromRemote(c);           /* 设备名单双向可见 */
     c = mergeBlocks(c);            /* 块级后写优先（见上方注释） */
+    const before = LMApp.state.content;
     let same = false;              /* 内容一模一样（重复帧 / 别人保存但没改东西）→ 不重绘不提示：
                                       协作模式下对方每次保存不再引发本机整页重绘，这是“开协作就卡”的主因之一 */
-    try { same = JSON.stringify(LMApp.state.content) === JSON.stringify(c); } catch (e5) { /* noop */ }
+    try { same = JSON.stringify(before) === JSON.stringify(c); } catch (e5) { /* noop */ }
     if (same) return;
     try { LMApp.state.content = c; LMApp.render(); } catch (e) { return; }
+    try { pushFeedFrom(before, c, by); } catch (eF0) { /* noop */ }
     setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
     LMApp.toast('🔄 已同步「' + (by || '其他设备') + '」的修改');
   }
@@ -427,6 +450,13 @@ window.LMCollab = (function () {
         + '<span class="cp-id">#' + escHtml(shortId(p.id)) + '</span>'
         + '<span class="cp-pg">' + escHtml(p.page || '') + '</span></div>';
     }).join('');
+    if (feed.length) { /* 改动动态（WPS 式）：远端合并进来的页面级变化流水 */
+      html += '<div class="cp-t">最近动态</div>' + feed.map(function (f2) {
+        return '<div class="cp-row"><b>' + escHtml(f2.by) + '</b>'
+          + '<span class="cp-pg">' + escHtml(f2.page) + '</span>'
+          + '<span class="cp-id">' + new Date(f2.ts).toLocaleTimeString('zh-CN') + '</span></div>';
+      }).join('');
+    }
     html += admin
       ? '<div class="cp-note">改名 / 查看全部设备 / 屏蔽管理：右上角 ⚙ 设置 → 协作与设备</div>'
       : '<div class="cp-note">设备昵称由管理员在 ⚙ 设置里统一管理（同昵称多设备允许，靠设备号区分）</div>';
@@ -442,6 +472,7 @@ window.LMCollab = (function () {
       });
       Object.keys(peers).forEach(function (k) { if (now - peers[k].ts > PEER_TTL) { delete peers[k]; paintChip(); renderPanel(); } });
       send({ type: 'iam', page: (window.LMApp ? LMApp.state.pageId : '') });
+      notifyPagePeers(); /* 同页多人提醒（进页/名单变化后按 key 去重，同人只提示一次） */
     } catch (e) { /* 心跳循环永不中断 */ }
   }
   /* ---------- 屏蔽机制（名单随内容同步，签名 = 管理密码通道哈希派生） ---------- */
@@ -750,6 +781,30 @@ window.LMCollab = (function () {
       }).catch(function () { /* 离线/网络抖动：下次再查 */ });
     } catch (eW) { /* noop */ }
   }
+  /* ---------- 同页多人提醒（WPS 式）：切页 / 名单变化时提示一次，防分工撞车 ----------
+     只在管理员模式响（访客极简不打扰）；同一「页面+设备组合」只提示一次，不重复轰炸 */
+  var pageNotified = {};
+  function notifyPagePeers() {
+    try {
+      if (!window.LMApp || !LMApp.state.admin) return;
+      const pid = LMApp.state.pageId;
+      if (!pid) return;
+      const names = [], seen = {};
+      Object.keys(peers).forEach(function (k) {
+        const p = peers[k];
+        if (p && p.page === pid && !seen[k]) { seen[k] = 1; names.push(p.name || '设备'); }
+      });
+      const yj = window.LMYCollab;
+      if (yj && yj.presence) yj.presence().forEach(function (p3) {
+        if (!p3 || p3.self || seen[p3.id] || p3.page !== pid) return;
+        seen[p3.id] = 1; names.push(p3.name || '设备');
+      });
+      const key = pid + '|' + names.slice().sort().join(',');
+      if (!names.length || pageNotified[key]) return;
+      pageNotified[key] = 1;
+      LMApp.toast('👥 本页还有 ' + names.length + ' 人（' + names.slice(0, 3).join('、') + (names.length > 3 ? ' 等' : '') + '）——同一块后保存的会覆盖，注意分工');
+    } catch (e) { /* noop */ }
+  }
   /* ---------- 事件接线 ---------- */
   function hello() { send({ type: 'hello', want: 1, page: (window.LMApp ? LMApp.state.pageId : '') }); }
   function init() {
@@ -784,6 +839,7 @@ window.LMCollab = (function () {
     ['mousedown', 'keydown', 'touchstart'].forEach(function (ev) {
       document.addEventListener(ev, function () { window._lmLastAct = Date.now(); }, { passive: true });
     });
+    window.addEventListener('hashchange', function () { setTimeout(notifyPagePeers, 900); }); /* 切页后等渲染稳定再提醒 */
     document.addEventListener('mousedown', function () { pointerDown = true; }, true);
     document.addEventListener('mouseup', function () { pointerDown = false; flushPending(); }, true);
     document.addEventListener('focusin', function (e) {

@@ -17,7 +17,7 @@ window.LMApp = (function () {
   };
 
   /* ---------- 文档历史：撤销 / 重做（最多 60 步，本次打开页面期间有效） ---------- */
-  const hist = { arr: [], ptr: -1 };
+  const hist = { arr: [], ts: [], ptr: -1 };
   /* 快照比较前剥离协作时间戳 _ts：touchBlock 每次都写 Date.now()，会让「内容其实没变」的
      保存也生成不同快照 —— 撤销时按一次没反应（看着像要按两次）。剥离后比较，一次操作 = 一步撤销。
      用字符串正则剥离（快、无解析）：JSON 里字符串内的引号都带反斜杠转义，不会误伤正文。
@@ -36,8 +36,11 @@ window.LMApp = (function () {
     const cur = hist.arr[hist.ptr];
     if (cur === snap || stripTsSnap(cur) === stripTsSnap(snap)) return;
     hist.arr = hist.arr.slice(0, hist.ptr + 1);
+    hist.ts = (hist.ts || []).slice(0, hist.ptr + 1);
     hist.arr.push(snap);
+    hist.ts.push(Date.now());
     if (hist.arr.length > 60) hist.arr.shift();
+    if (hist.ts.length > 60) hist.ts.shift();
     hist.ptr = hist.arr.length - 1;
     if (window.LMEditor && LMEditor.renderToolbar) { try { LMEditor.renderToolbar(); } catch (e) { /* noop */ } }
   }
@@ -719,6 +722,35 @@ window.LMApp = (function () {
     }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
     document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
   }
+  /* ---------- 历史版本面板（WPS 式）：列表 + 一键恢复 ----------
+     恢复 ≠ 指针回跳：把该快照变成一次「新修改」走完整 commit 链（本地落盘 → 实时广播 → 云端提交），
+     其他设备与云端照常收到，且本机可再撤销 —— 与 WPS「恢复到历史版本」语义一致 */
+  function historyList() {
+    const out = [];
+    for (let i = hist.arr.length - 1; i >= 0; i--) {
+      let c = null;
+      try { c = JSON.parse(hist.arr[i]); } catch (e) { continue; }
+      if (!c || !Array.isArray(c.pages)) continue;
+      const cur = c.pages.find(function (p) { return p && p.id === state.pageId; }) || c.pages[0] || {};
+      out.push({ i: i, ts: (hist.ts || [])[i] || 0, isCur: i === hist.ptr,
+                 pages: c.pages.length, size: hist.arr[i].length, title: cur.title || '' });
+    }
+    return out;
+  }
+  function restoreVersion(i) {
+    let c = null;
+    try { c = JSON.parse(hist.arr[i]); } catch (e) { return false; }
+    if (!c || !Array.isArray(c.pages)) return false;
+    state.content = c;
+    LMStore.saveLocal(state.content);
+    commit({ msg: '已恢复到 ' + new Date((hist.ts || [])[i] || Date.now()).toLocaleTimeString('zh-CN') + ' 的历史版本' });
+    return true;
+  }
+  /* ---------- 访客互动开关：管理员可在「网站信息」里关闭留言/讨论（关闭后访客仍可浏览全部内容） ---------- */
+  function commentsOff() {
+    try { return !!(state.content.config && state.content.config.commentsOff) && !state.admin; }
+    catch (e) { return false; }
+  }
   /* ---------- 管理员登录 ---------- */
   /* ---------- 密码校验（v2：PBKDF2 密钥拉伸 + 随机盐） ----------
      优先走 v2 拉伸记录；老内容只有单轮 SHA-256 时先按老方式验证，
@@ -1174,7 +1206,12 @@ window.LMApp = (function () {
     const meD = LMCommunity.me();
     const fb = fbList();
     const mine = fb.filter(function (it) { return it.dev === meD.code; });
-    let html = fbFormHtml() + fbMineHtml(mine) + dcHtml();
+    let html;
+    if (commentsOff()) {
+      html = '<p class="fb-empty">💬 留言与讨论已由管理员暂时关闭。你可以继续浏览全部内容；有需要请通过课程渠道联系小组。</p>';
+    } else {
+      html = fbFormHtml() + fbMineHtml(mine) + dcHtml();
+    }
     if (state.admin) html += fbAdminHtml(fb);
     host.innerHTML = html;
   }
@@ -1185,6 +1222,7 @@ window.LMApp = (function () {
     if (!f || !window.LMCommunity) return;
     if (f.id === 'fbForm') {
       e.preventDefault();
+      if (commentsOff()) { toast('留言已由管理员关闭'); return; }
       const text = (f.querySelector('#fbText').value || '').trim();
       const url = (f.querySelector('#fbUrl').value || '').trim();
       const g = LMCommunity.gate('feedback', text);
@@ -1207,6 +1245,7 @@ window.LMApp = (function () {
       mountFeedback();
     } else if (f.id === 'dcForm') {
       e.preventDefault();
+      if (commentsOff()) { toast('讨论区已由管理员关闭'); return; }
       const ta = f.querySelector('textarea[name="text"]');
       const g = LMCommunity.gate('post', ta ? ta.value : '');
       if (!g.ok) { toast(g.msg); return; }
@@ -1218,6 +1257,7 @@ window.LMApp = (function () {
       toast(window.LMCollab ? '已发表（实时同步给其他设备；云端设备随轮询可见）' : '已发表');
     } else if (f.hasAttribute && f.hasAttribute('data-dcreply')) {
       e.preventDefault();
+      if (commentsOff()) { toast('回复已由管理员关闭'); return; }
       const pid = f.getAttribute('data-dcreply');
       const ta = f.querySelector('textarea[name="text"]');
       const g = LMCommunity.gate('reply', ta ? ta.value : '');
@@ -1407,6 +1447,7 @@ window.LMApp = (function () {
     ensureConfig();
     setupResilience();
     hist.arr = [JSON.stringify(state.content)];
+    hist.ts = [Date.now()];
     hist.ptr = 0;
     state.admin = sessionStorage.getItem('lm_admin') === '1';
     state.root = state.admin && sessionStorage.getItem('lm_root') === '1';
@@ -1442,6 +1483,7 @@ window.LMApp = (function () {
   return {
     state: state, render: render, applyEdit: applyEdit, toast: toast,
     refreshDiscuss: mountFeedback,
+    historyList: historyList, restoreVersion: restoreVersion,
     esc: esc, md: md, currentId: currentId, ensureConfig: ensureConfig,
     commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayout,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,

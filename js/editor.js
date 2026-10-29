@@ -634,6 +634,7 @@ window.LMEditor = (function () {
       + '<button class="btn btn-primary" data-panel="sync" type="button">☁️ 同步到 GitHub</button>'
       + '<button class="btn btn-mini" data-panel="site" type="button">🏠 网站信息</button>'
       + '<button class="btn btn-mini" data-panel="pages" type="button">📄 页面管理</button>'
+      + '<button class="btn btn-mini" data-panel="hist" type="button">🕘 历史版本</button>'
       + '<button class="btn btn-mini" data-panel="backup" type="button">💾 备份 / 恢复</button>'
       + '<button class="btn btn-mini" data-panel="password" type="button">🔑 修改密码</button>';
   }
@@ -643,6 +644,7 @@ window.LMEditor = (function () {
     const k = p.getAttribute('data-panel');
     if (k === 'sync') syncModal();
     else if (k === 'site') siteModal();
+    else if (k === 'hist') histModal();
     else if (k === 'pages') pagesModal();
     else if (k === 'backup') backupModal();
     else if (k === 'password') passwordModal();
@@ -754,10 +756,43 @@ window.LMEditor = (function () {
     });
   }
 
+  /* ---------- 历史版本面板（WPS 式）----------
+     列出本次会话的编辑快照（最多 60 步，带时间与体量），一键恢复；
+     恢复走完整 commit 链（保存 → 实时广播 → 云端提交），且本机可再撤销 */
+  function histModal() {
+    const list = LMApp.historyList ? LMApp.historyList() : [];
+    if (!list.length) {
+      modal('<h3>历史版本</h3><p class="modal-note">本次打开页面还没有可回退的编辑记录（编辑任意内容后这里就会出现快照）。</p>'
+        + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>关闭</button></div>');
+      return;
+    }
+    modal('<h3>历史版本（本次会话 · 最多 60 步）</h3>'
+      + '<p class="modal-note">点「恢复此版本」= 把该快照变成一次新修改：会同步给其他设备并提交云端，本机还能再撤销。撤销栈之外更早的版本请用「💾 备份 / 恢复」。</p>'
+      + '<div style="max-height:52vh;overflow:auto">'
+      + list.map(function (v) {
+          const d = v.ts ? new Date(v.ts).toLocaleString('zh-CN') : '（更早）';
+          return '<div style="display:flex;gap:10px;align-items:center;padding:7px 2px;border-bottom:1px solid rgba(0,0,0,.06)">'
+            + '<b style="flex:1;font-size:.92rem">' + LMApp.esc(d) + (v.isCur ? ' <span style="color:#0a84ff;font-size:.8rem">← 当前</span>' : '') + '</b>'
+            + '<span style="color:#86868b;font-size:.8rem">' + v.pages + ' 页 · ' + Math.max(1, Math.round(v.size / 1024)) + 'KB</span>'
+            + (v.isCur ? '' : '<button type="button" class="btn btn-mini" data-restore="' + v.i + '">恢复此版本</button>')
+            + '</div>';
+        }).join('')
+      + '</div>'
+      + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>关闭</button></div>', function (root) {
+      root.querySelectorAll('[data-restore]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          const ok = LMApp.restoreVersion(+b.getAttribute('data-restore'));
+          if (ok) { closeModal(); LMApp.toast('✅ 已恢复历史版本（已同步其他设备并提交云端，可 Ctrl+Z 再撤销）'); }
+          else LMApp.toast('该版本数据异常，无法恢复');
+        });
+      });
+    });
+  }
   /* ---------- 网站信息 ---------- */
   function siteModal() {
     const s = LMApp.state.content.site;
     const f = LMApp.state.content.config.footer;
+    const cfgS = LMApp.state.content.config = LMApp.state.content.config || {};
     modal('<form id="siteForm"><h3>网站信息（首页与页脚）</h3>'
       + field('首页大标题', F.text('title', s.title))
       + field('顶部小字（课程名等）', F.text('subtitle', s.subtitle))
@@ -765,6 +800,8 @@ window.LMEditor = (function () {
       + field('网站简介', F.area('description', s.description, '', 3))
       + field('页脚一句话', F.text('note', f.note || ''))
       + field('GitHub 仓库链接（页脚展示，可留空）', F.text('githubUrl', f.githubUrl || '', 'https://github.com/用户名/仓库名'))
+      + field('访客互动', '<label style="display:flex;gap:8px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" name="cOff"' + (cfgS.commentsOff ? ' checked' : '') + ' style="width:16px;height:16px"> 关闭访客留言与讨论（访客只能浏览，不能留言发帖）</label>',
+          'WPS 式权限分级里的「仅浏览」开关：关闭后访客仍能看到全部内容与已有讨论，只是不能再发言。')
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
       + '<button class="btn btn-primary" type="submit">保存</button></div></form>', function (root) {
       root.querySelector('#siteForm').addEventListener('submit', function (e) {
@@ -776,6 +813,7 @@ window.LMEditor = (function () {
         s.description = String(fd.get('description') || '').trim();
         f.note = String(fd.get('note') || '').trim();
         f.githubUrl = String(fd.get('githubUrl') || '').trim();
+        cfgS.commentsOff = fd.get('cOff') === 'on';
         closeModal();
         LMApp.applyEdit('网站信息已保存');
       });

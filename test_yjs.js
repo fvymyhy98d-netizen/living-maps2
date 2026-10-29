@@ -156,5 +156,21 @@ T('配置漂移自愈（防旧缓存分房：定时拉最新 config 对比 room/
   col.indexOf('function cfgWatch') > 0 && col.indexOf('CFG_WATCH_KEY') > 0
     && col.indexOf('js/yjs-config.js?t=') > 0);
 
+/* ---------- 6) WPS 式能力补齐：历史版本面板 / 访客互动开关 / 改动动态 / 同页提醒 ---------- */
+console.log('【6】历史版本面板 / 访客互动开关 / 改动动态 / 同页多人提醒');
+T('历史版本面板：快照带时间戳（hist.ts 平行数组）+ 列表/恢复导出（恢复走完整 commit 链，可再撤销）',
+  appSrc.indexOf('hist.ts = (hist.ts || []).slice') > 0 && appSrc.indexOf('function historyList') > 0
+    && appSrc.indexOf('function restoreVersion') > 0 && appSrc.indexOf('historyList: historyList') > 0
+    && edt.indexOf('data-panel="hist"') > 0 && edt.indexOf('function histModal') > 0);
+T('访客互动开关：commentsOff 三通道拦截（留言/发帖/回复）+ 渲染层提示 + 网站信息开关（管理员不受限）',
+  appSrc.indexOf('function commentsOff') > 0 && (appSrc.match(/commentsOff\(\)\) \{ toast/g) || []).length >= 3
+    && appSrc.indexOf('留言与讨论已由管理员暂时关闭') > 0 && edt.indexOf('cOff') > 0);
+T('改动动态：合并前后页面签名 diff → 面板「最近动态」流水（复用 _t 时间戳，不加传输内容）',
+  col.indexOf('function pushFeedFrom') > 0 && col.indexOf('pushFeedFrom(before, c, by)') > 0
+    && col.indexOf('最近动态') > 0);
+T('同页多人提醒：进页（hashchange）与心跳扫描双触发 + key 去重（仅管理员态提示）',
+  col.indexOf('function notifyPagePeers') > 0 && col.indexOf('pageNotified') > 0
+    && col.indexOf("setTimeout(notifyPagePeers, 900)") > 0 && col.indexOf('notifyPagePeers(); /*') > 0);
+
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
