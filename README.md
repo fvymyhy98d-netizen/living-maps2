@@ -323,6 +323,12 @@ living-maps/
 > ▸ **新增备用线路**：`mqtt.brokers` 池（**跨供应商三台**：EMQX 中国节点 broker-cn.emqx.io 主 + EMQX 国际节点 broker.emqx.io 备 + HiveMQ broker.hivemq.com 备）。传输层按「房间哈希 % 池大小」**确定性选台**——同一房间所有设备算出同一台 broker，天然互通；主站故障时改 config 池两端同步生效。守护 52 条全绿。
 > ▸ **额度与定位（如实说明）**：EMQX/HiveMQ 公共 Broker 是官方免费测试服务，**无正式 SLA 与固定额度**（匿名、公平使用、有单客户端消息速率限制）；本站用量（5 人 × 15s 心跳 + 偶发握手 ≈ 每分钟 20-30 条小消息）远低于任何限制，课程场景完全够用；稳定性靠「跨供应商三台主备 + 确定性选台」兜底。
 
+> **🚀 正式上线记录（2026-10-29 深夜）**：
+> ▸ **线上地址**：`https://fvymyhy98d-netizen.github.io/living-maps2/`（仓库 `living-maps2`，GitHub Pages，main 分支 / root）。
+> ▸ **发布方式**：GitHub Desktop 图形界面（Publish repository → Pages 开 main + /root），全程零命令行；日常代码更新 = Desktop 里 Commit to main + Push origin 两下；**内容更新连 Desktop 都不用**——管理员配一次 Fine-grained Token（Contents: Read and write）后，**每次编辑保存自动提交 `data/content.js`**，访客设备 90 秒只读轮询自动跟上（管理员设备轮询提频至 6~15 秒档）。
+> ▸ **排障实录（教训沉淀）**：① 首次部署 404 = Pages 还在构建（1~5 分钟），非故障；② 一次全站白屏的根因是**同步模板的说明注释里嵌了 `/*CONTENT-START*/` 字样，内部的 `*/` 把注释提前闭合**，生成的 content.js 语法错误 → 核心数据加载失败（Console 报 `Unexpected identifier 'JSON'` + `deepCopy → JSON.parse(undefined)` 连锁崩）。修复：store.js 模板去掉嵌套注释符号 + 管理员重新同步一次即恢复（管理员浏览器有 localStorage 缓存不受影响，恰是修复跳板）。**方法论：F12 Console 的报错 + 直接抓线上文件做 `node --check`，10 分钟定位并验证。**
+> ▸ **协作规范（实测沉淀）**：内容同步「后保存的赢」——两人**同时改同一处**会互相覆盖；正确姿势是**分页面分工**（各改各的地图），同一页改完打声招呼。管理员之间互见修改约 6~15 秒，访客 90 秒~5 分钟，急看就硬刷新。
+
 
 ## 四、部署到 GitHub Pages（约 10 分钟）
 
