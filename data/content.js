@@ -49,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793275480286,
+      "syncTs": 1793275500565,
       "roster": {}
     }
   },
@@ -546,7 +546,13 @@ window.SITE_CONTENT = {
         {
           "type": "sources",
           "title": "本页来源",
-          "items": []
+          "items": [
+            {
+              "label": "善加好",
+              "url": "httpjgreigeirgno"
+            }
+          ],
+          "seq": 0
         }
       ]
     }
