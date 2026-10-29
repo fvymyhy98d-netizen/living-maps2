@@ -1871,13 +1871,30 @@ window.LMEditor = (function () {
     /* ★ 选区边界切在加粗/斜体/高亮等标记中间（如从加粗词中间开始拖选）→ 自动扩展到完整
        包含该标记。旧版不扩展：跨着标记边界的选区一律静默 return false 交给整段
        applyStyle ——「选中带加粗的词再高亮，整个文本框都被高亮」「跨加粗/非加粗设色失败」
-       两个 bug 都从这里来。@@ 颜色标记骑跨仍保守拒绝（其开标记带色值前缀，扩展会把标记
-       语法卷进新包裹产生坏源码）。md.js 渲染加粗/斜体等先于 ==、@@ 自内向外循环，
-       扩展后 == / @@ 内嵌套加粗等标记都能正常解析 */
+       两个 bug 都从这里来。@@ 颜色/字号标记不在此扩展（见下方外层包裹扩展）。
+       md.js 渲染加粗/斜体等先于 ==、@@ 自内向外循环，扩展后 == / @@ 内嵌套加粗等标记
+       都能正常解析 */
     w.toks.forEach(function (k) {
       if (SYM.indexOf(k.t) < 0) return;
       if (k.b > s0 && k.a < e0 && (k.a < s0 || k.b > e0)) { s0 = Math.min(s0, k.a); e0 = Math.max(e0, k.b); }
     });
+    /* ★ 外层 hl / @@ 包裹「骑跨」选区（开标记在选区前、闭标记在选区后）→ 把选区扩展到该
+       包裹的完整范围，随后 stripToks 会把（现已完整包含的）外层对剥掉再包新标记 —— 全程
+       无嵌套。修复㉖⑦放宽后踩过的坑：外层已 ==…== 时在其内部再包 == / @@，md.js 的 ==
+       配对是线性最近闭合、@@ 的 [^@]+ 会被内层开标记截断，嵌套必然错配 →「选中的不高亮、
+       没选中的高亮」「调色后冒出可见 ==」全是它。配对方式与 md.js 一致：hl 单槽交替
+       （线性最近闭合），@@ 用 @@o/@@c 栈配对 */
+    (function () {
+      var openHl = null, stAt = [], pairs = [];
+      w.toks.forEach(function (k) {
+        if (k.t === 'hl') { if (openHl === null) { openHl = k; } else { pairs.push([openHl, k]); openHl = null; } }
+        else if (k.t === '@@o') stAt.push(k);
+        else if (k.t === '@@c' && stAt.length) pairs.push([stAt.pop(), k]);
+      });
+      pairs.forEach(function (p) {
+        if (p[0].a < s0 && p[1].b > e0) { s0 = p[0].a; e0 = p[1].b; }
+      });
+    })();
     const inter = w.toks.filter(function (k) { return k.b > s0 && k.a < e0; }); /* 与选区相交的标记 */
     const touchHl = w.toks.some(function (k) { /* 紧贴选区边界的 ==/@@（非完整包裹）→ 配对会被打散 */
       if (k.a >= s0 && k.b <= e0) return false;
@@ -1907,7 +1924,8 @@ window.LMEditor = (function () {
       } else {
         /* 与颜色/渐变分支同一保守策略：骑跨任何标记（一半在内一半在外）→ 回退整段；
            完整包含在选区内的标记可共存 —— md.js 里加粗等先渲染、== 后渲染，
-           == 内的加粗/斜体正常解析；只剥选区内完整的旧颜色/旧高亮（== 里不能再套 ==） */
+           == 内的加粗/斜体正常解析；只剥选区内完整的旧颜色/旧高亮（== 里不能再套 ==）。
+           外层 hl/@@ 包裹骑跨的情况已在上方扩展为整个包裹范围（此处不会遇到） */
         if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false;
         if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return false;
         const r = stripToks(t, w.toks, s0, e0, ['@@o', '@@c', 'hl']);
@@ -1942,11 +1960,12 @@ window.LMEditor = (function () {
         nt = stripToks(t, rm, s0, e0, ['@@o', '@@c']).text;
         msg = '已清除' + kind + '（仅选中文字）';
       } else {
-        if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false; /* 骑跨 → 回退整段 */
+        if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false; /* ref/jump/link 等骑跨 → 回退整段 */
         if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return false;
-        /* ★ 只包选区（md.js 支持嵌套渲染）。旧版在这里向外扩展完整包裹层再重包，
-           把选区外的文字也拖进了新标记 —— 「画一个词、整段变色」的元凶，已移除 */
-        const r = stripToks(t, w.toks, s0, e0, ['@@o', '@@c', 'hl']); /* 内部完整颜色/高亮对先剥掉再包新标记 */
+        /* ★ 只包选区；选区内完整的旧颜色/高亮对先剥掉再包新标记（嵌套安全：内层对紧贴
+           新外层开标记，md.js 的 [^@]+ 空匹配失败会先消耗内层）。外层包裹骑跨选区的
+           情况已在上方整体外扩（= 换掉外层包裹的语义）—— 那种嵌套永不安全：外层
+           [^@]+ 内容非空时会抢内层 @@ 的开标记当闭合，配对全线错乱 */
         nt = r.text.slice(0, r.s) + '@@' + tag + ',' + r.text.slice(r.s, r.e) + '@@' + r.text.slice(r.e);
         msg = '已对选中文字应用' + kind;
       }

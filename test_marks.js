@@ -71,5 +71,9 @@ eq('font-inline', inlineFmt('@@f:hei,黑体字@@'),
 eq('font-color-key-order', inlineFmt('@@red,红字@@'), '<span style="color:red">红字</span>');
 eq('size-around-font', inlineFmt('@@22,@@f:hei,字@@@@'),
   "<span style=\"font-size:22px\"><span data-lmf=\"hei\" style=\"font-family:'Heiti SC','SimHei',sans-serif\">字</span></span>");
+/* 10) 孤立 == 自愈（修复㉗）：历史坏数据里未配对的 == 不再泄漏成可见文字
+   （「调完颜色前面出现个 = 号」——外层高亮嵌套错配的残骸，渲染兜底清掉） */
+eq('heal-lone-hl', inlineFmt('具体==关系'), '具体关系');
+eq('heal-lone-hl-bold', inlineFmt('讲清楚**具体==关系**'), '讲清楚<strong>具体关系</strong>');
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

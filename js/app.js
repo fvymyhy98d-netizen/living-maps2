@@ -632,6 +632,12 @@ window.LMApp = (function () {
     if (window.LMEditor && LMEditor.fixFreeOverlaps) { try { LMEditor.fixFreeOverlaps(); } catch (e0) { /* noop */ } }
     assignRefNums();
     if (window.LMEditor) { LMEditor.renderAdminBar(); LMEditor.renderToolbar(); }
+    /* ★ 撤销基准快照（修复㉗）：hist 初始为空、只在 commit 时入栈 —— 会话里第一次格式操作
+       之前的内容从未入栈，那一次的撤销（canUndo=false）静默无效，用户以为撤掉了、接着的
+       新格式就把「没撤掉的旧格式」一起叠上来（删除线→撤销→加下划线→删除线复活 = 它）。
+       render 尾部挂一次 hPush：加载完成 / 协同回灌 / 云端落地等任何内容变更都作为基准入栈
+       （hPush 有 stripTsSnap 去重，重复调用无副作用） */
+    hPush();
     observeReveal();
     app.classList.remove('page-enter');
     void app.offsetWidth;

@@ -65,5 +65,19 @@ T('focusout page-field guard (fix25)', /normTxt\(page\[pgF\]\) === txt/.test(esr
 T('focusout md-src guard (fix25)', /String\(b\.text == null \? '' : b\.text\) === String\(el\.value == null \? '' : el\.value\)/.test(esrc));
 T('applyInline no-op never commits (fix25)', /if \(nt === t\) \{ refreshFmtState\(\); return true; \}/.test(esrc));
 
+/* =========================================================
+   修复㉗：撤销基准快照 —— hist 初始为空、只在 commit 时入栈，会话里第一次格式操作之前的
+   内容从未入栈 → 那一次的撤销（canUndo=false）静默无效，用户以为撤掉了、接着的新格式把
+   「没撤掉的旧格式」一起叠上来（加删除线→撤销→加下划线→删除线复活）。render 尾部挂
+   hPush 后：加载完成 / 协同回灌（doApply 里 LMApp.render()）/ 云端落地都成为撤销基准 */
+const asrc = fs.readFileSync('js/app.js', 'utf8');
+T('render-tail hPush undo baseline (fix27)', /renderAdminBar\(\); LMEditor\.renderToolbar\(\); \}[\s\S]{0,600}hPush\(\);/.test(asrc));
+
+/* =========================================================
+   修复㉗：外层 hl/@@ 包裹骑跨选区 → 扩展选区到外层完整范围再剥再包（全程无嵌套）——
+   修复㉖⑦放宽后，在已有 ==…== 内部再包 == 会嵌套错配：md.js 的 == 配对是线性最近闭合、
+   @@ 的 [^@]+ 会被内层开标记截断 →「选中的不高亮、没选中的高亮」「调色后冒出可见 ==」 */
+T('outer hl/@@ wrap straddling selection expands selection (fix27)', /外层 hl \/ @@ 包裹「骑跨」选区[\s\S]{0,1200}pairs\.forEach/.test(esrc));
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
