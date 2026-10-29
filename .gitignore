@@ -1,0 +1,7 @@
+# Node（自建信令服务器依赖；网站本身是纯静态，不需要 node_modules）
+node_modules/
+package-lock.json
+
+# 系统与编辑器杂物
+Thumbs.db
+.DS_Store

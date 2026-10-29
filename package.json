@@ -1,0 +1,16 @@
+{
+  "name": "living-maps",
+  "version": "1.0.0",
+  "private": true,
+  "description": "三张活地图。网站本体是纯静态（index.html + js/css/lib/data），无需任何构建即可部署 GitHub Pages；本 package.json 只服务于开发工具：node build-libs.js 把 Yjs 套件打包进 lib/ 并本地化 mqtt UMD（升级版本时重跑）",
+  "scripts": {
+    "build-libs": "node build-libs.js"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "mqtt": "^5",
+    "y-indexeddb": "^9",
+    "y-protocols": "1.0.7",
+    "yjs": "^13"
+  }
+}

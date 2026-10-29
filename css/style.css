@@ -1,0 +1,844 @@
+/* =========================================================
+   三张活地图 · 样式表（Apple 官网风格）
+   结构：基础 → 导航 → 按钮 → 首页 → 内容块 → 管理模式
+        → 弹窗 → 页脚 → 动画 → 响应式
+   ========================================================= */
+
+/* ---------- 基础 ---------- */
+:root{
+  --bg:#ffffff;
+  --bg2:#f5f5f7;
+  --text:#1d1d1f;
+  --text2:#86868b;
+  --blue:#0071e3;
+  --blue-h:#0077ed;
+  --line:#d2d2d7;
+  --radius:18px;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro SC","SF Pro Display","SF Pro Text","PingFang SC","Hiragino Sans GB","Helvetica Neue","Microsoft YaHei",sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{color:var(--blue);text-decoration:none}
+img{max-width:100%;display:block}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+.muted{color:var(--text2);font-size:14px}
+
+/* ---------- 顶部导航（毛玻璃悬浮） ---------- */
+.nav{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.72);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);transition:box-shadow .3s ease}
+.nav.scrolled{box-shadow:0 1px 0 rgba(0,0,0,.10)}
+.nav-inner{max-width:1024px;margin:0 auto;padding:0 22px;height:52px;display:flex;align-items:center;gap:24px}
+.brand{color:var(--text);font-weight:600;font-size:17px;letter-spacing:-.01em;white-space:nowrap}
+.nav-links{display:flex;gap:28px;flex:1;justify-content:center;overflow-x:auto;scrollbar-width:none}
+.nav-links::-webkit-scrollbar{display:none}
+.nav-links a{color:rgba(29,29,31,.8);font-size:13px;white-space:nowrap;padding:4px 2px;border-radius:6px;transition:color .2s ease,opacity .2s ease}
+.nav-links a:hover{color:var(--text)}
+.nav-links a:active{opacity:.6}
+.nav-links a.active{color:var(--text);font-weight:600}
+.nav-actions{display:flex;align-items:center;gap:8px}
+
+/* ---------- 按钮（胶囊形，带按压动画） ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:980px;padding:9px 18px;font-size:14px;font-weight:500;user-select:none;transition:transform .15s ease,background-color .2s ease,color .2s ease,box-shadow .2s ease}
+.btn:active{transform:scale(.94)}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:var(--blue-h)}
+.btn-primary:disabled{opacity:.6;cursor:default;transform:none}
+.btn-ghost{background:rgba(0,0,0,.05);color:var(--text)}
+.btn-ghost:hover{background:rgba(0,0,0,.09)}
+.btn-ghost-dark{background:transparent;color:var(--blue);border:1px solid var(--line)}
+.btn-ghost-dark:hover{border-color:var(--blue)}
+.btn-mini{padding:6px 13px;font-size:12px;background:rgba(0,0,0,.06);color:var(--text);border-radius:980px}
+.btn-mini:hover{background:rgba(0,0,0,.11)}
+.btn.danger{color:#ff375f}
+
+/* ---------- 首页 Hero（大标题 + 渐变字） ---------- */
+.hero{max-width:860px;margin:0 auto;padding:96px 22px 64px;text-align:center}
+.eyebrow{font-size:13px;font-weight:600;color:var(--blue);letter-spacing:.02em;margin-bottom:14px}
+.hero-title{font-size:clamp(46px,8vw,88px);font-weight:700;letter-spacing:-.022em;line-height:1.05;background:linear-gradient(94deg,#0090f7 0%,#6a5df9 38%,#e64ac0 72%,#f5a623 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.hero-topic{margin-top:20px;font-size:clamp(18px,2.6vw,24px);font-weight:600;letter-spacing:-.01em}
+.hero-desc{margin:12px auto 0;max-width:660px;font-size:16px;color:var(--text2)}
+.hero-cta{margin-top:36px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* ---------- 区块与卡片 ---------- */
+.section{max-width:1024px;margin:0 auto;padding:56px 22px}
+.section-title{font-size:clamp(28px,4.4vw,46px);font-weight:700;letter-spacing:-.015em;text-align:center;margin-bottom:44px}
+.map-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.map-card{background:var(--bg2);border-radius:var(--radius);padding:36px 28px;display:flex;flex-direction:column;gap:10px;color:var(--text);transition:transform .35s cubic-bezier(.16,1,.3,1),box-shadow .35s ease}
+.map-card:hover{transform:translateY(-6px);box-shadow:0 20px 44px rgba(0,0,0,.10)}
+.map-card:active{transform:translateY(-2px) scale(.985)}
+.card-ico{font-size:34px;line-height:1}
+.map-card h3{font-size:22px;font-weight:700;letter-spacing:-.01em}
+.map-card p{font-size:14px;color:var(--text2);flex:1}
+.card-link{font-size:14px;color:var(--blue);font-weight:500}
+.feature-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.feature{background:var(--bg2);border-radius:var(--radius);padding:28px 22px}
+.feature .fi{font-size:26px;line-height:1}
+.feature h4{margin-top:12px;font-size:16px;font-weight:650}
+.feature p{margin-top:6px;font-size:13px;color:var(--text2)}
+/* ---------- 内容页（页面大标题 + 内容块） ---------- */
+.page-hero{max-width:860px;margin:0 auto;padding:72px 22px 10px;text-align:center}
+.page-hero h1{font-size:clamp(34px,5.4vw,56px);font-weight:700;letter-spacing:-.018em}
+.page-desc{margin-top:12px;color:var(--text2);font-size:16px}
+.blocks{max-width:780px;margin:0 auto;padding:28px 22px 96px;display:flex;flex-direction:column;gap:26px}
+
+.b-h{letter-spacing:-.01em;font-weight:700}
+.b-h1{font-size:34px;margin-top:16px}
+.b-h2{font-size:26px;margin-top:12px}
+.b-h3{font-size:20px;margin-top:8px}
+.b-p{font-size:16.5px;color:#333336}
+.b-p.lead{font-size:19px;color:var(--text);font-weight:500}
+.block-title{font-size:19px;font-weight:700;margin-bottom:12px}
+
+.callout{border-radius:var(--radius);padding:22px 24px}
+.tone-gray{background:var(--bg2)}
+.tone-blue{background:#eaf3ff}
+.tone-green{background:#e9f9ee}
+.tone-orange{background:#fff3e5}
+.tone-pink{background:#fdeef4}
+.callout-title{font-weight:700;margin-bottom:6px;font-size:15px}
+.callout-text{font-size:15px;color:#3a3a3c}
+
+.table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:480px}
+th{background:var(--bg2);text-align:left;font-weight:600;white-space:nowrap}
+th,td{padding:12px 14px;border-bottom:1px solid #e8e8ed;vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+tbody tr{transition:background .15s ease}
+tbody tr:hover{background:#fafafa}
+
+.b-fig{margin:0}
+.b-fig img{border-radius:var(--radius);box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.b-fig figcaption{margin-top:10px;text-align:center;font-size:13px;color:var(--text2)}
+.b-fig.full{max-width:920px;margin-left:auto;margin-right:auto}
+
+.chart-box svg{width:100%;height:auto;display:block}
+
+.file-list{display:flex;flex-direction:column;gap:10px}
+.file-item{display:flex;align-items:center;gap:12px;background:var(--bg2);border-radius:14px;padding:14px 18px;color:var(--text);transition:transform .2s ease,box-shadow .2s ease}
+.file-item:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.09)}
+.file-item:active{transform:scale(.985)}
+.file-ico{font-size:17px}
+.file-name{font-size:14.5px;font-weight:500}
+.file-arrow{margin-left:auto;color:var(--text2)}
+
+.src-list{padding-left:22px;font-size:14px;color:var(--text2);display:flex;flex-direction:column;gap:8px}
+
+/* ---------- 管理模式 ---------- */
+.block-wrap{position:relative;border-radius:14px;border:1.5px dashed transparent;transition:border-color .2s ease,background .2s ease}
+body.admin .block-wrap:hover{border-color:rgba(0,113,227,.55);background:rgba(0,113,227,.03)}
+body.admin .block-wrap.selected{border-color:var(--blue);background:rgba(0,113,227,.05);box-shadow:0 4px 18px rgba(0,113,227,.10)}
+/* 无动画重绘：编辑操作静默更新，不闪屏（Word 式） */
+body.no-anim .reveal{opacity:1 !important;transform:none !important;transition:none !important}
+body.no-anim #app{animation:none !important}
+.block-tools{position:absolute;top:10px;right:10px;display:none;gap:6px;z-index:5}
+body.admin .block-wrap:hover .block-tools,body.admin .block-wrap.selected .block-tools{display:flex}
+.block-tools button{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.95);box-shadow:0 2px 10px rgba(0,0,0,.16);font-size:13px;display:flex;align-items:center;justify-content:center;transition:transform .12s ease}
+.block-tools button:hover{transform:scale(1.1)}
+.block-tools button:active{transform:scale(.9)}
+
+.add-block{display:none;margin:0 auto;padding:13px 28px;border:1.5px dashed var(--line);border-radius:980px;color:var(--text2);font-size:14px;transition:all .2s ease}
+body.admin .add-block{display:inline-flex}
+.add-block:hover{border-color:var(--blue);color:var(--blue);background:rgba(0,113,227,.05)}
+
+#adminBar{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;z-index:90;display:flex;gap:8px;background:rgba(255,255,255,.85);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);padding:10px;border-radius:980px;box-shadow:0 12px 34px rgba(0,0,0,.18);flex-wrap:wrap;justify-content:center;max-width:94vw;animation:pageIn .4s ease}
+
+/* ---------- Word 式在线编辑（管理模式） ---------- */
+body.admin [data-edit]{outline:1.5px dashed transparent;outline-offset:3px;border-radius:6px;cursor:text;transition:outline-color .15s ease,background-color .15s ease;caret-color:var(--blue)}
+body.admin [data-edit]:hover{outline-color:rgba(0,113,227,.45)}
+body.admin [data-edit]:focus{outline:none;background:rgba(0,113,227,.045)}
+body.admin [data-edit]:empty::before{content:attr(data-ph);color:var(--text2);pointer-events:none}
+/* 修复：渐变/透明填充的文字在编辑时新输入的字会隐形（Chrome 渲染特性）——聚焦期间临时用实色 */
+body.admin [data-edit]:focus,body.admin [data-edit]:focus *{-webkit-text-fill-color:#1d1d1f !important;color:#1d1d1f !important;background-image:none !important}
+body.admin .edit-note{font-size:12px;color:var(--text2);margin-top:8px}
+body.admin .src-link{font-size:12px;margin-left:6px;color:var(--blue);cursor:pointer}
+body.admin .file-item{cursor:text}
+body.admin .file-item .file-arrow{cursor:pointer}
+body.admin .pg-ico{cursor:default}
+.bar-tip{align-self:center;font-size:12px;color:var(--text2);padding:0 6px;white-space:nowrap}
+.save-dot{align-self:center;font-size:12px;color:#34c759;padding:0 6px;white-space:nowrap;transition:transform .2s ease}
+.save-dot.flash{transform:scale(1.12)}
+/* ---------- 弹窗 ---------- */
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .25s ease}
+.modal-card{background:#fff;border-radius:20px;padding:28px;width:100%;max-width:640px;max-height:86vh;overflow:auto;animation:popIn .32s cubic-bezier(.16,1,.3,1);box-shadow:0 30px 80px rgba(0,0,0,.25)}
+.modal-card h3{font-size:20px;letter-spacing:-.01em}
+.modal-note{font-size:13px;color:var(--text2);margin-top:8px;line-height:1.6}
+.field{display:block;margin-top:16px}
+.field-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+.field-hint{display:block;font-size:12px;color:var(--text2);margin-top:5px}
+.input{width:100%;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:14px;font-family:inherit;background:#fff;transition:border-color .2s ease,box-shadow .2s ease}
+.input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,113,227,.18)}
+textarea.input{resize:vertical;line-height:1.55}
+.form-actions{margin-top:22px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.color-row{display:flex;align-items:center;gap:12px}
+.color-row input[type=color]{width:46px;height:32px;border:1px solid var(--line);border-radius:8px;padding:2px;background:#fff;cursor:pointer}
+.chk{font-size:13px;color:var(--text2);display:flex;align-items:center;gap:6px;cursor:pointer}
+.type-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+.type-btn{background:var(--bg2);border-radius:14px;padding:16px 8px;display:flex;flex-direction:column;align-items:center;gap:7px;font-size:13px;font-weight:500;transition:transform .15s ease,background .2s ease}
+.type-btn:hover{background:#e8e8ed}
+.type-btn:active{transform:scale(.93)}
+.type-btn .ti{font-size:22px}
+.page-rows{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+.page-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--bg2);border-radius:14px;padding:10px}
+.page-row .input{flex:1;min-width:120px}
+.page-row.new-page{background:transparent;border:1.5px dashed var(--line)}
+/* 新页面模板：虚线大按钮（点一下多一个空白模板行） */
+button.page-row.new-page{width:100%;justify-content:center;color:var(--muted);font-size:13.5px;cursor:pointer;padding:14px;margin-top:2px;transition:border-color .2s ease,color .2s ease}
+button.page-row.new-page:hover{border-color:var(--blue);color:var(--blue);background:rgba(0,113,227,.05)}
+.page-row.page-new{background:rgba(0,113,227,.04);border:1px solid rgba(0,113,227,.25)}
+
+/* ---------- 轻提示 Toast ---------- */
+.toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(29,29,31,.92);color:#fff;padding:10px 20px;border-radius:980px;font-size:13px;z-index:300;opacity:0;transition:opacity .3s ease,transform .3s ease;pointer-events:none;max-width:86vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- 页脚 ---------- */
+.footer{background:var(--bg2);margin-top:40px}
+.footer-inner{max-width:1024px;margin:0 auto;padding:36px 22px;color:var(--text2);font-size:12.5px;display:flex;flex-direction:column;gap:6px}
+.foot-brand{font-size:15px;font-weight:600;color:var(--text)}
+.foot-meta a{color:var(--blue)}
+
+/* ---------- 动画 ---------- */
+.page-enter{animation:pageIn .5s cubic-bezier(.16,1,.3,1)}
+@keyframes pageIn{from{opacity:0;transform:translateY(14px)}}
+@keyframes fadeIn{from{opacity:0}}
+@keyframes popIn{from{opacity:0;transform:scale(.94) translateY(10px)}}
+.reveal{opacity:0;transform:translateY(30px);transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1)}
+.reveal.in{opacity:1;transform:none}
+/* —— 让位 / 换位的平滑动画 ——
+   内容块被文本框压住让位时 margin-top 渐进过渡（框移走回弹同样有动画）；
+   自由框 ⤒/↑/↓/贴边时 top/left/width 渐进过渡。拖拽中加 .dragging 关闭过渡保证跟手。
+   注意：这里必须把 opacity/transform 一并列全，否则会覆盖上面 .reveal 的入场过渡 */
+/* 🔒 YIELD-V4 已锁定：下面三条过渡规则（margin-top 渐变 / .no-measure-anim / .free-box）与让位引擎是整体，改动会让拖拽让位重新发抖 */
+.blocks > .block-wrap:not(.free-box){transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1),margin-top .4s cubic-bezier(.16,1,.3,1)}
+/* 让位测量专用：adjustFreeLayout 计算期间临时挂上，拿到真实布局位置后立刻摘除 */
+.blocks.no-measure-anim > .block-wrap{transition:none !important}
+.free-box{transition:opacity .9s cubic-bezier(.16,1,.3,1),transform .9s cubic-bezier(.16,1,.3,1),top .4s cubic-bezier(.16,1,.3,1),left .4s cubic-bezier(.16,1,.3,1),width .4s cubic-bezier(.16,1,.3,1)}
+/* ★ 保险丝：自由框永远保持 absolute —— 块排序共用的 .dragging 类带 position:fixed（悬浮克隆专用），
+   框一旦被 fixed 化，inline 的 top:几百px 会被按「视口坐标」解释，瞬间飞出屏幕下方
+   （这就是“一按住手柄框就飞到底下”的根因）； free-drag 是自由框专属的拖拽态，只关过渡 */
+.free-box.dragging{position:absolute !important;transition:none;cursor:grabbing}
+.free-box.free-drag{transition:none !important;cursor:grabbing;z-index:60}
+.map-cards .reveal:nth-child(2){transition-delay:.08s}
+.map-cards .reveal:nth-child(3){transition-delay:.16s}
+.feature-grid .reveal:nth-child(2){transition-delay:.06s}
+.feature-grid .reveal:nth-child(3){transition-delay:.12s}
+.feature-grid .reveal:nth-child(4){transition-delay:.18s}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:860px){
+  .map-cards{grid-template-columns:1fr}
+  .feature-grid{grid-template-columns:repeat(2,1fr)}
+  .nav-links{justify-content:flex-start}
+}
+@media (max-width:540px){
+  .feature-grid{grid-template-columns:1fr}
+  .type-grid{grid-template-columns:repeat(2,1fr)}
+  .hero{padding:64px 18px 44px}
+  .nav-inner{gap:12px;padding:0 14px}
+  .brand{font-size:15px}
+  .nav-links{gap:16px}
+  #adminBar{border-radius:22px;padding:8px}
+}
+
+/* =========================================================
+   Word / WPS 式浮动工具栏（苹果风）+ 弹出面板
+   ========================================================= */
+#editBar{position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:96;
+  display:flex;align-items:center;gap:2px;padding:6px 8px;border-radius:14px;
+  background:rgba(255,255,255,.78);backdrop-filter:saturate(180%) blur(20px);
+  -webkit-backdrop-filter:saturate(180%) blur(20px);
+  border:1px solid rgba(0,0,0,.08);box-shadow:0 8px 28px rgba(0,0,0,.14);
+  max-width:calc(100vw - 20px);overflow-x:auto;scrollbar-width:none;
+  touch-action:pan-x;-webkit-overflow-scrolling:touch}
+#editBar::-webkit-scrollbar{display:none}
+.tb-btn{flex:none;height:30px;min-width:30px;padding:0 9px;border:0;border-radius:8px;background:transparent;
+  font-size:13px;color:var(--ink);cursor:pointer;line-height:1;transition:background .15s ease}
+.tb-btn:hover:not(:disabled){background:rgba(0,0,0,.06)}
+.tb-btn:disabled{opacity:.32;cursor:default}
+.tb-btn.primary{background:var(--blue);color:#fff}
+.tb-btn.primary:hover:not(:disabled){background:#0077ed}
+.tb-btn.wide{padding:0 12px;white-space:nowrap}
+.tb-sel{flex:none;height:30px;border:1px solid rgba(0,0,0,.12);border-radius:8px;background:#fff;
+  font-size:12.5px;color:var(--ink);padding:0 4px;max-width:106px;cursor:pointer}
+.tb-div{flex:none;width:1px;height:20px;background:rgba(0,0,0,.12);margin:0 5px}
+.tb-lab{flex:none;font-size:11px;color:var(--muted);padding:0 2px;white-space:nowrap}
+.hl-demo{background:#ffe08a;border-radius:4px;padding:0 3px}
+@media(max-width:760px){#editBar{top:56px}}
+
+.popover{position:fixed;z-index:300;background:rgba(255,255,255,.92);backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(0,0,0,.08);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.18);
+  padding:12px;min-width:200px;animation:popIn .18s ease}
+@keyframes popIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.pop-title{font-size:12px;color:var(--muted);margin-bottom:8px}
+.swatches{display:flex;flex-wrap:wrap;gap:6px;max-width:230px}
+.sw{width:26px;height:26px;border-radius:8px;border:1px solid rgba(0,0,0,.12);cursor:pointer;padding:0;transition:transform .12s ease}
+.sw:hover{transform:scale(1.12)}
+.sw-none{background:#fff;font-size:12px;color:var(--muted)}
+.sw-custom{-webkit-appearance:none;appearance:none;width:46px;height:28px;padding:0;border:0;background:none;
+  border-radius:9px;cursor:pointer;box-shadow:0 0 0 1px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.14);
+  transition:transform .16s ease,box-shadow .16s ease;vertical-align:middle}
+.sw-custom::-webkit-color-swatch-wrapper{padding:0}
+.sw-custom::-webkit-color-swatch{border:none;border-radius:9px}
+.sw-custom::-moz-color-swatch{border:none;border-radius:9px}
+.pop-custom{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-top:10px;color:var(--ink);cursor:pointer}
+.pop-custom:hover .sw-custom{transform:scale(1.1);box-shadow:0 0 0 1px rgba(0,113,227,.45),0 3px 10px rgba(0,0,0,.2)}
+.pop-custom:active .sw-custom{transform:scale(1.02)}
+.pop-note{font-size:11.5px;color:var(--muted);margin:6px 0 0}
+.pop-row{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px;color:var(--ink)}
+.pop-row .input{max-width:130px}
+.align-row{display:flex;gap:6px}
+.al{flex:1;border:1px solid rgba(0,0,0,.1);background:#fff;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+.al:hover{background:var(--blue);color:#fff}
+.ins-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ins{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid rgba(0,0,0,.08);
+  background:#fff;border-radius:10px;padding:10px 6px;font-size:11.5px;cursor:pointer}
+.ins span{font-size:17px}
+.ins:hover{background:var(--blue);color:#fff}
+.grid-pick{display:grid;grid-template-columns:repeat(10,16px);grid-auto-rows:16px;gap:3px}
+.gp{background:rgba(0,0,0,.07);border:1px solid rgba(0,0,0,.1);border-radius:3px;cursor:pointer}
+.gp.on{background:var(--blue);border-color:var(--blue)}
+.gp-lab{margin-top:8px;font-size:12.5px;color:var(--ink);text-align:center}
+
+/* 文字样式：高亮 / 渐变 */
+.hl{padding:1px 6px;border-radius:6px;-webkit-box-decoration-break:clone;box-decoration-break:clone}
+.grad{-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  color:transparent;background-image:var(--g,#999)}
+/* 选中渐变字时的渲染兜底：Chrome 对「处于选中态的 background-clip:text」会整块绘制渐变底、
+   文字像被吞掉（尤其表格里，看起来就是“字变得极小/消失”）。选中态改用普通淡蓝底 + 白字，始终可读 */
+.grad::selection{background:rgba(0,113,227,.30);color:#fff;-webkit-text-fill-color:#fff}
+.grad-1{--g:linear-gradient(94deg,#0090f7,#6a5df9 45%,#e64ac0)}
+.grad-2{--g:linear-gradient(94deg,#ff9f0a,#ff375f 60%,#af52de)}
+.grad-3{--g:linear-gradient(94deg,#34c759,#00c7be 60%,#0071e3)}
+.grad-4{--g:linear-gradient(94deg,#ff375f,#ff9f0a)}
+.grad-5{--g:linear-gradient(94deg,#5e5ce6,#bf5af2)}
+.grad-6{--g:linear-gradient(94deg,#1d1d1f,#8e8e93)}
+.grad-b1{background:linear-gradient(94deg,#0090f7,#6a5df9 45%,#e64ac0)}
+.grad-b2{background:linear-gradient(94deg,#ff9f0a,#ff375f 60%,#af52de)}
+.grad-b3{background:linear-gradient(94deg,#34c759,#00c7be 60%,#0071e3)}
+.grad-b4{background:linear-gradient(94deg,#ff375f,#ff9f0a)}
+.grad-b5{background:linear-gradient(94deg,#5e5ce6,#bf5af2)}
+.grad-b6{background:linear-gradient(94deg,#1d1d1f,#8e8e93)}
+
+/* =========================================================
+   图片直接操作（选中 / 缩放 / 旋转 / 拖动 / 裁剪 / 边框 / 虚化）
+   ========================================================= */
+.b-fig{text-align:center}
+.b-fig .img-box{position:relative;display:inline-block;max-width:100%;box-shadow:0 10px 30px rgba(0,0,0,.1)}
+.b-fig img{border-radius:0;box-shadow:none}
+.crop-box{position:relative;overflow:hidden;width:100%;aspect-ratio:1.5;border-radius:inherit;background:rgba(0,0,0,.03)}
+.crop-box img{position:absolute;display:block;max-width:none;user-select:none;-webkit-user-drag:none}
+body.admin .img-box{cursor:move}
+.img-box.selected{outline:2.5px solid var(--blue);outline-offset:5px}
+.img-box.cropping{transform:none !important}
+.img-handles{position:absolute;inset:0;pointer-events:none}
+.ih{pointer-events:auto;position:absolute;width:15px;height:15px;background:#fff;border:2px solid var(--blue);
+  border-radius:5px;box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:7}
+.ih[data-h="nw"]{left:-9px;top:-9px;cursor:nwse-resize}
+.ih[data-h="ne"]{right:-9px;top:-9px;cursor:nesw-resize}
+.ih[data-h="sw"]{left:-9px;bottom:-9px;cursor:nesw-resize}
+.ih[data-h="se"]{right:-9px;bottom:-9px;cursor:nwse-resize}
+.ih-rot{pointer-events:auto;position:absolute;top:-40px;left:50%;margin-left:-12px;width:24px;height:24px;
+  border-radius:50%;background:#fff;border:2px solid var(--blue);cursor:grab;z-index:7;
+  box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.ih-rot::after{content:"";position:absolute;left:50%;top:100%;width:2px;height:16px;background:var(--blue);transform:translateX(-50%)}
+
+/* WPS 式对齐参考线 */
+#guideV{position:fixed;top:0;bottom:0;width:0;border-left:2px dashed var(--blue);z-index:250;
+  pointer-events:none;display:none;opacity:.75}
+
+/* 块类型切换条：选中标题/正文块时出现在块下方（大标题 ↔ 小标题 ↔ 正文解释） */
+.blk-typebar{position:absolute;left:14px;bottom:-16px;transform:translateY(100%);z-index:62;
+  display:flex;gap:3px;padding:4px;background:rgba(255,255,255,.96);border:1px solid var(--line);
+  border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.blk-typebar button{border:0;background:transparent;font-size:12px;color:var(--ink);cursor:pointer;
+  padding:4px 9px;border-radius:7px;white-space:nowrap}
+.blk-typebar button:hover{background:rgba(0,113,227,.1)}
+.blk-typebar button.on{background:var(--blue);color:#fff}
+
+/* 来源引用：虚线下划线 + 上标编号；阅读模式点击跳到页尾 */
+.refmark{border-bottom:1.5px dashed rgba(0,113,227,.8);cursor:pointer;transition:background .15s ease}
+.refmark:hover{background:rgba(0,113,227,.09)}
+.refmark .refnum{color:var(--blue);font-weight:700;font-size:.68em;margin-left:2px}
+.refmark.ref-miss{border-bottom-color:#e6a23c}
+body.admin .refmark{cursor:text}
+/* ---------- 条目级跳转（[[j:ID,文字]] 起点）：绿虚线可点；点击平滑滚到终点块并绿光闪一次 ---------- */
+.jumplink{border-bottom:1.5px dashed rgba(52,199,89,.9);cursor:pointer;transition:background .15s ease}
+.jumplink:hover{background:rgba(52,199,89,.12)}
+body.admin .jumplink{cursor:text}
+/* 弹窗/管理面板打开时 body 会被锁滚动（overflow:hidden）→ 滚动条消失 → 视口变宽、整个页面右移一下；
+   让滚动条槽常驻，宽度恒定，页面不再左右平移 */
+html{scrollbar-gutter:stable}
+/* 来源引用编号：不参与选择/输入；编辑模式下隐藏编号（防在引用旁打字误入上标，访客/预览态照常显示） */
+sup.refnum{user-select:none;-webkit-user-select:none}
+body.admin .refmark sup.refnum{display:none}
+/* 来源引用条目点击后的操作行（✔ 使用 / ✕ 删除） */
+.ref-ops{display:none;gap:6px;padding:4px 2px 10px 30px}
+.ref-ops.open{display:flex}
+/* 跳转终点：同样的绿虚线（与起点视觉对称）—— span.jumpdst 是渲染后的纯显示层装饰，不进源码 */
+.jumpdst{border-bottom:1.5px dashed rgba(52,199,89,.9);cursor:pointer;transition:background .15s ease}
+.jumpdst:hover{background:rgba(52,199,89,.12)}
+body.admin .jumpdst{cursor:text}
+/* 临时「返回」键：任何方向跳转落定后屏幕下方浮出，点一下回到出发端并消失；8 秒不动自动收起 */
+.lm-jump-back{position:fixed;left:50%;bottom:96px;transform:translate(-50%,18px);opacity:0;pointer-events:none;z-index:1210;
+  background:linear-gradient(94deg,#34c759,#00c7be);color:#fff;border:none;border-radius:999px;padding:10px 26px;
+  font-size:14px;font-weight:600;letter-spacing:.5px;cursor:pointer;box-shadow:0 10px 26px rgba(52,199,89,.35);
+  transition:opacity .28s cubic-bezier(.16,1,.3,1),transform .28s cubic-bezier(.16,1,.3,1)}
+.lm-jump-back.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+.lm-jump-back:hover{filter:brightness(1.06)}
+.block-wrap{scroll-margin:130px}
+.block-wrap.jump-flash{animation:jumpGlow 1.7s ease}
+@keyframes jumpGlow{0%{box-shadow:0 0 0 0 rgba(52,199,89,0)}25%{box-shadow:0 0 0 6px rgba(52,199,89,.32)}70%{box-shadow:0 0 0 3px rgba(52,199,89,.14)}100%{box-shadow:0 0 0 0 rgba(52,199,89,0)}}
+.jump-item{display:flex;align-items:center;gap:6px;padding:4px 2px;font-size:12px;border-bottom:1px dashed rgba(0,0,0,.08)}
+.jump-a{color:#1b7a3d;font-weight:600;max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jump-arrow{color:var(--muted)}
+.jump-b{max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jump-pg{margin-left:auto;color:var(--muted);font-size:11px;white-space:nowrap}
+.jump-del{border:0;background:none;cursor:pointer;color:#c0392b;font-size:12px;padding:2px 4px}
+.src-list li{scroll-margin:130px}
+.src-list li.ref-flash{animation:refGlow 1.7s ease}
+@keyframes refGlow{0%{background:rgba(0,113,227,.22)}70%{background:rgba(0,113,227,.16)}100%{background:transparent}}
+#refBack{position:fixed;top:72px;right:22px;z-index:97;border:0;cursor:pointer;
+  padding:9px 14px;border-radius:11px;background:rgba(255,255,255,.9);color:var(--blue);
+  font-size:13px;font-weight:600;box-shadow:0 8px 28px rgba(0,0,0,.16);border:1px solid rgba(0,113,227,.35);
+  opacity:0;pointer-events:none;transform:translateY(-8px);transition:opacity .25s ease,transform .25s ease}
+#refBack.show{opacity:1;pointer-events:auto;transform:none}
+#refBack:hover{background:#fff}
+
+/* 来源引用弹层 */
+.pop-t{margin:0 0 6px;font-size:14px}
+.pop-note{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+.ref-list{display:flex;flex-direction:column;gap:3px;max-height:180px;overflow-y:auto;margin-bottom:8px;min-width:230px}
+.ref-item{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:#fff;border-radius:8px;
+  padding:6px 9px;font-size:12.5px;color:var(--ink);cursor:pointer;text-align:left}
+.ref-item:hover{border-color:var(--blue);background:rgba(0,113,227,.06)}
+.ref-item.on{border-color:var(--blue);background:rgba(0,113,227,.1)}
+.ref-item .ref-n{flex:none;width:18px;height:18px;border-radius:50%;background:var(--blue);color:#fff;
+  font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.ref-new{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--line)}
+
+/* 页面管理 · 图标选择面板 */
+.icon-pick{position:absolute;z-index:40;display:grid;grid-template-columns:repeat(8,38px);gap:3px;
+  padding:9px;background:#fff;border:1px solid var(--line);border-radius:13px;
+  box-shadow:0 14px 40px rgba(0,0,0,.18);max-height:184px;overflow-y:auto}
+.icon-pick button{width:36px;height:36px;border:0;background:transparent;border-radius:9px;
+  font-size:19px;cursor:pointer;line-height:1}
+.icon-pick button:hover{background:rgba(0,113,227,.13)}
+
+/* 拖框裁剪 */
+.crop-overlay{position:fixed;z-index:400;cursor:crosshair;
+  box-shadow:0 0 0 100000px rgba(0,0,0,.35);background:rgba(255,255,255,.02)}
+.crop-rect{position:absolute;border:2px solid #fff;cursor:move;
+  box-shadow:0 0 0 1px rgba(0,0,0,.4),0 0 24px rgba(0,0,0,.45)}
+.crop-h{position:absolute;width:16px;height:16px;border-radius:50%;background:#fff;
+  border:2.5px solid var(--blue);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.crop-h[data-h="nw"]{left:-9px;top:-9px}
+.crop-h[data-h="ne"]{right:-9px;top:-9px}
+.crop-h[data-h="sw"]{left:-9px;bottom:-9px}
+.crop-h[data-h="se"]{right:-9px;bottom:-9px}
+.crop-bar{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:401;display:flex;gap:10px;
+  align-items:center;background:rgba(255,255,255,.9);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  padding:10px 14px;border-radius:980px;box-shadow:0 14px 40px rgba(0,0,0,.28)}
+
+/* 表格：列宽握把 */
+th{position:relative}
+.col-grip{position:absolute;top:0;right:-7px;width:14px;height:100%;cursor:col-resize;z-index:30;display:none}
+body.admin .col-grip{display:block}
+body.admin .col-grip:hover{background:rgba(0,113,227,.18);border-radius:3px}
+
+/* =========================================================
+   选项卡工具栏（开始 / 插入）+ 行内格式 + 格式刷
+   ========================================================= */
+.tb-tab{flex:none;height:26px;padding:0 12px;margin-right:2px;border:0;border-radius:8px;background:transparent;
+  font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:background .15s ease}
+.tb-tab:hover{background:rgba(0,0,0,.06)}
+.tb-tab.act{background:var(--blue);color:#fff}
+#editBar[data-tab="start"] .grp-insert{display:none}
+#editBar[data-tab="insert"] .grp-start{display:none}
+.tb-grp{display:flex;align-items:center;gap:2px;flex:none}
+.tb-btn.on{background:var(--blue);color:#fff}
+#editBar .tb-btn:active{background:rgba(0,113,227,.18)}
+
+/* =========================================================
+   自由文本框（像 Word：拖 ⠿ 移动 / 拖边角缩放 / 字号随框宽自动缩放）
+   ========================================================= */
+.blocks{position:relative}
+.free-box{position:absolute;background:rgba(255,255,255,.85);border:1px solid rgba(0,0,0,.1);border-radius:14px;
+  padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.07)}
+/* 反馈留言区与上方内容列对齐（.blocks 同款 780px 居中列，修复“提交反馈溢出屏幕”） */
+#fbMount{max-width:780px;margin:0 auto;padding:0 22px 110px}
+.free-box .b-p{margin:0}
+/* —— 反馈与建议：访客留言框 + 管理员反馈通道 —— */
+.fb-sec{margin-top:26px}
+.fb-title{margin:0 0 14px;font-size:1.15rem;font-weight:700;color:var(--text)}
+.fb-row{display:flex;gap:14px;flex-wrap:wrap}
+.fb-field{display:flex;flex-direction:column;gap:6px;flex:1;min-width:210px;font-size:.85rem;color:var(--text2);margin-bottom:12px}
+.fb-input{border:1px solid var(--line);border-radius:10px;padding:9px 12px;font:inherit;font-size:.92rem;background:#fff;color:var(--text);width:100%}
+.fb-input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,113,227,.15)}
+textarea.fb-input{resize:vertical;min-height:96px}
+.fb-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:2px}
+.fb-send{border:none;border-radius:10px;padding:10px 28px;font:inherit;font-weight:700;color:#fff;background:var(--blue)}
+.fb-send:hover{background:var(--blue-h)}
+.fb-hint{font-size:.8rem;color:var(--text2)}
+.fb-ok{margin:12px 0 0;font-size:.9rem;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:10px;padding:10px 14px}
+.fb-admin{border:2px dashed #c7d2fe;border-radius:16px;padding:16px 18px;background:#fafaff}
+/* —— 讨论区 v3：昵称/身份码/楼中楼/屏蔽（与反馈区同风格） —— */
+.dc-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:.85rem;color:var(--text2)}
+.dc-bar b{color:var(--text)}
+.dc-code{display:inline-block;margin-left:8px;padding:1px 8px;border:1px dashed var(--line);border-radius:999px;font-size:.72rem;color:var(--text2)}
+.dc-nick-edit{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.dc-nick-edit .fb-input{width:150px;padding:5px 10px;font-size:.8rem}
+.dc-warn{margin:8px 0;padding:9px 12px;border-radius:10px;background:#fdecec;color:#b42318;font-size:.85rem}
+.dc-list{display:flex;flex-direction:column;gap:14px;margin-top:12px}
+.dc-msg{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:#fff}
+.dc-msg.dc-hid{opacity:.55;background:#fafafa}
+.dc-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.8rem;color:var(--text2)}
+.dc-nick{color:var(--text);font-size:.9rem}
+.dc-time{margin-left:auto}
+.dc-rto{color:var(--blue)}
+.dc-text{margin:6px 0 8px;font-size:.95rem;color:var(--text);white-space:pre-wrap;word-break:break-word}
+.dc-ops{display:flex;gap:8px;align-items:center}
+.dc-replies{margin-top:10px;display:flex;flex-direction:column;gap:8px;padding-left:14px;border-left:2px solid var(--line)}
+.dc-replyform{margin-top:8px;display:flex;gap:8px;align-items:flex-start}
+.dc-replyform .fb-input{flex:1}
+.fb-code{display:inline-block;padding:1px 8px;border:1px dashed var(--line);border-radius:999px;font-size:.72rem;color:var(--text2)}
+.fb-reply-box{margin-top:8px;padding:9px 12px;border-radius:10px;background:#eef4ff;border:1px solid #c7d8ff}
+.fb-reply-box b{font-size:.78rem;color:#2b5fd9}
+.fb-reply-box p{margin:4px 0 0;font-size:.92rem;color:var(--text)}
+.fb-list{display:flex;flex-direction:column;gap:12px;margin-bottom:12px}
+.fb-item{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff}
+.fb-meta{font-size:.8rem;color:var(--text2);display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.fb-meta b{color:var(--text)}
+.fb-st{color:#b45309;font-weight:600}
+.fb-text{margin:8px 0;white-space:pre-wrap;word-break:break-word;font-size:.92rem;line-height:1.65}
+.fb-url{margin:4px 0;font-size:.82rem;word-break:break-all}
+.fb-ops{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.fb-stsel{width:auto}
+.fb-reply{flex:1;min-width:180px}
+.fb-mini{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px;font:inherit;font-size:.82rem}
+.fb-mini:hover{background:#f5f5f7}
+.fb-del{color:#b91c1c;border-color:#fecaca}
+.fb-del:hover{background:#fef2f2}
+.fb-empty{font-size:.9rem;color:var(--text2)}
+body.admin .free-box:hover{outline:1.5px dashed rgba(0,113,227,.5);outline-offset:2px}
+/* 选中状态只保留一道边框：清除悬停虚线与内容聚焦框，避免双框叠影 */
+body.admin .free-box.selected{outline:none !important}
+body.admin .block-wrap.selected [data-edit]{outline-color:transparent !important}
+.free-box .block-tools{top:-14px;right:-4px;flex-wrap:wrap;justify-content:flex-end;max-width:252px}
+.fb-grip{display:none;position:absolute;top:-17px;left:2px;width:28px;height:20px;border-radius:6px;background:var(--blue);
+  color:#fff;font-size:12px;line-height:20px;text-align:center;cursor:grab;z-index:6;box-shadow:0 2px 8px rgba(0,0,0,.22)}
+.fb-hd{display:none;position:absolute;width:12px;height:12px;background:#fff;border:2px solid var(--blue);border-radius:4px;
+  z-index:6;box-shadow:0 1px 5px rgba(0,0,0,.2)}
+/* ★ 修复「并排后的两个块像一直被选中」：自由框（并排块/文本框）的蓝色拖动手柄不再是管理模式常显——
+   桌面端悬停 / 选中 / 拖动时出现，触屏设备（无 hover）保持常显 */
+body.admin .fb-grip,body.admin .fb-hd{display:none}
+body.admin .free-box:hover .fb-grip,body.admin .free-box:hover .fb-hd,
+body.admin .free-box.selected .fb-grip,body.admin .free-box.selected .fb-hd,
+body.admin .free-box.free-drag .fb-grip,body.admin .free-box.free-drag .fb-hd,
+body.admin .free-box:focus-within .fb-grip,body.admin .free-box:focus-within .fb-hd{display:block}
+@media (hover:none){body.admin .fb-grip,body.admin .fb-hd{display:block}}
+.fb-hd[data-h="e"]{right:-7px;top:50%;margin-top:-6px;cursor:ew-resize}
+.fb-hd[data-h="w"]{left:-7px;top:50%;margin-top:-6px;cursor:ew-resize}
+.fb-hd[data-h="s"]{left:50%;margin-left:-6px;bottom:-7px;cursor:ns-resize}
+.fb-hd[data-h="se"]{right:-7px;bottom:-7px;cursor:nwse-resize}
+
+/* ---------- 勾选模式提示条（解决「不知道怎么取消勾选」）----------
+   放在屏幕底部：不再遮挡顶部工具栏；手机端自动缩小字号、允许换行 ---------- */
+body.multi-mode .blocks::after{content:'☑ 勾选模式 — 点块选中/再点取消（最多 4 个）→ 点工具栏「▦ 并排」完成；点空白处 = 清空勾选；Esc = 退出';
+  position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:290;pointer-events:none;
+  background:rgba(52,199,89,.94);color:#fff;font-size:12.5px;line-height:1.5;padding:7px 16px;border-radius:14px;
+  box-shadow:0 4px 18px rgba(0,0,0,.18);white-space:normal;width:max-content;max-width:92vw;text-align:center}
+@media(max-width:760px){body.multi-mode .blocks::after{font-size:11.5px;bottom:10px;padding:6px 12px;max-width:94vw}}
+
+/* ---------- 自定义下拉（F.select，替代原生 <select> 的系统风展开列表） ---------- */
+.lmsel{position:relative;display:block}
+/* 关键修复：.lmsel-list 的 display:flex 会盖过 [hidden] 的 UA 样式（作者样式 > 浏览器默认），
+   导致 hidden 属性失效 —— 列表其实一直“开着”，在工具栏里被 overflow 裁掉 → 表现为“完全点不开”。
+   显式声明 hidden 时的 display:none，开合逻辑立即恢复正常 */
+.lmsel-list[hidden]{display:none!important}
+.lmsel-btn{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;cursor:pointer;
+  font:inherit;color:inherit;background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.lmsel-btn:hover{border-color:var(--blue)}
+.lmsel-ar{color:var(--text2);font-size:11px;transition:transform .18s ease}
+.lmsel-list{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:60;background:#fff;border:1px solid var(--line);
+  border-radius:12px;box-shadow:0 14px 38px rgba(0,0,0,.16);padding:5px;display:flex;flex-direction:column;gap:2px;
+  max-height:280px;overflow:auto}
+.lmsel-it{border:none;background:transparent;text-align:left;font:inherit;color:inherit;cursor:pointer;
+  padding:9px 11px;border-radius:8px;line-height:1.35}
+.lmsel-it:hover{background:rgba(0,113,227,.09)}
+.lmsel-it.on{background:var(--blue);color:#fff;font-weight:600}
+
+/* ---------- 全站 Apple 化收尾：滚动条 / 控件主题色 / 焦点环 / 工具栏紧凑下拉 ---------- */
+/* Windows Chrome 的默认滚动条又宽又灰（系统风）；换成 macOS 式细圆角半透明 */
+*{scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.28) transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:rgba(0,0,0,.26);border-radius:999px;border:2px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-thumb:hover{background-color:rgba(0,0,0,.45)}
+/* 原生 checkbox / radio / 颜色控件套用主题蓝（Chrome/Edge 支持 accent-color） */
+input[type=checkbox],input[type=radio],input[type=range]{accent-color:var(--blue)}
+/* 键盘导航焦点环：细蓝圈代替系统双线框 */
+:focus-visible{outline:2px solid rgba(0,113,227,.55);outline-offset:2px;border-radius:6px}
+/* 主按钮加苹果式微高光阴影（弹窗底部主按钮更柔和） */
+.btn-primary{box-shadow:0 1px 2px rgba(0,60,140,.18),inset 0 1px 0 rgba(255,255,255,.14)}
+.btn-primary:active{box-shadow:none}
+/* 工具栏里的字体 / 字号下拉：紧凑版自定义组件（不再有系统 select 边框） */
+#editBar .tb-compact{display:inline-block;position:relative;width:auto}
+#editBar .tb-compact .lmsel-btn{padding:5px 9px;border:1px solid transparent;background:rgba(0,0,0,.045);
+  border-radius:8px;font-size:13px;gap:6px;min-width:64px;justify-content:space-between}
+#editBar .tb-compact .lmsel-btn:hover{background:rgba(0,0,0,.09);border-color:transparent;box-shadow:none}
+#editBar .tb-compact .lmsel-list{left:auto;right:0;min-width:150px;max-height:240px}
+#editBar .tb-compact .lmsel-it{padding:7px 10px;font-size:13px}
+/* 反馈区「状态」紧凑下拉（自定义组件，不再用系统 select） */
+.fb-compact{display:inline-block;position:relative;vertical-align:middle}
+.fb-compact .lmsel-btn{padding:6px 10px;border:1px solid var(--line);background:#fff;border-radius:980px;font-size:12.5px;gap:6px}
+.fb-compact .lmsel-btn:hover{border-color:var(--blue)}
+.fb-compact .lmsel-list{left:0;min-width:120px}
+.fb-compact .lmsel-it{padding:7px 10px;font-size:12.5px}
+/* 悬浮态下拉（展开瞬间挂在 body 下）：字号紧凑，与工具栏/表单相称 */
+.lmsel-fly .lmsel-it{padding:7px 11px;font-size:13px;line-height:1.45}
+.lmsel-fly .lmsel-it.on{font-weight:600}
+/* 「最近活跃」小标签（设备面板 / 在线列表） */
+.cp-recent,.gp-rtag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:500;
+  background:rgba(52,199,89,.14);color:#1f7a35;vertical-align:1px}
+
+/* =========================================================
+   Markdown 块（源码编辑 + 实时预览 + 渲染排版）
+   ========================================================= */
+.md-editor{margin-bottom:12px}
+.md-src{width:100%;min-height:150px;max-height:380px;resize:vertical;border:1px solid rgba(0,0,0,.14);border-radius:12px;
+  padding:12px;font-size:13px;font-family:"SF Mono",Consolas,monospace;line-height:1.6;background:#fbfbfd;color:var(--ink)}
+.md-src:focus{outline:2px solid var(--blue);outline-offset:1px}
+.md-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:8px}
+.md-tip{font-size:11.5px;color:var(--muted);margin-right:auto}
+.md-body{line-height:1.75;font-size:15.5px;overflow-wrap:break-word}
+.md-body h2,.md-body h3,.md-body h4,.md-body h5{margin:.9em 0 .4em;letter-spacing:-.01em}
+.md-body h2{font-size:1.45em}.md-body h3{font-size:1.2em}.md-body h4{font-size:1.05em}.md-body h5{font-size:1em}
+.md-body ul,.md-body ol{padding-left:1.4em;margin:.5em 0}
+.md-body blockquote{margin:.7em 0;padding:8px 14px;border-left:3px solid var(--blue);background:rgba(0,113,227,.06);
+  border-radius:0 10px 10px 0;color:var(--text2)}
+.md-body code{font-family:"SF Mono",Consolas,monospace;font-size:.9em;background:rgba(0,0,0,.06);border-radius:5px;padding:1px 5px}
+.md-code{background:#1d1d1f;color:#f5f5f7;border-radius:10px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.6;margin:.7em 0}
+.md-code code{background:none;color:inherit;padding:0}
+.md-tblwrap{overflow-x:auto;margin:.7em 0}
+.md-body table{border-collapse:collapse;width:100%;font-size:.95em}
+.md-body th,.md-body td{border:1px solid rgba(0,0,0,.14);padding:7px 10px;text-align:left}
+.md-body th{background:rgba(0,0,0,.045)}
+
+/* ---------- 勾选并排模式（工具栏 ☑ → 点选块 → ▦ 并排） ---------- */
+/* 必须排除 .free-box：自由文本框是 position:absolute（left/top 定位），
+   若被这里的 relative 覆盖（特异性更高），框会掉回文档流并变成相对偏移，
+   导致「卡在图表/表格中间推不开」「并排后框位移飞出视野」两个 bug */
+.blocks > .block-wrap:not(.free-box){position:relative}
+/* 选中块的置顶：工具条（⠿ ↑ ↓ ⚙ 🗑 / 贴边按钮）不被后面的表格、图片等块盖住 */
+.blocks > .block-wrap.selected,
+.blocks > .block-wrap.multi-sel,
+.blocks > .block-wrap:has(.selected),
+.blocks > .block-wrap:has(.multi-sel){z-index:80}
+.page-hero{position:relative;z-index:40}
+.block-tools{z-index:8}
+body.multi-mode .blocks > .block-wrap{cursor:pointer}
+body.multi-mode .blocks > .block-wrap .block-tools{display:none !important}
+body.multi-mode .blocks > .block-wrap:hover{outline:1.5px dashed rgba(52,199,89,.55);outline-offset:2px}
+.block-wrap.multi-sel{outline:2.5px dashed #34c759 !important;outline-offset:3px}
+.block-wrap.multi-sel::after{content:'✓';position:absolute;top:-11px;right:-11px;width:22px;height:22px;border-radius:50%;
+  background:#34c759;color:#fff;font-size:13px;line-height:22px;text-align:center;z-index:7;box-shadow:0 2px 8px rgba(0,0,0,.22)}
+
+/* ---------- 非自由块的水平贴齐（图片 / 表格：⇤ 贴左 · ⇆ 居中 · ⇥ 贴右；图片等比缩放不变形） ---------- */
+.block-wrap.ha-left .b-fig{text-align:left}
+.block-wrap.ha-right .b-fig{text-align:right}
+.block-wrap.ha-left .table-wrap{width:fit-content;max-width:100%;margin-left:0;margin-right:auto}
+.block-wrap.ha-right .table-wrap{width:fit-content;max-width:100%;margin-left:auto;margin-right:0}
+.block-wrap.ha-center .table-wrap{width:fit-content;max-width:100%;margin-left:auto;margin-right:auto}
+
+/* ---------- 首页特性行卡片：删除 ✕ / 虚线添加卡片 ---------- */
+.feature{position:relative}
+.feat-x{display:none;position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;border:none;
+  background:rgba(0,0,0,.08);color:#6e6e73;font-size:12px;line-height:24px;cursor:pointer;z-index:3;padding:0}
+.feature:hover .feat-x{display:block}
+.feat-x:hover{background:#ff3b30;color:#fff}
+.feat-add{border:1.5px dashed var(--line);background:transparent;border-radius:var(--radius);min-height:130px;
+  color:var(--muted);font-size:13.5px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  transition:border-color .25s ease,color .25s ease,background .25s ease}
+.feat-add span{font-size:26px;line-height:1}
+.feat-add:hover{border-color:var(--blue);color:var(--blue);background:rgba(0,113,227,.05)}
+.md-body mark{background:#fff3b0;border-radius:4px;padding:0 3px}
+.md-hr{border:0;border-top:1.5px solid rgba(0,0,0,.14);margin:1em 0}
+.b-hr{border:0;border-top:1.5px solid rgba(0,0,0,.14);margin:6px 0}
+
+/* hero 标题区：与内容块统一的工具条（🗑 删除/隐藏，隐藏后 👁 常显找回） */
+.page-hero{position:relative}
+body.admin .page-hero:hover .block-tools,body.admin .hero-off .block-tools{display:flex}
+.hero-off{min-height:44px}
+.pop-btn{cursor:pointer;background:var(--bg2);border-radius:10px;padding:9px 12px}
+.pop-btn:hover{background:#e8e8ed}
+
+/* ---------- Word 式块选中：四角手柄（拖动调宽） ---------- */
+.blk-handles{position:absolute;inset:-2px;pointer-events:none;z-index:6}
+.bh{pointer-events:auto;position:absolute;width:14px;height:14px;background:#fff;border:2.5px solid var(--blue);border-radius:5px;box-shadow:0 1px 6px rgba(0,0,0,.28)}
+.bh[data-h="nw"]{left:-8px;top:-8px;cursor:nwse-resize}
+.bh[data-h="ne"]{right:-8px;top:-8px;cursor:nesw-resize}
+.bh[data-h="sw"]{left:-8px;bottom:-8px;cursor:nesw-resize}
+.bh[data-h="se"]{right:-8px;bottom:-8px;cursor:nwse-resize}
+
+/* ---------- 块拖拽排序（⠿ 把手） ---------- */
+.block-tools button[data-drag]{cursor:grab}
+/* ★ 修复（非文本框块拖动 ⠿"飞出屏幕"）：下方 .blocks > .block-wrap:not(.free-box){position:relative}
+   权重(0,3,0) 高于本条(0,2,0)，导致拖动中的块根本没变成 fixed，left/top 被按"相对偏移"解释，
+   鼠标一动块就累加偏移飞出视野（Markdown/图表/图片/表格/段落全部中招；文本框因 .free-box.dragging
+   自带 !important 幸免）。与 .free-box.dragging 同理补 !important，并关闭过渡保证跟手 */
+.block-wrap.dragging{position:fixed !important;transition:none !important;z-index:300;pointer-events:none;opacity:.95;box-shadow:0 24px 60px rgba(0,0,0,.30);transform:scale(1.01);cursor:grabbing}
+.block-wrap.dragging .blk-handles,.block-wrap.dragging .block-tools{display:none !important}
+.block-wrap.drag-ph{border:2px dashed var(--blue);background:rgba(0,113,227,.07);border-radius:14px}
+body.block-dragging{cursor:grabbing !important;user-select:none;-webkit-user-select:none}
+body.block-dragging *{cursor:grabbing !important}
+
+/* ---------- 站内确认弹窗（替代原生 confirm） ---------- */
+.cfm-mask{z-index:260}
+.cfm-card{max-width:430px}
+
+/* ---------- 格式刷聊天气泡（工具栏下方，常开面板） ---------- */
+#brushPop{position:fixed;top:114px;left:50%;transform:translateX(-50%);z-index:95;display:none;align-items:center;gap:10px;
+  background:rgba(255,255,255,.95);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(0,0,0,.08);border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.16);padding:9px 12px;max-width:88vw}
+#brushPop::before{content:'';position:absolute;top:-6.5px;left:50%;width:13px;height:13px;margin-left:-6.5px;
+  background:rgba(255,255,255,.95);border-left:1px solid rgba(0,0,0,.08);border-top:1px solid rgba(0,0,0,.08);transform:rotate(45deg)}
+.bp-status{font-size:12.5px;color:#515154;line-height:1.45;max-width:430px}
+#brushCopy{flex:none;border:0;border-radius:980px;background:var(--blue);color:#fff;font-size:12.5px;padding:6px 14px;cursor:pointer;
+  transition:transform .12s ease}
+#brushCopy:hover{transform:scale(1.04)}
+#brushCopy:active{transform:scale(.96)}
+@media(max-width:760px){#brushPop{top:108px}}
+
+/* =========================================================
+   右上角 ⚙ 设置（管理模式 + 界面版本 集成面板）
+   ========================================================= */
+.nav-gear{width:38px;height:38px;border-radius:50%;border:1px solid rgba(0,0,0,.08);
+  background:rgba(255,255,255,.72);font-size:17px;line-height:1;cursor:pointer;position:relative;
+  color:var(--text);transition:transform .15s ease,background .2s ease,color .2s ease}
+.nav-gear:hover{transform:rotate(40deg) scale(1.06);background:#fff}
+.nav-gear.admin-on{background:var(--blue);color:#fff;border-color:transparent}
+.nav-gear.admin-on::after{content:'';position:absolute;top:3px;right:3px;width:8px;height:8px;
+  border-radius:50%;background:#34c759;border:1.5px solid #fff}
+#gearPop{position:fixed;top:58px;right:12px;z-index:150;width:min(320px,94vw);
+  background:rgba(255,255,255,.96);backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border:1px solid rgba(0,0,0,.08);border-radius:16px;box-shadow:0 18px 48px rgba(0,0,0,.18);
+  padding:14px 16px;animation:popIn .25s cubic-bezier(.16,1,.3,1)}
+.gp-row{display:flex;align-items:center;gap:12px;justify-content:space-between}
+.gp-row.gp-col{flex-direction:column;align-items:stretch;gap:8px}
+.gp-t{font-size:14px;font-weight:600}
+.gp-d{font-size:12px;color:var(--text2);margin-top:2px}
+.gp-div{height:1px;background:rgba(0,0,0,.07);margin:12px 0}
+.gp-seg{display:flex;background:rgba(0,0,0,.05);border-radius:980px;padding:3px;gap:2px}
+.gp-seg button{flex:1;border:0;background:transparent;border-radius:980px;padding:7px 0;
+  font-size:12.5px;cursor:pointer;color:var(--text2);transition:all .15s ease}
+.gp-seg button.on{background:#fff;color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.14);font-weight:600}
+
+/* =========================================================
+   手机版（body.mobile-view：自动识别，或在 ⚙ 里手动切换）
+   原则：横向绝不溢出；管理员工具条全部可换行；拖拽把手放大到指尖可抓
+   ========================================================= */
+body.mobile-view{overflow-x:clip}
+/* —— 导航 —— */
+body.mobile-view .nav-inner{padding:0 10px;height:48px;gap:10px}
+body.mobile-view .brand{font-size:14px}
+body.mobile-view .nav-links{gap:12px;max-width:54vw;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+body.mobile-view .nav-links::-webkit-scrollbar{display:none}
+body.mobile-view .nav-links a{white-space:nowrap;font-size:13px}
+body.mobile-view .nav-gear{width:34px;height:34px;font-size:16px}
+body.mobile-view #gearPop{top:54px;right:8px;left:8px;width:auto}
+/* —— 正文 —— */
+body.mobile-view .blocks{padding:18px 12px 120px;gap:20px}
+body.mobile-view .block-wrap{max-width:100%}
+body.mobile-view .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+/* —— 块工具条（悬停在手机上不存在：点选块后出现，靠已选中态展示） —— */
+body.mobile-view .block-tools{gap:4px}
+body.mobile-view .block-tools button{width:27px;height:27px;font-size:12px}
+body.mobile-view .free-box .block-tools{max-width:calc(100vw - 20px)}
+body.mobile-view .free-box{padding:10px 12px}
+/* —— 手机端管理模式：顶部 Word 工具条 —— */
+body.mobile-view #editBar{left:6px;right:6px;transform:none;width:auto;max-width:none;top:52px;
+  flex-wrap:wrap;justify-content:center;gap:2px;padding:5px 6px}
+body.mobile-view .tb-btn{height:28px;min-width:28px;padding:0 7px;font-size:12.5px}
+body.mobile-view .tb-lab{font-size:10px}
+/* 格式刷气泡：改挂到底部（避开换行后更高的工具条），贴在管理条上方 */
+body.mobile-view #brushPop{left:8px;right:8px;transform:none;top:auto;bottom:96px;max-width:none;flex-wrap:wrap}
+body.mobile-view #brushPop::before{display:none}
+/* —— 手机端管理模式：底部悬浮管理条 —— */
+body.mobile-view #adminBar{bottom:12px;gap:6px;padding:7px;border-radius:20px}
+body.mobile-view #adminBar .btn{font-size:12px;padding:7px 10px}
+body.mobile-view .bar-tip{display:none}
+/* —— 弹窗 / 气泡 / 输入 —— */
+body.mobile-view .popover{max-width:92vw}
+body.mobile-view .modal-card{padding:18px;max-height:88vh}
+body.mobile-view .input{font-size:16px} /* 防 iOS 聚焦时自动放大页面 */
+/* —— 拖拽把手放大（触屏可抓） —— */
+body.mobile-view .fb-grip{width:34px;height:26px;top:-20px;line-height:26px;font-size:13px}
+body.mobile-view .fb-hd{width:18px;height:18px}
+body.mobile-view .fb-hd[data-h="e"]{right:-10px}
+body.mobile-view .ih{width:20px;height:20px}
+body.mobile-view .bh{width:18px;height:18px}
+body.mobile-view .blk-typebar button{padding:5px 9px;font-size:12px}
+@media(max-width:760px){
+  /* 无 JS 时的兜底：真机窄屏至少保证顶部工具条与管理条不溢出 */
+  #editBar{left:6px;right:6px;transform:none;width:auto;max-width:none;flex-wrap:wrap;justify-content:center;top:56px}
+  #adminBar{gap:6px;padding:8px}
+  #adminBar .btn{font-size:12px;padding:7px 10px}
+  .bar-tip{display:none}
+  .block-tools button{width:27px;height:27px;font-size:12px}
+  .popover{max-width:92vw}
+}
+.cfm-card h3{margin-bottom:6px}
+
+/* ---------- 实时协作（lm_collab_v1）：在线徽章 + 「✍ 正在编辑」占位标签 ---------- */
+#collabChip{position:fixed;left:12px;bottom:12px;z-index:280;background:rgba(29,29,31,.85);color:#fff;font-size:12px;padding:6px 12px;border-radius:980px;cursor:pointer;user-select:none;box-shadow:0 2px 10px rgba(0,0,0,.18);max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#collabChip .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#34c759;margin-right:6px;vertical-align:1px}
+/* 左下角徽章点开的「在线设备」面板 */
+#collabPanel{position:fixed;left:12px;bottom:52px;z-index:281;width:min(300px,88vw);background:rgba(255,255,255,.97);
+  backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);
+  border:1px solid rgba(0,0,0,.06);border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.2);
+  padding:12px 14px;display:none;font-size:12.5px}
+#collabPanel.show{display:block;animation:pageIn .18s ease}
+#collabPanel .cp-t{font-weight:700;font-size:13px;margin-bottom:8px}
+#collabPanel .cp-row{display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px dashed rgba(0,0,0,.08)}
+#collabPanel .cp-row b{font-weight:600}
+#collabPanel .cp-id{color:#86868b;font-size:11px;font-family:ui-monospace,Consolas,monospace}
+#collabPanel .cp-pg{margin-left:auto;color:#0071e3;font-size:11px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#collabPanel .cp-note{color:#86868b;font-size:11px;margin-top:8px;line-height:1.5}
+/* ⚙ 设置面板里的设备列表与屏蔽管理 */
+.gp-devlist,.gp-dev{display:block}
+.gp-dev{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px dashed rgba(0,0,0,.08);flex-wrap:wrap}
+.gp-devm{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.gp-devid{color:#86868b;font-size:11px;font-family:ui-monospace,Consolas,monospace}
+.gp-btag{background:rgba(255,59,48,.12);color:#c0392b;font-size:10.5px;padding:2px 7px;border-radius:980px}
+.gp-ops{display:flex;gap:4px;flex-wrap:wrap}
+.gp-me{color:#34c759;font-size:11.5px;font-weight:600}
+.btn.btn-mini.danger{color:#c0392b;border-color:rgba(255,59,48,.4)}
+.btn.btn-mini.danger:hover{background:rgba(255,59,48,.08)}
+/* 被屏蔽设备看到的页面 —— 伪装成 Chrome 的「无法访问此页面」错误页（白底、:( 图标、错误码、重新加载），
+   看起来就像网页本身出错了，绝无“被屏蔽/管理员”等字样 */
+#banMask{position:fixed;inset:0;z-index:9999;background:#fff;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,'Segoe UI',Roboto,'PingFang SC','Microsoft YaHei',sans-serif}
+#banMask .bm-card{width:min(560px,92vw);padding:20px 24px}
+#banMask .bm-ico{font-size:74px;line-height:1;color:#5f6368;margin-bottom:22px;font-weight:300}
+#banMask h2{font-size:22px;font-weight:400;color:#202124;margin:0 0 14px}
+#banMask .bm-txt{color:#5f6368;font-size:14px;line-height:1.65;margin:0 0 22px}
+#banMask .bm-err{color:#9aa0a6;font-size:12.5px;font-family:ui-monospace,Consolas,monospace;margin:0 0 26px}
+#banMask .bm-btn{background:#fff;border:1px solid #dadce0;color:#3c4043;font-size:13.5px;padding:9px 18px;border-radius:6px;cursor:pointer;transition:background .15s ease,box-shadow .15s ease}
+#banMask .bm-btn:hover{background:#f8f9fa;box-shadow:0 1px 3px rgba(60,64,67,.2)}
+#banMask .bm-btn:active{background:#f1f3f4}
+/* 单块渲染失败时的占位（防崩溃隔离，不拖垮整页） */
+.block-err{border:1px dashed rgba(0,0,0,.16);border-radius:14px;padding:22px 18px;text-align:center;color:#86868b;font-size:13px;background:rgba(0,0,0,.02)}
+/* 单元格跳转落点也闪光 */
+td.jump-flash,th.jump-flash{animation:jumpGlow 1.7s ease}
+.block-wrap .collab-tag{position:absolute;top:-15px;right:8px;background:#ff9f0a;color:#fff;font-size:11px;line-height:1;padding:4px 9px;border-radius:980px;z-index:9;pointer-events:none;white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,.22)}
+.tb-btn.jump-pend{background:rgba(255,159,10,.16);border-color:rgba(255,159,10,.55);color:#b26a00;font-weight:600;animation:jumpPend 1.2s ease-in-out infinite}
+@keyframes jumpPend{0%,100%{box-shadow:0 0 0 0 rgba(255,159,10,.45)}50%{box-shadow:0 0 0 5px rgba(255,159,10,0)}}
+.jump-item{cursor:pointer}
+.jump-item:hover{background:rgba(52,199,89,.08)}
+
+/* ---------- Yjs 网状协同（ycollab.js）：他人正在编辑的块（Awareness 驱动，纯装饰不影响布局） ---------- */
+.cp-edit{margin-left:6px;font-size:11px;color:#34c759}
+.block-wrap.lm-peer-edit{box-shadow:0 0 0 2px var(--peer-c,#0a84ff),0 0 14px -4px var(--peer-c,#0a84ff)}
+.lm-peer-tag{position:absolute;top:-22px;left:8px;z-index:81;background:var(--peer-c,#0a84ff);color:#fff;font-size:12px;line-height:1;padding:5px 9px;border-radius:8px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+
+
