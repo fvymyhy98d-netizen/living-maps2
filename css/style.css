@@ -757,6 +757,11 @@ body.mobile-view .block-tools button{width:27px;height:27px;font-size:12px}
 /* ★ 手机没有 hover：块工具条（上移/下移/删除/并排勾选…）常显，不依赖悬停或选中态；
    多选模式（multi-mode）的 display:none !important 仍优先生效，勾选时自动隐藏 */
 body.admin.mobile-view .block-wrap .block-tools{display:flex}
+/* 大标题区的工具条不在 .block-wrap 里（挂在 .page-hero 下），同款常显 */
+body.admin.mobile-view .page-hero .block-tools{display:flex}
+/* 并排框/文本框的蓝色拖动抓手（fb-grip）与调宽调高手柄（fb-hd）也一直显示——
+   @media(hover:none) 已有触屏常显，这里对 mobile-view 再保底（个别安卓 WebView 误报 hover 能力） */
+body.admin.mobile-view .fb-grip,body.admin.mobile-view .fb-hd{display:block}
 body.mobile-view .free-box .block-tools{max-width:calc(100vw - 20px)}
 body.mobile-view .free-box{padding:10px 12px}
 /* —— 手机端管理模式：顶部 Word 工具条 —— */
