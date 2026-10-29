@@ -49,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793281091251,
+      "syncTs": 1793281135992,
       "roster": {}
     }
   },
@@ -91,7 +91,12 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "核心概念"
+          "text": "核心概念",
+          "free": {
+            "x": 0,
+            "y": 414,
+            "w": 49
+          }
         },
         {
           "type": "table",
@@ -122,7 +127,12 @@ window.SITE_CONTENT = {
               "用少量数据或外部知识让模型适配具体任务",
               "LoRA、向量数据库"
             ]
-          ]
+          ],
+          "free": {
+            "x": 51,
+            "y": 414,
+            "w": 49
+          }
         },
         {
           "type": "heading",
