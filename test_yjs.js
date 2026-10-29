@@ -220,6 +220,28 @@ T('取消并排：pickFullGroup 校验同组且全选（跨组/选不全不可�
 T('取消并排渲染：wAlign=right 的窄块 margin-left:auto 贴页面右缘（app.js 渲染层支持，无 wAlign 行为不变）',
   appSrc.indexOf("b.wAlign === 'right' ? 'margin-left:auto;' : ''") > 0);
 
+/* ---------- 9.5) 修复㉙：调宽挤开并排框 / 文本框占位 / 跳转空白弹性匹配 / Token 记住 ---------- */
+console.log('【9.5】修复㉙：并排调宽互挤 · 空文本框占位 · 跳转空白匹配 · Token 记住');
+T('调宽松手 force 互挤：resolveFreeOverlaps 加 force 参数，同组对在 force 时不跳过（扩宽挤开旁边的并排框）',
+  edt2.indexOf('function resolveFreeOverlaps(wrap, me, quiet, force)') > 0
+    && edt2.indexOf('if (!force && A.b.free.g != null && A.b.free.g === B.b.free.g) continue;') > 0
+    && edt2.indexOf('resolveFreeOverlaps(wrap, b, false, true);') > 0);
+T('拖动松手不传 force（保持旧行为：拖框不拆散并排行）',
+  edt2.indexOf('resolveFreeOverlaps(wrap, b);') > 0 && edt2.indexOf('resolveFreeOverlaps(wrap, b, false, true);') > 0);
+T('新插入文本框 text 置空（占位交给渲染层 data-ph，不再是真文字）',
+  edt2.indexOf("return { type: 'paragraph', size: 'normal', text: '', style: {}, free:") > 0);
+T('jumpSpanOf 空白弹性回退：连续空格折叠/nbsp 差异不再导致「定位不到」',
+  edt2.indexOf('空白弹性回退') > 0 && edt2.indexOf("join('[\\\\s\\\\u00A0]+')") > 0);
+T('终点绿线宿主匹配空白归一（normSp）：渲染折叠空格后绿线仍挂得上',
+  edt2.indexOf('const normSp = function (s2) { return String(s2 || \'\').replace(/[\\s\\u00A0]+/g, \' \'); };') > 0);
+const storeSrc = srcOf('js/store.js');
+T('Token 记住：setGhCfg 支持 remember 写 localStorage（lm_gh_token_r），ghToken 回退读取',
+  storeSrc.indexOf("localStorage.setItem('lm_gh_token_r', cfg.token)") > 0
+    && storeSrc.indexOf("sessionStorage.getItem('lm_gh_token') || localStorage.getItem('lm_gh_token_r')") > 0
+    && storeSrc.indexOf("keep.remembered = !!localStorage.getItem('lm_gh_token_r');") > 0);
+T('root 上传弹窗：勾选框 ghRemember（记住 Token）+ collect 带 remember',
+  edt2.indexOf('id="ghRemember"') > 0 && edt2.indexOf('remember: !!(root.querySelector(\'#ghRemember\')') > 0);
+
 /* ---------- 8) 自动限时限制（banSelf）修复：三拦截全部打通 + 防锁死 ---------- */
 console.log('【8】密码试错自动限时限制（走通 + 防锁死）');
 T('banSelf 专用通道：绕过「不能屏蔽本机」守卫 + 轮询等签名密钥（waitBanKey 最多 3 秒）',

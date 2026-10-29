@@ -43,10 +43,18 @@ window.LMStore = (function () {
   }
   function setGhCfg(cfg) {
     const keep = { owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main', path: cfg.path || DEF_GH.path };
+    if (cfg.token) {
+      sessionStorage.setItem('lm_gh_token', cfg.token);
+      /* ★ 记住 Token（修复㉙）：勾选后同时写入 localStorage —— sessionStorage 关标签页/清
+         站点数据就没了，这就是「root 每次上传都要重填一遍配置」的原因。明文存本机
+         localStorage（个人课程站风险可控），换机/他人电脑上别勾选即可 */
+      if (cfg.remember) localStorage.setItem('lm_gh_token_r', cfg.token);
+      else localStorage.removeItem('lm_gh_token_r');
+    }
+    keep.remembered = !!localStorage.getItem('lm_gh_token_r'); /* 实际状态回读（token 留空时保持现状） */
     localStorage.setItem(LS_GH, JSON.stringify(keep));
-    if (cfg.token) sessionStorage.setItem('lm_gh_token', cfg.token);
   }
-  function ghToken() { return sessionStorage.getItem('lm_gh_token') || ''; }
+  function ghToken() { return sessionStorage.getItem('lm_gh_token') || localStorage.getItem('lm_gh_token_r') || ''; }
 
   /* ---------- 团队 Token 保险箱（AES-GCM + PBKDF2，浏览器原生 WebCrypto） ----------
      根管理员用「团队管理密码」把 GitHub 配置加密成保险箱，随内容 JSON 上云分发；

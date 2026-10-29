@@ -744,10 +744,12 @@ window.LMEditor = (function () {
       + field('仓库名', F.text('repo', cfg.repo, '例如 living-maps2'))
       + field('分支', F.text('branch', cfg.branch || 'main', '一般保持 main'))
       + field('内容文件路径', F.text('path', cfg.path || 'data/content.js', '一般保持默认'))
-      + field('GitHub Token（只存在当前标签页，关闭浏览器即清除）',
+      + field('GitHub Token（默认只存当前标签页，关闭浏览器即清除）',
           '<input class="input" type="password" name="token" autocomplete="off" placeholder="'
-          + (hasToken ? '本次会话已保存 Token，留空则继续使用' : '粘贴 Fine-grained Personal Access Token') + '">',
+          + (hasToken ? '本次会话已有 Token，留空则继续使用' : '粘贴 Fine-grained Personal Access Token') + '">',
           '生成方法：GitHub → Settings → Developer settings → Fine-grained tokens → 生成时仅选择本仓库 → 权限里把 Contents 勾选为 Read and write')
+      + '<label class="modal-note" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ghRemember"'
+          + (cfg.remembered ? ' checked' : '') + '> 在本机记住 Token（关浏览器/刷新都不丢，不用每次重填；公共电脑请勿勾选）</label>'
       + field('团队管理密码（普通管理员的登录密码）',
           '<input class="input" type="password" name="teamPw" autocomplete="off" placeholder="'
           + (vault ? '已配置团队分发，留空则保持不变' : '填写后普通管理员登录即可一键上传') + '">',
@@ -765,7 +767,8 @@ window.LMEditor = (function () {
           repo: String(fd.get('repo') || '').trim(),
           branch: String(fd.get('branch') || '').trim() || 'main',
           path: String(fd.get('path') || '').trim() || 'data/content.js',
-          token: String(fd.get('token') || '')
+          token: String(fd.get('token') || ''),
+          remember: !!(root.querySelector('#ghRemember') && root.querySelector('#ghRemember').checked)
         };
       };
       const vaultize = function (c) { /* 团队保险箱：填了团队密码才更新（随内容上云分发给普通管理员） */
@@ -2351,10 +2354,22 @@ window.LMEditor = (function () {
   function jumpSpanOf(t, selText) {
     const w = walkInline(t);
     const vis = w.map.map(function (i2) { return t.charAt(i2); }).join('');
-    const vi = vis.indexOf(selText);
+    let want = String(selText);
+    let vi = vis.indexOf(want);
+    /* ★ 空白弹性回退（修复㉙「在文本框里选字经常建不了跳转」）：HTML 渲染会把连续空格折叠成
+       一个、nbsp 与普通空格互换（"双击  输入"渲染后变"双击 输入"），DOM 选区文字因此和
+       源码对不上 → indexOf 必失败。失败时把选区文字的空白段当作 [ \u00A0]+ 弹性匹配重找 */
+    if (vi < 0 && /[\s\u00A0]/.test(want)) {
+      const parts = want.split(/[\s\u00A0]+/).filter(function (x) { return x; });
+      if (parts.length) {
+        const re = new RegExp(parts.map(function (x) { return x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('[\\s\\u00A0]+'));
+        const m2 = re.exec(vis);
+        if (m2) { vi = m2.index; want = m2[0]; }
+      }
+    }
     if (vi < 0) return { err: '那段文字在源码里定位不到（可能刚被编辑过），请重新选择' };
     const s0 = w.map[vi];
-    const e0 = w.map[vi + selText.length - 1] + 1;
+    const e0 = w.map[vi + want.length - 1] + 1;
     const bad = w.toks.some(function (k) { return k.b > s0 && k.a < e0 && (k.t === 'ref' || k.t === 'jump' || k.t === 'link'); });
     if (bad) return { err: '所选文字里含有来源引用 / 链接 / 已有跳转，请选不含这些的文字（已有跳转可在 ⇄ 气泡里改目标）' };
     if (!pairCheck(w.toks, s0, e0)) return { err: '所选文字骑跨了颜色标记，请调整选区' };
@@ -2656,8 +2671,9 @@ window.LMEditor = (function () {
         : w.querySelector('th[data-c="' + goal.cell.c + '"]');
     }
     const eds = w.querySelectorAll('[data-edit],[data-pgf]');
-    for (let i = 0; i < eds.length; i++) { if (eds[i].textContent && eds[i].textContent.indexOf(goal.text) >= 0) return eds[i]; }
-    for (let i = 0; i < eds.length; i++) { if (eds[i].textContent && bare(String(eds[i].textContent)).indexOf(want) >= 0) return eds[i]; }
+    const normSp = function (s2) { return String(s2 || '').replace(/[\s\u00A0]+/g, ' '); }; /* 渲染折叠空格/nbsp ↔ 源码差异（修复㉙） */
+    for (let i = 0; i < eds.length; i++) { if (eds[i].textContent && normSp(eds[i].textContent).indexOf(normSp(goal.text)) >= 0) return eds[i]; }
+    for (let i = 0; i < eds.length; i++) { if (eds[i].textContent && normSp(eds[i].textContent).indexOf(normSp(want)) >= 0) return eds[i]; }
     /* ★ 访客态兜底（修复㉔）：data-edit/data-pgf 只在管理模式渲染，访客页两者皆无 ——
        旧版直接返回 null → 终点绿线在访客页永远挂不上。按标签找承载文字的元素 */
     const cands = w.querySelectorAll('p,h1,h2,h3,h4,h5,.callout,td,th,div');
@@ -2976,7 +2992,9 @@ window.LMEditor = (function () {
     const col = document.querySelector('.blocks');
     let y = 240;
     if (col) y = Math.round(window.innerHeight * 0.45 - col.getBoundingClientRect().top);
-    return { type: 'paragraph', size: 'normal', text: '双击输入文字', style: {}, free: { x: 14, y: Math.max(20, y), w: 44 } };
+    return { type: 'paragraph', size: 'normal', text: '', style: {}, free: { x: 14, y: Math.max(20, y), w: 44 } };
+    /* ★ text 置空（修复㉙）：渲染层对空段落自带 data-ph 占位（css :empty::before）——
+       「双击输入文字」不再作为真文字写进数据，点进去直接打字，不用先手动删掉那几个字 */
   }
   /* 插入图片：本地文件（Base64）或链接；已选中图片块时直接替换 */
   function imgInsertPop(anchor) {
@@ -3077,7 +3095,7 @@ window.LMEditor = (function () {
      框的 top 有 .4s 过渡，拖完瞬间矩形还在动画中途，按矩形推挤会算出互相矛盾的 y
      并把坏位置写进数据（页面上就是「几个框叠成一坨」）。模型值是落定的，纯计算必然收敛。
      只动 free.y / style.top，不碰 🔒 YIELD-V4 的让位引擎（margin/freeDecide 一概不碰） */
-  function resolveFreeOverlaps(wrap, me, quiet) {
+  function resolveFreeOverlaps(wrap, me, quiet, force) {
     const col = document.querySelector('.blocks');
     if (!col) return;
     const colW = col.clientWidth || 1;
@@ -3099,7 +3117,10 @@ window.LMEditor = (function () {
       for (let i = 0; i < boxes.length; i++) {
         for (let j = i + 1; j < boxes.length; j++) {
           const A = boxes[i], B = boxes[j];
-          if (A.b.free.g != null && A.b.free.g === B.b.free.g) continue; /* 同一并排组的框同处一行：拼位过程不互推（防「松手时行被拆散、下方乱跳」） */
+          /* 同一并排组的框默认同处一行：拼位过程不互推（防「松手时行被拆散、下方乱跳」）。
+             ★ force（调宽松手）：扩宽就是要挤开旁边 —— 同组对不再跳过，被压的框挤到本框
+             下一行（下方的文档流块由 adjustFreeLayout 自动让位），级联循环继续排开 */
+          if (!force && A.b.free.g != null && A.b.free.g === B.b.free.g) continue;
           if (A.y + A.h <= B.y + 0.5) continue; /* A 完全在 B 上方，无重叠 */
           const ax = A.x / 100 * colW, aw = A.wp / 100 * colW;
           const bx = B.x / 100 * colW, bw = B.wp / 100 * colW;
@@ -3115,7 +3136,7 @@ window.LMEditor = (function () {
       }
       if (!any) break;
     }
-    if (moved && !quiet) LMApp.toast('已自动下移重叠的文本框');
+    if (moved && !quiet) LMApp.toast(force ? '已把调宽后压住的并排框挤到下一行（下方内容已自动让位）' : '已自动下移重叠的文本框');
   }
   function startFreeMove(e, wrap) {
     const b = blockOf(wrap);
@@ -3249,7 +3270,10 @@ window.LMEditor = (function () {
       document.removeEventListener('mouseup', up);
       sc.stop();
       wrap.classList.remove('free-drag');
-      resolveFreeOverlaps(wrap, b);
+      /* ★ force=true（修复㉙）：调宽松手时同组并排框也参与互挤 —— 向右/向左扩宽压到旁边
+         的并排框就把对方挤到下一行（旧版同组跳过 → 两个框叠在一起），被挤的框下方的
+         内容块再由让位引擎自动推开 */
+      resolveFreeOverlaps(wrap, b, false, true);
       if (window.LMApp && LMApp.endFreeDrag) LMApp.endFreeDrag();
       else if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout();
       LMApp.commit({ silent: true, rerender: false });
