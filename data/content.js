@@ -49,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793275572742,
+      "syncTs": 1793275579868,
       "roster": {}
     }
   },
@@ -558,7 +558,10 @@ window.SITE_CONTENT = {
           ],
           "seq": 1
         }
-      ]
+      ],
+      "heroStyle": {
+        "grad": "5"
+      }
     }
   ],
   "discuss": [],
