@@ -10,38 +10,16 @@ window.SITE_CONTENT = {
     "title": "三张活地图",
     "subtitle": "人工智能前沿与创新 · 课程大作业",
     "topic": "示例主题：大语言模型（LLM）—— 上线前请改成你们小组的选题",
-    "description": "围绕所选领域，建立「领域 · 生态 · 认知」三张相互关联、持续更新的活地图，作为伴随大学四年的思考外脑。",
-    "homeFeatures": [
-      {
-        "icon": "🖐️",
-        "title": "可探索",
-        "desc": "点击内容，查看含义、作用与关系"
-      },
-      {
-        "icon": "🔗",
-        "title": "相关联",
-        "desc": "概念、工具、课程与案例相互链接"
-      },
-      {
-        "icon": "🔎",
-        "title": "可追溯",
-        "desc": "重要内容标注来源，区分事实与推断"
-      },
-      {
-        "icon": "🌱",
-        "title": "可更新",
-        "desc": "每周检查，让地图随学习持续生长"
-      }
-    ]
+    "description": "围绕所选领域，建立「领域 · 生态 · 认知」三张相互关联、持续更新的活地图，作为伴随大学四年的思考外脑。"
   },
   "config": {
     "admin": {
-      "hint": "密码已于 2026/10/29 19:00:46 修改",
+      "hint": "密码已于 2026/10/29 19:20:59 修改",
       "auth": {
         "v": 2,
         "iters": 60000,
-        "salt": "06235e8350bb3df92b803268bcf2cb11",
-        "hash": "afd79e70bee416d362e7cb625998721a2df9d2744c64ea8b9f2f41e82d7cab4d"
+        "salt": "34af1bcb67bd07fdc68c038299484bc9",
+        "hash": "75ff483e94e32482e32f686800a288bc158628d7262e099a15beac702a4228f8"
       }
     },
     "footer": {
@@ -49,7 +27,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793271646463,
+      "syncTs": 1793272859866,
       "roster": {}
     }
   },
@@ -270,13 +248,16 @@ window.SITE_CONTENT = {
           "items": [
             {
               "label": "Hugging Face 官网",
-              "url": "https://huggingface.co"
+              "url": "https://huggingface.co",
+              "id": "r1"
             },
             {
               "label": "示例来源：请替换",
-              "url": "#"
+              "url": "#",
+              "id": "r2"
             }
-          ]
+          ],
+          "seq": 2
         }
       ]
     },
