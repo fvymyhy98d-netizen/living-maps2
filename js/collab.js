@@ -522,8 +522,10 @@ window.LMCollab = (function () {
             const n0 = cb.bans.length;
             cb.bans = cb.bans.filter(function (e2) { return e2 && !e2._bad && e2.sig; });
             if (cb.bans.length !== n0) {
-              try { LMStore.saveLocal(LMApp.state.content); } catch (e3) { /* noop */ }
-              bump(Date.now());
+              try {
+                cb.syncTs = Date.now(); bump(cb.syncTs);
+                LMStore.saveLocal(LMApp.state.content);
+              } catch (e3) { /* noop */ }
               send({ type: 'commit', content: LMApp.state.content });
               LMApp.toast('🛡 已清理 ' + (n0 - cb.bans.length) + ' 条被篡改的屏蔽记录并重新广播');
             }
@@ -562,6 +564,14 @@ window.LMCollab = (function () {
   function publish(content) {
     if (!validContent(content)) return;
     const ts = Date.now();
+    /* 版本戳随内容走：本机保存即把 syncTs 写进内容再 bump，保证 lastTs 恒等于
+       「已应用内容的版本戳」。否则本机时钟恒大于云端历史版本戳，
+       云端（其他设备保存的）更新会被当「过期包」永久丢弃（实测全站白屏后内容卡死的主因） */
+    try {
+      const cfgC = (content.config = content.config || {});
+      cfgC.collab = cfgC.collab || {};
+      cfgC.collab.syncTs = ts;
+    } catch (eT) { /* noop */ }
     bump(ts);
     /* 云端发布把时间戳写进内容（仓库文件里可比新旧）；本地落盘但不重绘 */
     try {
@@ -627,13 +637,33 @@ window.LMCollab = (function () {
       GH.inFlight = false;
       if (!validContent(c)) return;
       const ts = +(((c.config || {}).collab || {}).syncTs || 0) || 1;
-      if (ts <= lastTs || ts <= GH.lastPullTs) return;
-      GH.lastPullTs = ts;
-      applyRemote({ content: c, ts: ts, name: '云端（GitHub）' });
+      const stale = (ts <= lastTs || ts <= GH.lastPullTs);
+      if (!stale) {
+        GH.lastPullTs = ts;
+        applyRemote({ content: c, ts: ts, name: '云端（GitHub）' });
+        return;
+      }
+      /* 时间戳不占优 ≠ 内容相同：多端并发或时钟错位时，云端可能带着本机没有的修改。
+         无 Token 的访客只读不写 → 云端恒为权威：内容与本地不同就采用（防本地旧缓存永久卡死）；
+         管理员（可写）保持「后写赢」，避免云端旧版盖掉本机尚未推送的新编辑。 */
+      if (GH.token) return;
+      try { if (JSON.stringify(c) === JSON.stringify(LMApp.state.content)) return; } catch (eC) { return; }
+      if (localBusy() || !verifyBanList(c)) return;
+      try {
+        LMApp.state.content = mergeBlocks(c);
+        LMApp.render();
+        if (window.LMStore) LMStore.saveLocal(LMApp.state.content);
+      } catch (eD) { return; }
+      setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
+      LMApp.toast('🔄 已同步「云端（GitHub）」的修改');
     }).catch(function () { GH.inFlight = false; });
   }
   function ghPush(content) {
     if (!GH.cfg || !GH.token || !window.LMStore) return;
+    /* 防旧覆盖新守卫：最近一次轮询看到的云端版本比本机内容新（其他设备刚推过）→
+       本机不推送（避免旧内容盖掉别人的新内容），改为立即拉取应用 */
+    const myTs = +(((content.config || {}).collab || {}).syncTs || 0);
+    if (GH.lastPullTs > myTs) { ghPull(); return; }
     const now = Date.now();
     if (GH.inFlight) return;
     const wait = GH_PUSH_MIN - (now - GH.lastPush);
