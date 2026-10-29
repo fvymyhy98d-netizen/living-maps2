@@ -187,7 +187,7 @@ button.page-row.new-page:hover{border-color:var(--blue);color:var(--blue);backgr
 .page-row.page-new{background:rgba(0,113,227,.04);border:1px solid rgba(0,113,227,.25)}
 
 /* ---------- 轻提示 Toast ---------- */
-.toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(29,29,31,.92);color:#fff;padding:10px 20px;border-radius:980px;font-size:13px;z-index:300;opacity:0;transition:opacity .3s ease,transform .3s ease;pointer-events:none;max-width:86vw;text-align:center}
+.toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(29,29,31,.92);color:#fff;padding:10px 20px;border-radius:14px;font-size:13px;z-index:300;opacity:0;transition:opacity .3s ease,transform .3s ease;pointer-events:none;max-width:min(86vw,420px);text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* ---------- 页脚 ---------- */

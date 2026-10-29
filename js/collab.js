@@ -249,6 +249,7 @@ window.LMCollab = (function () {
     try {
       switch (msg.type) {
       case 'hello':
+        if (!peers[msg.from]) { LMApp.toast('🟢 「' + (msg.name || '设备') + '」已上线'); }
         peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page };
         if (msg.want) { /* 新设备要全量：只让「设备号最小」的那台回，避免多台同时灌 */
           const ids = Object.keys(peers).concat([me.id]).sort();
@@ -256,6 +257,7 @@ window.LMCollab = (function () {
         }
         paintChip(); renderPanel(); break;
       case 'iam':
+        if (!peers[msg.from]) { LMApp.toast('🟢 「' + (msg.name || '设备') + '」已上线'); }
         peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page }; paintChip(); renderPanel(); break;
       case 'state':
         if (msg.to && msg.to !== me.id) break;
@@ -282,8 +284,12 @@ window.LMCollab = (function () {
         else if (lk2 && lk2.shared) lk2.shared = false;
         repaintLocks(); break;
       }
-      case 'bye':
-        delete peers[msg.from]; paintChip(); renderPanel(); break;
+      case 'bye': {
+        const goneName = (peers[msg.from] && peers[msg.from].name) || msg.name || '设备';
+        delete peers[msg.from]; paintChip(); renderPanel();
+        if (msg.from) LMApp.toast('🔴 「' + goneName + '」已断线');
+        break;
+      }
       }
     } catch (eS) { /* 单条坏消息/单次处理异常不影响后续协作消息 */ }
   }
@@ -470,7 +476,14 @@ window.LMCollab = (function () {
       Object.keys(locks).forEach(function (k) {
         if (now - locks[k].ts > LOCK_TTL) { delete locks[k]; delete coEdit[k]; repaintLocks(); }
       });
-      Object.keys(peers).forEach(function (k) { if (now - peers[k].ts > PEER_TTL) { delete peers[k]; paintChip(); renderPanel(); } });
+      const gonePeers = [];
+      Object.keys(peers).forEach(function (k) {
+        if (now - peers[k].ts > PEER_TTL) { gonePeers.push(peers[k].name || '设备'); delete peers[k]; }
+      });
+      if (gonePeers.length) { /* 断线提醒（掉线 25 秒无心跳 / 异常关闭未发 bye 的兜底），多台合并一条不轰炸 */
+        LMApp.toast('🔴 ' + gonePeers.map(function (n2) { return '「' + n2 + '」'; }).join('') + (gonePeers.length > 1 ? ' 等 ' + gonePeers.length + ' 台设备' : '') + ' 已断线');
+        paintChip(); renderPanel();
+      }
       send({ type: 'iam', page: (window.LMApp ? LMApp.state.pageId : '') });
       notifyPagePeers(); /* 同页多人提醒（进页/名单变化后按 key 去重，同人只提示一次） */
     } catch (e) { /* 心跳循环永不中断 */ }
@@ -724,7 +737,14 @@ window.LMCollab = (function () {
         .then(function (r) { return r.ok ? r.json().then(function (j) { return j.sha; }) : null; });
     getSha.then(put).then(function (r) {
       GH.inFlight = false;
-      if (r.status === 409 || r.status === 422) { GH.sha = null; ghPull(); return; } /* 别人先提交 → 拉最新，后写优先 */
+      if (r.status === 409 || r.status === 422) { /* 别人先提交 → 拉最新；6 秒后尾随重推一次（防 409 后最后一笔只留本机） */
+        GH.sha = null; ghPull();
+        if (!GH._409T) GH._409T = setTimeout(function () {
+          GH._409T = null;
+          if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);
+        }, 6000);
+        return;
+      }
       if (r.ok) return r.json().then(function (j) { GH.sha = j.content && j.content.sha; });
     }).catch(function () { GH.inFlight = false; });
   }

@@ -172,5 +172,21 @@ T('同页多人提醒：进页（hashchange）与心跳扫描双触发 + key 去
   col.indexOf('function notifyPagePeers') > 0 && col.indexOf('pageNotified') > 0
     && col.indexOf("setTimeout(notifyPagePeers, 900)") > 0 && col.indexOf('notifyPagePeers(); /*') > 0);
 
+/* ---------- 7) 登录防护升级 / 上线断线提醒 / 409 尾随重推 ---------- */
+console.log('【7】密码试错防护 / 上线断线 Toast / 冲突重推');
+T('密码试错防护：1 小时滑动窗口持久化（localStorage）+ 指数退避锁定 + 「系统繁忙」假象文案',
+  appSrc.indexOf('lm_fail_hist') > 0 && appSrc.indexOf('f >= 7 ? 600000') > 0
+    && appSrc.indexOf('系统繁忙，请') > 0 && appSrc.indexOf('0x2F') > 0);
+T('试错自动入黑名单：登录成功时补签 banDevice（1 小时内 ≥5 次失败；根管理员豁免，可解禁）',
+  appSrc.indexOf('已自动限制管理员入口') > 0 && appSrc.indexOf("banDevice(LMCollab.me().id") > 0
+    && appSrc.indexOf('根管理员身份不受自动限制') > 0);
+T('上线/断线 Toast：hello/iam 新设备提示、bye 提示、TTL 清扫合并提示（多台不轰炸）',
+  col.indexOf('已上线') > 0 && col.indexOf('已断线') > 0
+    && col.indexOf('const gonePeers = [];') > 0);
+T('Toast 手机端不遮屏：宽度上限 min(86vw, 420px)，多行圆角 14px',
+  fs.readFileSync(path.join(DIR, 'css/style.css'), 'utf8').indexOf('max-width:min(86vw,420px)') > 0);
+T('409 冲突尾随重推：拉最新后 6 秒重试一次（防最后一笔只留本机），防覆盖守卫仍然生效',
+  col.indexOf('GH._409T') > 0 && col.indexOf('}, 6000);') > 0);
+
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

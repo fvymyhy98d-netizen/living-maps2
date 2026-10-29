@@ -801,7 +801,7 @@ window.LMApp = (function () {
         e.preventDefault();
         const lockUntil = +(sessionStorage.getItem('lm_lock_until') || 0);
         if (Date.now() < lockUntil) {
-          toast('尝试次数过多，请 ' + Math.ceil((lockUntil - Date.now()) / 1000) + ' 秒后再试');
+          toast('系统繁忙，请 ' + Math.ceil((lockUntil - Date.now()) / 1000) + ' 秒后再试（错误码 0x2F）');
           return;
         }
         const v = root.querySelector('[name=pw]').value;
@@ -833,6 +833,22 @@ window.LMApp = (function () {
             LMEditor.closeModal();
             render();
             toast('管理模式已开启：直接点击文字就能修改（像 Word 一样），改动自动保存');
+            /* 密码试错自动入黑名单：本机 1 小时内 ≥5 次密码错误 → 登录成功这一刻也自动限制
+               本设备的管理员入口（banDevice 由本机合法签名，其他设备会认可并同步）；
+               根管理员可在 ⚙ 协作与设备 里解禁。根管理员身份豁免（自己忘了密码不把自己锁死） */
+            try {
+              const fh = JSON.parse(localStorage.getItem('lm_fail_hist') || '[]')
+                .filter(function (t2) { return Date.now() - t2 < 3600000; });
+              if (fh.length >= 5 && window.LMCollab) {
+                if (!r.root && LMCollab.banDevice && LMCollab.me) {
+                  LMCollab.banDevice(LMCollab.me().id, LMCollab.me().fp, 'admin', LMCollab.me().name);
+                  toast('⛔ 本设备 1 小时内密码错误 ' + fh.length + ' 次，已自动限制管理员入口（根管理员可在「协作与设备」解禁）');
+                } else if (r.root) {
+                  toast('⚠️ 本设备 1 小时内密码错误 ' + fh.length + ' 次（根管理员身份不受自动限制）');
+                }
+                localStorage.removeItem('lm_fail_hist');
+              }
+            } catch (eF2) { /* noop */ }
             /* 访客极简：管理员登录后才启动实时协同（信令 + 在线名单 + 同浏览器互连） */
             try { if (window.LMYCollabStart) window.LMYCollabStart(); } catch (eC0) { /* noop */ }
             /* 云端上传通道（团队保险箱）：普通管理员用「团队管理密码」解密根管理员分发的 GitHub 配置，
@@ -859,14 +875,22 @@ window.LMApp = (function () {
               } catch (e3) { /* noop */ }
             }
           } else {
-            const n = +(sessionStorage.getItem('lm_fail_n') || 0) + 1;
-            if (n >= 5) {
-              sessionStorage.setItem('lm_lock_until', String(Date.now() + 30000));
+            /* 密码试错防护（1 小时滑动窗口）：失败时间戳持久化到 localStorage（关浏览器也记得）；
+               5 次锁定时长指数退避（30 秒 → 2 分钟 → 10 分钟）；对外文案统一「系统繁忙」——
+               不向尝试者暴露锁定机制与剩余次数，模拟服务器繁忙的假象 */
+            let fh = [];
+            try { fh = JSON.parse(localStorage.getItem('lm_fail_hist') || '[]').filter(function (t2) { return Date.now() - t2 < 3600000; }); } catch (eF0) { /* noop */ }
+            fh.push(Date.now());
+            try { localStorage.setItem('lm_fail_hist', JSON.stringify(fh)); } catch (eF1) { /* noop */ }
+            const f = fh.length;
+            if (f >= 5) {
+              const lockMs = f >= 7 ? 600000 : (f >= 6 ? 120000 : 30000);
+              sessionStorage.setItem('lm_lock_until', String(Date.now() + lockMs));
               sessionStorage.removeItem('lm_fail_n');
-              toast('密码不正确：已连续失败 5 次，锁定 30 秒');
+              toast('系统繁忙，请 ' + Math.ceil(lockMs / 1000) + ' 秒后再试（错误码 0x2F）');
             } else {
-              sessionStorage.setItem('lm_fail_n', String(n));
-              toast('密码不正确（' + n + '/5，连续失败 5 次将锁定 30 秒）');
+              sessionStorage.setItem('lm_fail_n', String(f));
+              toast('密码不正确');
             }
           }
         }).catch(function (err) {
