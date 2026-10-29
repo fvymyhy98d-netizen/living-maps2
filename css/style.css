@@ -800,8 +800,9 @@ body.mobile-view .ih{width:20px;height:20px}
 body.mobile-view .bh{width:18px;height:18px}
 body.mobile-view .blk-typebar button{padding:5px 9px;font-size:12px}
 @media(max-width:760px){
-  /* 无 JS 时的兜底：真机窄屏至少保证顶部工具条与管理条不溢出 */
-  #editBar{left:6px;right:6px;transform:none;width:auto;max-width:none;flex-wrap:wrap;justify-content:center;top:56px}
+  /* 无 JS 时的兜底：真机窄屏至少保证顶部工具条与管理条不溢出。
+     ★ 修复㉛：限高 + 内部滚动 —— 工具条展开不再吞掉半块屏幕，配合 editor.js 的光标跟随滚动保证打字时可见 */
+  #editBar{left:6px;right:6px;transform:none;width:auto;max-width:none;flex-wrap:wrap;justify-content:center;top:56px;max-height:42vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
   #adminBar{gap:6px;padding:8px}
   #adminBar .btn{font-size:12px;padding:7px 10px}
   .bar-tip{display:none}

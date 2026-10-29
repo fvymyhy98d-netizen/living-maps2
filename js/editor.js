@@ -1076,9 +1076,8 @@ window.LMEditor = (function () {
   function pageOf() {
     return LMApp.state.content.pages.find(function (p) { return p.id === LMApp.state.pageId; });
   }
-  document.addEventListener('focusout', function (e) {
+  function saveEdited(el) {
     if (!window.LMApp || !LMApp.state.admin) return;
-    const el = e.target;
     if (!el || !el.getAttribute || !el.getAttribute('data-edit')) return;
     const txt = htmlToMd(el).replace(/\u00A0/g, ' ').replace(/^\s+|\s+$/g, '').replace(/\n{3,}/g, '\n\n');
     /* ★ 无变化不落盘的统一归一化（修复㉔④ 同款，提到最外层给所有失焦保存路径共用）：
@@ -1152,6 +1151,39 @@ window.LMEditor = (function () {
       touchBlock(b); /* 块级后写优先的时间戳（冲突保护，见 collab.js mergeBlocks） */
       LMApp.commit({ silent: true, rerender: false }); markSaved();
     }
+  }
+  document.addEventListener('focusout', function (e) {
+    saveEdited(e.target);
+    liveStopEdit();
+  });
+  /* ★ 编辑期间节流广播（修复㉛）：字段/单元格此前只在失焦时保存 —— 对方一直不点别处，
+     本机就一直收不到内容更新（只看得到「正在编辑」徽标）。现在输入停顿 1.2s 或持续输入
+     每 3.5s 自动走一遍与失焦完全相同的保存（无变化不落盘，不产生空包）；本机自己输入期间
+     远端包照旧挂起（localBusy → pending），不会被对方的重绘打断 */
+  var liveEdit = { t1: 0, t2: 0, el: null };
+  function liveStopEdit() {
+    if (liveEdit.t1) { clearTimeout(liveEdit.t1); liveEdit.t1 = 0; }
+    if (liveEdit.t2) { clearInterval(liveEdit.t2); liveEdit.t2 = 0; }
+    liveEdit.el = null;
+  }
+  document.addEventListener('input', function (e) {
+    if (!window.LMApp || !LMApp.state.admin) return;
+    const el = e.target;
+    if (!el || !el.getAttribute || !el.getAttribute('data-edit')) return;
+    if (el.classList && el.classList.contains('md-src')) return; /* Markdown 源码框自带实时预览 */
+    if (liveEdit.el !== el) {
+      liveStopEdit();
+      liveEdit.el = el;
+      liveEdit.t2 = setInterval(function () {
+        if (!liveEdit.el || document.activeElement !== liveEdit.el) { liveStopEdit(); return; }
+        saveEdited(liveEdit.el); /* 持续输入也每 3.5s 强制同步一包 */
+      }, 3500);
+    }
+    if (liveEdit.t1) clearTimeout(liveEdit.t1);
+    liveEdit.t1 = setTimeout(function () {
+      liveEdit.t1 = 0;
+      if (liveEdit.el && document.activeElement === liveEdit.el) saveEdited(liveEdit.el); /* 停手 1.2s 保存 */
+    }, 1200);
   });
   /* Markdown 源码框失焦 → 自动保存源码 */
   document.addEventListener('focusout', function (e) {
@@ -1456,6 +1488,27 @@ window.LMEditor = (function () {
   document.addEventListener('selectionchange', function () {
     if (!window.LMApp || !LMApp.state.admin) return;
     refreshFmtState();
+  });
+  /* ★ 打字时把光标滚进可视区（修复㉛·手机端）：顶部工具栏展开 + 软键盘把可视区夹得很窄，
+     光标常被压在工具栏下面看不见 —— 节流跟随，光标一出可见范围就滚回中间 */
+  var caretT = 0;
+  document.addEventListener('selectionchange', function () {
+    if (!window.LMApp || !LMApp.state.admin) return;
+    const el = document.activeElement;
+    if (!el || !el.getAttribute || !el.getAttribute('data-edit')) return;
+    const now = Date.now(); if (now - caretT < 400) return; caretT = now;
+    try {
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      if (!r || (!r.top && !r.bottom)) { el.scrollIntoView({ block: 'center' }); return; }
+      const bar = document.getElementById('editBar');
+      const top = bar ? bar.getBoundingClientRect().bottom + 8 : 0;
+      const bottom = window.innerHeight - 8;
+      if (r.top < top || r.bottom > bottom) {
+        try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e2) { el.scrollIntoView(); }
+      }
+    } catch (e) { /* noop */ }
   });
   /* 在文本片段里剥离某标记（处理 ** 与 *、~~ 与 ~ 的嵌套冲突） */
   function stripMark(seg, k) {

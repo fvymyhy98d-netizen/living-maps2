@@ -140,7 +140,7 @@ T('MQTT 断线状态去重（offStatus 防重连风暴刷屏）',
 
 /* ---------- 5·补2) 访客极简 + 团队保险箱 + 配置漂移自愈 ---------- */
 console.log('【5·补2】访客极简 / 团队 Token 保险箱 / 配置漂移自愈');
-const sto = srcOf('js/store.js'), edt = srcOf('js/editor.js'), appSrc = srcOf('js/app.js');
+const sto = srcOf('js/store.js'), edt = srcOf('js/editor.js'), appSrc = srcOf('js/app.js'), cssSrc = srcOf('css/style.css');
 T('访客极简：未登录管理员不启动实时协同（maybeBoot 门禁 + 登录后 LMYCollabStart 按需启动 + boot 防重入）',
   src.indexOf('function maybeBoot') > 0 && src.indexOf('sessionStorage.getItem(\'lm_admin\')') > 0
     && src.indexOf('window.LMYCollabStart') > 0 && src.indexOf('if (booted) return;') > 0);
@@ -257,6 +257,23 @@ T('包裹带色前缀 + 同色取消/异色换色/整段底色一并清',
     && edt2.indexOf("b.style.hl = '';") > 0);
 T('htmlToMd 往返：mark background → ==#hex,文字==（默认黄不写前缀）',
   edt2.indexOf("hc.toLowerCase() !== '#fff3b0'") > 0);
+
+/* ---------- 9.7) 修复㉛：协同实时（编辑期间节流广播）+ 手机打字可见 ---------- */
+console.log('【9.7】修复㉛：协同实时 + 光标跟随');
+T('失焦保存提取为 saveEdited（focusout 与 input 节流共用同一路径）',
+  edt2.indexOf('function saveEdited(el)') > 0
+    && edt2.indexOf('saveEdited(e.target)') > 0
+    && edt2.indexOf('liveStopEdit()') > 0);
+T('input 节流广播：停顿 1.2s 保存 / 持续 3.5s 强制一包（无变化不落盘不空包）',
+  edt2.indexOf('liveEdit = { t1: 0, t2: 0, el: null }') > 0
+    && edt2.indexOf(', 1200)') > 0 && edt2.indexOf(', 3500)') > 0
+    && edt2.indexOf("classList.contains('md-src')") > 0);
+T('光标跟随滚动：selectionchange 节流 + scrollIntoView（工具栏+键盘夹缝里可见）',
+  (edt2.match(/selectionchange/g) || []).length >= 3
+    && edt2.indexOf('caretT') > 0
+    && edt2.indexOf("block: 'center'") > 0);
+T('手机端工具栏限高可滚（max-height 42vh，展开不吞屏）',
+  cssSrc.indexOf('max-height:42vh') > 0 && cssSrc.indexOf('-webkit-overflow-scrolling:touch') > 0);
 
 /* ---------- 8) 自动限时限制（banSelf）修复：三拦截全部打通 + 防锁死 ---------- */
 console.log('【8】密码试错自动限时限制（走通 + 防锁死）');
