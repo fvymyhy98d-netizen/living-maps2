@@ -648,21 +648,60 @@ window.LMEditor = (function () {
     else if (k === 'password') passwordModal();
   });
 
-  /* ---------- GitHub 同步设置 ---------- */
+  /* ---------- GitHub 同步设置（双视图）----------
+     根管理员：完整配置界面（本机专属通道 + 团队保险箱分发）；普通管理员：只见「确认上传」一键操作，
+     看不到 Token/用户名/仓库名等任何配置（明文密钥永不出现在界面上） */
   function syncModal() {
+    if (LMApp.state.root) syncModalRoot();
+    else syncModalLite();
+  }
+  function syncModalLite() {
+    const cfg = LMStore.getGhCfg();
+    const canPush = !!(cfg && cfg.owner && cfg.repo && LMStore.ghToken());
+    modal('<h3>同步到 GitHub（云端上传）</h3>'
+      + '<p class="modal-note">' + (canPush
+        ? '☁️ 云端上传通道已开启（由根管理员统一分发管理）。你的修改将上传到团队仓库，网页 1-2 分钟后自动更新。'
+        : '⏳ 云端上传通道尚未开启：请让根管理员登录本站配置一次，之后本机自动可用。<br>你已做的修改都安全保存在本设备，不会丢失。') + '</p>'
+      + (canPush
+        ? '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
+          + '<button type="button" class="btn btn-primary" id="ghLitePush">☁️ 确认上传</button></div>'
+        : '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>我知道了</button></div>'),
+      function (root) {
+        const b = root.querySelector('#ghLitePush');
+        if (!b) return;
+        b.addEventListener('click', function () {
+          b.disabled = true; b.textContent = '正在上传…';
+          const cfg2 = LMStore.getGhCfg();
+          cfg2.token = cfg2.token || LMStore.ghToken();
+          LMStore.saveGitHub(cfg2, LMApp.state.content).then(function () {
+            LMEditor.closeModal();
+            LMApp.toast('✅ 已上传到 GitHub，网页 1-2 分钟后自动更新');
+          }).catch(function (err) {
+            b.disabled = false; b.textContent = '☁️ 确认上传';
+            LMApp.toast('上传失败：' + (err && err.message ? err.message : err));
+          });
+        });
+      });
+  }
+  function syncModalRoot() {
     const cfg = LMStore.getGhCfg();
     const hasToken = !!LMStore.ghToken();
-    modal('<h3>同步到 GitHub（云端保存）</h3>'
+    const vault = ((LMApp.state.content.config || {}).collab || {}).tokenVault;
+    modal('<h3>同步到 GitHub（云端保存 · 根管理员专属）</h3>'
       + '<p class="modal-note">在网站上保存的内容先存在<b>你自己的浏览器</b>里；配置下面信息后，即可把内容直接提交到 GitHub 仓库，GitHub Pages 会在 1-2 分钟后自动更新——<b>不需要手动上传文件</b>。</p>'
       + '<form id="ghForm">'
-      + field('GitHub 用户名 / 组织名', F.text('owner', cfg.owner, '例如 zhangsan'))
-      + field('仓库名', F.text('repo', cfg.repo, '例如 living-maps'))
+      + field('GitHub 用户名 / 组织名', F.text('owner', cfg.owner, '例如 fvymyhy98d-netizen'))
+      + field('仓库名', F.text('repo', cfg.repo, '例如 living-maps2'))
       + field('分支', F.text('branch', cfg.branch || 'main', '一般保持 main'))
       + field('内容文件路径', F.text('path', cfg.path || 'data/content.js', '一般保持默认'))
       + field('GitHub Token（只存在当前标签页，关闭浏览器即清除）',
           '<input class="input" type="password" name="token" autocomplete="off" placeholder="'
           + (hasToken ? '本次会话已保存 Token，留空则继续使用' : '粘贴 Fine-grained Personal Access Token') + '">',
           '生成方法：GitHub → Settings → Developer settings → Fine-grained tokens → 生成时仅选择本仓库 → 权限里把 Contents 勾选为 Read and write')
+      + field('团队管理密码（普通管理员的登录密码）',
+          '<input class="input" type="password" name="teamPw" autocomplete="off" placeholder="'
+          + (vault ? '已配置团队分发，留空则保持不变' : '填写后普通管理员登录即可一键上传') + '">',
+          '可选：填写后会把上面的 GitHub 配置 AES-256-GCM 加密成「团队保险箱」随内容上云；普通管理员用这个密码登录时自动解密取回，一键上传。明文 Token 不会出现在任何界面与云端内容里。')
       + '<div class="form-actions">'
       + '<button type="button" class="btn btn-ghost" data-close>关闭</button>'
       + '<button type="button" class="btn btn-ghost" id="ghSaveCfg">只保存设置</button>'
@@ -679,19 +718,34 @@ window.LMEditor = (function () {
           token: String(fd.get('token') || '')
         };
       };
+      const vaultize = function (c) { /* 团队保险箱：填了团队密码才更新（随内容上云分发给普通管理员） */
+        const pw = String((new FormData(form)).get('teamPw') || '').trim();
+        if (!pw) return Promise.resolve(false);
+        return LMStore.encryptForTeam(JSON.stringify({ owner: c.owner, repo: c.repo, branch: c.branch, path: c.path, token: c.token }), pw).then(function (box) {
+          const cc = LMApp.state.content.config = LMApp.state.content.config || {};
+          cc.collab = cc.collab || {};
+          cc.collab.tokenVault = box;
+          LMApp.commit({ silent: true, rerender: false });
+          return true;
+        });
+      };
       root.querySelector('#ghSaveCfg').addEventListener('click', function () {
-        LMStore.setGhCfg(collect());
-        LMApp.toast('设置已保存（Token 仅本次会话有效）');
+        const c = collect();
+        LMStore.setGhCfg(c);
+        vaultize(c).then(function (vOk) {
+          LMApp.toast(vOk ? '设置已保存；团队保险箱已更新（随内容自动上云）' : '设置已保存（Token 仅本次会话有效）');
+        }).catch(function (eV1) { LMApp.toast('设置已保存；但保险箱加密失败：' + (eV1 && eV1.message ? eV1.message : eV1)); });
       });
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         const c = collect();
         LMStore.setGhCfg(c);
+        vaultize(c).catch(function (eV2) { LMApp.toast('团队保险箱加密失败：' + (eV2 && eV2.message ? eV2.message : eV2)); });
         const btn = form.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = '正在同步…';
         LMStore.saveGitHub(c, LMApp.state.content).then(function () {
           closeModal();
-          LMApp.toast('已提交到 GitHub！页面 1-2 分钟后自动更新');
+          LMApp.toast('已提交到 GitHub！页面 1-2 分钟后自动更新' + (String((new FormData(form)).get('teamPw') || '').trim() ? '；团队分发已更新' : ''));
         }).catch(function (err) {
           LMApp.toast(err.message || String(err));
           btn.disabled = false; btn.textContent = '保存并同步到 GitHub';

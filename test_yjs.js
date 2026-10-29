@@ -96,8 +96,8 @@ console.log('【5】传输层（js/yjstcb.js：EMQX MQTT 信令 + 原生 WebRTC 
 const tcb = srcOf('js/yjstcb.js');
 T('yjstcb.js 存在且实现原生 WebRTC Mesh（RTCPeerConnection + DataChannel）',
   exists('js/yjstcb.js') && tcb.indexOf('new RTCPeerConnection') > 0 && tcb.indexOf('createDataChannel') > 0);
-T('信令只走 MQTT 定向 publish（/to/<peerId> topic，QoS0）',
-  tcb.indexOf('function sig(payload)') > 0 && tcb.indexOf('peerTopic(payload.to') > 0 && tcb.indexOf('mq.publish') > 0);
+T('信令只走 MQTT 定向 publish（/to/<peerId> topic，QoS0；多路广播由 mqPublish 统一发送）',
+  tcb.indexOf('function sig(payload)') > 0 && tcb.indexOf('peerTopic(payload.to') > 0 && tcb.indexOf('function mqPublish') > 0);
 T('CloudBase 线路已移除（不再出现 ensureAuth / bootTCB / presenceState / window.CloudBase）',
   tcb.indexOf('ensureAuth') < 0 && tcb.indexOf('bootTCB') < 0 && tcb.indexOf('presenceState') < 0 && tcb.indexOf('window.CloudBase') < 0);
 T('全量互换收敛：新连接互发 encodeStateAsUpdate（CRDT 幂等）',
@@ -125,14 +125,36 @@ T('MQTT presence 三保险：15s 心跳 + LWT 遗言（will）+ 45s 超时清扫
   tcb.indexOf('presTopic()') > 0 && tcb.indexOf('will:') > 0 && tcb.indexOf('leave') > 0 && tcb.indexOf('> 45') > 0);
 T('MQTT 定向握手 topic（/to/<peerId>）与口令派生房间（防猜）',
   tcb.indexOf('peerTopic') > 0 && tcb.indexOf("shortHash((opts.channel || 'living-maps') + '|'") > 0);
-T('broker 池确定性选择（房间哈希 % 池大小 → 同房间同台互通）',
-  tcb.indexOf('parseInt(shortHash(topic), 36) % brokers.length') > 0 && tcb.indexOf('opts.brokers') > 0);
+T('MQTT 多 broker 全连（握手帧三路广播 + 帧唯一号去重 + 单路断开不掉线）',
+  tcb.indexOf('mqs.push(mq)') > 0 && tcb.indexOf('function mqPublish') > 0 && tcb.indexOf('sigSeen') > 0
+    && tcb.indexOf('function mqDown') > 0 && tcb.indexOf('payload.n =') > 0);
 T('yjs-config.js broker 池三供应商（EMQX 中国/国际 + HiveMQ），tcb/signalMode 已删',
   cfg.indexOf('broker-cn.emqx.io') > 0 && cfg.indexOf('broker.emqx.io') > 0 && cfg.indexOf('broker.hivemq.com') > 0 && cfg.indexOf('signalMode') < 0 && cfg.indexOf('tcb:') < 0);
 T('ycollab.js 传递 brokers 给传输层',
   src.indexOf('CFG.mqtt && CFG.mqtt.brokers') > 0);
 T('MQTT 断线状态去重（offStatus 防重连风暴刷屏）',
   tcb.indexOf('function offStatus') > 0);
+
+/* ---------- 5·补2) 访客极简 + 团队保险箱 + 配置漂移自愈 ---------- */
+console.log('【5·补2】访客极简 / 团队 Token 保险箱 / 配置漂移自愈');
+const sto = srcOf('js/store.js'), edt = srcOf('js/editor.js'), appSrc = srcOf('js/app.js');
+T('访客极简：未登录管理员不启动实时协同（maybeBoot 门禁 + 登录后 LMYCollabStart 按需启动 + boot 防重入）',
+  src.indexOf('function maybeBoot') > 0 && src.indexOf('sessionStorage.getItem(\'lm_admin\')') > 0
+    && src.indexOf('window.LMYCollabStart') > 0 && src.indexOf('if (booted) return;') > 0);
+T('访客极简：collab.js 访客分支不再注册传输层（无「协作中」徽章），同浏览器互连仅管理员启用',
+  col.indexOf('访客只读不上云') < 0 && col.indexOf('lmIsAdmin') > 0);
+T('团队 Token 保险箱：AES-256-GCM + PBKDF2（store 加解密导出，明文 Token 不进界面/内容/云端）',
+  sto.indexOf('encryptForTeam') > 0 && sto.indexOf('decryptForTeam') > 0
+    && sto.indexOf('AES-GCM') > 0 && sto.indexOf('PBKDF2') > 0);
+T('双视图上传：根管理员完整配置（含团队密码分发）+ 普通管理员一键上传（看不到任何密钥）',
+  edt.indexOf('syncModalLite') > 0 && edt.indexOf('syncModalRoot') > 0
+    && edt.indexOf('teamPw') > 0 && edt.indexOf('tokenVault') > 0);
+T('登录回调：管理员登录启动协同，普通管理员自动解密保险箱取回上传通道（refreshGh 重入接线）',
+  appSrc.indexOf('LMYCollabStart') > 0 && appSrc.indexOf('decryptForTeam') > 0
+    && col.indexOf('refreshGh: ghInit') > 0);
+T('配置漂移自愈（防旧缓存分房：定时拉最新 config 对比 room/password，sessionStorage 防刷新循环）',
+  col.indexOf('function cfgWatch') > 0 && col.indexOf('CFG_WATCH_KEY') > 0
+    && col.indexOf('js/yjs-config.js?t=') > 0);
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

@@ -156,10 +156,12 @@
     }
 
     /* ---------- 信令发送（MQTT 定向 publish 到对端 topic；失败只记录不中断流程） ---------- */
+    var sigSeen = {}; /* 多 broker 全连后同一握手帧会从多路到达 → 帧唯一号去重，只消费第一路 */
     function sig(payload) { /* 定向 topic：lm/<room>/to/<peerId>（QoS0；丢失由 ICE 重发/重协商兜底） */
-      if (!mq || !mq.connected) return Promise.resolve('no-mq');
-      try { mq.publish(peerTopic(payload.to || ''), JSON.stringify(payload)); return Promise.resolve('ok'); }
-      catch (e) { return Promise.resolve('error'); }
+      if (!mqUp) return Promise.resolve('no-mq');
+      payload.n = Math.floor(Math.random() * 1e9).toString(36) + '-' + Math.floor(Math.random() * 1e9).toString(36);
+      mqPublish(peerTopic(payload.to || ''), payload);
+      return Promise.resolve('ok');
     }
     /* MQTT topic 派生：房间基座 = lm/<口令哈希>（不知道口令就撞不出 topic）；presence 广播 + 定向握手 */
     function baseTopic() { return 'lm/' + shortHash((opts.channel || 'living-maps') + '|' + (opts.password || '')); }
@@ -168,6 +170,11 @@
     function peerTopic(pid) { return baseTopic() + '/to/' + pid; }
     function onSignal(p) {
       if (!p || p.from === myPeer) return;
+      var sk = (p.from || '') + '|' + (p.n || '');
+      if (sigSeen[sk]) return;
+      sigSeen[sk] = Date.now();
+      var skKeys = Object.keys(sigSeen);
+      if (skKeys.length > 200) { var cutT = Date.now() - 30000; skKeys.forEach(function (k2) { if (sigSeen[k2] < cutT) delete sigSeen[k2]; }); }
       if (p.k === 'offer' && (!p.to || p.to === myPeer)) {
         var pc = conns[p.from] && conns[p.from].pc;
         if (!pc) pc = makePC(p.from, false);
@@ -196,44 +203,53 @@
     bootMQTT();
     return api;
 
-    /* ---------- MQTT 信令：EMQX 公共 Broker 池（免费匿名、国内直连） ---------- */
+    /* ---------- MQTT 信令：公共 Broker 池（EMQX 中国/国际 + HiveMQ，免费匿名） ---------- */
+    var mqs = [], mqUp = 0; /* 多 broker 全连：同时连池内所有公共 broker */
     function bootMQTT() {
       if (!window.mqtt || typeof window.mqtt.connect !== 'function') { status('error', 'MQTT 库未加载（lib/mqtt.js）'); return; }
-      /* broker 池确定性选择：下标 = 房间哈希 % 池大小 —— 同一房间所有设备算出同一台 broker；
-         池统一在 js/yjs-config.js 的 mqtt.brokers 维护（两端 config 不同则互不可见） */
-      var brokers = (opts.brokers && opts.brokers.length) ? opts.brokers : [opts.mqttUrl || 'wss://broker-cn.emqx.io:8084/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
-      var url = brokers[parseInt(shortHash(topic), 36) % brokers.length] || brokers[0];
-      try {
-        mq = window.mqtt.connect(url, {
-          clientId: 'lmsig-' + shortHash(myPeer) + Math.floor(Math.random() * 1e4).toString(36),
-          keepalive: 30, clean: true, reconnectPeriod: 5000, connectTimeout: 10000,
-          will: { topic: presTopic(), payload: JSON.stringify({ peer: myPeer, t: nowSec(), leave: 1 }), qos: 0, retain: false }
+      /* ★ 全连而非单点选台：握手帧向所有已连接 broker 三路广播。
+         旧「确定性选台」在公共 broker 对某些网络（校园网/移动流量）不可达时，
+         设备会永远卡在死服务器上重试 → 全员互相看不见（实测 3 台设备同时孤岛）。
+         全连后任何一台公共服务器抽风都不影响互联，代价只是几条极小的握手帧重复（帧唯一号去重）。 */
+      var brokers = (opts.brokers && opts.brokers.length) ? opts.brokers : ['wss://broker-cn.emqx.io:8084/mqtt', 'wss://broker.emqx.io:8084/mqtt'];
+      var willMsg = JSON.stringify({ peer: myPeer, t: nowSec(), leave: 1 });
+      brokers.forEach(function (url, bi) {
+        var mq;
+        try {
+          mq = window.mqtt.connect(url, {
+            clientId: 'lmsig' + bi + '-' + shortHash(myPeer) + Math.floor(Math.random() * 1e4).toString(36),
+            keepalive: 30, clean: true, reconnectPeriod: 5000, connectTimeout: 12000,
+            will: { topic: presTopic(), payload: willMsg, qos: 0, retain: false }
+          });
+        } catch (eM) { statusSafely('signaling-off', 'MQTT 连接失败：' + eM); return; }
+        mqs.push(mq);
+        mq.on('connect', function () {
+          mq.__wasUp = true; mqUp++;
+          sigReady = true; lastOff = '';
+          try { mq.subscribe(presTopic()); mq.subscribe(selfTopic()); } catch (e0) { /* noop */ }
+          statusSafely('signaling-on', topic + '（' + mqUp + '/' + mqs.length + ' 路信令）');
+          mqPublish(presTopic(), { peer: myPeer, t: nowSec() });
+          if (mqPing) clearInterval(mqPing);
+          mqPing = setInterval(function () { if (!destroyed && mqUp) mqPublish(presTopic(), { peer: myPeer, t: nowSec() }); }, 15000);
         });
-      } catch (eM) { status('error', 'MQTT 连接失败：' + eM); return; }
-      mq.on('connect', function () {
-        sigReady = true; lastOff = '';
-        try { mq.subscribe(presTopic()); mq.subscribe(selfTopic()); } catch (e0) { /* noop */ }
-        statusSafely('signaling-on', topic);
-        mqPublish(presTopic(), { peer: myPeer, t: nowSec() });
-        if (mqPing) clearInterval(mqPing);
-        mqPing = setInterval(function () { if (!destroyed && mq && mq.connected) mqPublish(presTopic(), { peer: myPeer, t: nowSec() }); }, 15000);
+        mq.on('message', function (t, payload) {
+          if (destroyed) return;
+          var p = null;
+          try { p = JSON.parse(payload.toString()); } catch (eP) { return; }
+          if (!p) return;
+          if (t === presTopic()) { onMqPresence(p); return; }
+          if (t === selfTopic()) onSignal(p); /* 定向握手帧：offer/answer/ice */
+        });
+        mq.on('offline', function () { mqDown(mq); });
+        mq.on('close', function () { mqDown(mq); });
+        mq.on('error', function (eE) { /* 断线自动重连（reconnectPeriod=5s）；只降状态不弹终态错误 */
+          statusSafely('signaling-off', String((eE && eE.message) || eE));
+        });
       });
-      mq.on('message', function (t, payload) {
-        if (destroyed) return;
-        var p = null;
-        try { p = JSON.parse(payload.toString()); } catch (eP) { return; }
-        if (!p) return;
-        if (t === presTopic()) { onMqPresence(p); return; }
-        if (t === selfTopic()) onSignal(p); /* 定向握手帧：offer/answer/ice */
-      });
-      mq.on('offline', function () { sigReady = false; offStatus('MQTT offline'); });
-      mq.on('close', function () { sigReady = false; });
-      mq.on('error', function (eE) { /* 断线自动重连（reconnectPeriod=5s）；只降状态不弹终态错误 */
-        statusSafely('signaling-off', String((eE && eE.message) || eE));
-      });
+      if (!mqs.length) { status('error', 'MQTT 全部连接失败'); return; }
       if (mqSweep) clearInterval(mqSweep);
       mqSweep = setInterval(function () { /* 心跳超时清扫：45s 无心跳视为离开（LWT 漏网兜底） */
-        if (destroyed || !mq) return;
+        if (destroyed || !mqs.length) return;
         var now = nowSec(), gone = [];
         Object.keys(presStates).forEach(function (pid) {
           if (!presStates[pid] || (now - (presStates[pid].t || 0)) > 45) gone.push(pid);
@@ -242,7 +258,15 @@
         if (gone.length) scanPresence();
       }, 20000);
     }
-    function mqPublish(t, obj) { try { mq.publish(t, JSON.stringify(obj)); } catch (e) { /* noop */ } }
+    function mqDown(mq) { /* 单路断开只减计数；全部断掉才置 signaling-off（重连循环里状态不闪烁） */
+      if (!mq || !mq.__wasUp) return;
+      mq.__wasUp = false; mqUp = Math.max(0, mqUp - 1);
+      if (!mqUp) { sigReady = false; offStatus('MQTT offline'); }
+    }
+    function mqPublish(t, obj) { /* 发到所有已连接的 broker（对端按帧唯一号去重） */
+      var s = JSON.stringify(obj);
+      mqs.forEach(function (m) { try { if (m.connected) m.publish(t, s); } catch (e) { /* noop */ } });
+    }
     function onMqPresence(p) {
       if (!p || !p.peer || p.peer === myPeer) return;
       if (p.leave) {

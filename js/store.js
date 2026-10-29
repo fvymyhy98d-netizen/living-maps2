@@ -48,6 +48,31 @@ window.LMStore = (function () {
   }
   function ghToken() { return sessionStorage.getItem('lm_gh_token') || ''; }
 
+  /* ---------- 团队 Token 保险箱（AES-GCM + PBKDF2，浏览器原生 WebCrypto） ----------
+     根管理员用「团队管理密码」把 GitHub 配置加密成保险箱，随内容 JSON 上云分发；
+     普通管理员登录（同一密码）自动解密取回配置。明文 Token 永不出现在界面、内容与云端 ——
+     云端只有密文（AES-256-GCM），拿到密文没有团队密码解不开。 */
+  function u8ToB64(u8) { let s = ''; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
+  function b64ToU8(b64) { const s = atob(String(b64 || '')); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+  function teamSubtle() { try { return (window.crypto && window.crypto.subtle) ? window.crypto.subtle : null; } catch (e) { return null; } }
+  async function encryptForTeam(text, pw) {
+    const c = teamSubtle(); if (!c) throw new Error('当前环境不支持加密（请用 https 打开本站）');
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const km = await c.importKey('raw', new TextEncoder().encode(String(pw || '')), 'PBKDF2', false, ['deriveKey']);
+    const key = await c.deriveKey({ name: 'PBKDF2', salt: salt, iterations: PBKDF2_ITERS, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+    const ct = new Uint8Array(await c.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(String(text || ''))));
+    return { v: 1, iters: PBKDF2_ITERS, salt: u8ToB64(salt), iv: u8ToB64(iv), ct: u8ToB64(ct) };
+  }
+  async function decryptForTeam(box, pw) {
+    const c = teamSubtle(); if (!c) throw new Error('当前环境不支持解密（请用 https 打开本站）');
+    if (!box || box.v !== 1 || !box.ct) throw new Error('团队保险箱为空或版本不符');
+    const km = await c.importKey('raw', new TextEncoder().encode(String(pw || '')), 'PBKDF2', false, ['deriveKey']);
+    const key = await c.deriveKey({ name: 'PBKDF2', salt: b64ToU8(box.salt), iterations: box.iters || PBKDF2_ITERS, hash: 'SHA-256' }, km, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+    const pt = await c.decrypt({ name: 'AES-GCM', iv: b64ToU8(box.iv) }, key, b64ToU8(box.ct));
+    return new TextDecoder().decode(pt);
+  }
+
   /* UTF-8 安全的 Base64（大文件分块转换，避免栈溢出） */
   function utf8ToBase64(str) {
     const bytes = new TextEncoder().encode(str);
@@ -145,6 +170,7 @@ window.LMStore = (function () {
   return {
     load: load, saveLocal: saveLocal, resetLocal: resetLocal,
     getGhCfg: getGhCfg, setGhCfg: setGhCfg, ghToken: ghToken,
+    encryptForTeam: encryptForTeam, decryptForTeam: decryptForTeam,
     sha256Hex: sha256Hex, pbkdf2Hex: pbkdf2Hex, randomSaltHex: randomSaltHex,
     PBKDF2_ITERS: PBKDF2_ITERS,
     saveGitHub: saveGitHub, buildFileText: buildFileText, deepCopy: deepCopy

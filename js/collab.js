@@ -699,28 +699,56 @@ window.LMCollab = (function () {
   }
   function ghInit() {
     if (window.LM_COLLAB_SERVER) return; /* 课堂服务器在场时以它为准（局域网最快） */
+    /* 可重入：管理员登录（拿到 Token）后由 refreshGh 再次调用，自动升级为上传通道 */
     try { GH.cfg = window.LMStore ? LMStore.getGhCfg() : null; } catch (e) { GH.cfg = null; }
     GH.token = (window.LMStore && LMStore.ghToken()) || '';
     if (GH.cfg && GH.cfg.owner && GH.cfg.repo && GH.token) {
-      transports.push({ send: function (msg) { if (msg.type === 'commit' && msg.content) ghPush(msg.content); } });
-      modeLabel = '本机+云端';
-      setInterval(function () {
-        const act = Date.now() - (window._lmLastAct || 0) < 30000;
-        const gap = document.visibilityState === 'hidden' ? POLL_HIDDEN : (act ? POLL_ACTIVE : POLL_IDLE);
-        if (!GH.timer || Date.now() - GH.timer >= gap) { GH.timer = Date.now(); ghPull(); }
-      }, 2000);
+      if (GH._wired !== 'admin') {
+        GH._wired = 'admin';
+        transports.push({ send: function (msg) { if (msg.type === 'commit' && msg.content) ghPush(msg.content); } });
+        modeLabel = '本机+云端';
+        setInterval(function () {
+          const act = Date.now() - (window._lmLastAct || 0) < 30000;
+          const gap = document.visibilityState === 'hidden' ? POLL_HIDDEN : (act ? POLL_ACTIVE : POLL_IDLE);
+          if (!GH.timer || Date.now() - GH.timer >= gap) { GH.timer = Date.now(); ghPull(); }
+        }, 2000);
+      }
       ghPull();
       return;
     }
-    /* 访客：GitHub Pages 上自动推导 owner/repo（无 Token、只读、≤5 分钟级） */
+    /* 访客：GitHub Pages 上自动推导 owner/repo（无 Token、只读、90 秒级轮询）。
+       访客极简：不再注册占位 transport —— 不显示「协作中」徽章、不参与任何实时协同，纯浏览 */
     const h = location.hostname, p = location.pathname;
     if (/\.github\.io$/.test(h) && p.split('/')[1]) {
-      GH.cfg = { owner: h.split('.')[0], repo: p.split('/')[1], branch: 'main', path: 'data/content.js' };
-      transports.push({ send: function () { /* 访客只读不上云 */ } });
-      modeLabel = '云端只读';
-      setInterval(ghPull, POLL_VISITOR);
+      if (GH._wired !== 'visitor') {
+        GH._wired = 'visitor';
+        GH.cfg = { owner: h.split('.')[0], repo: p.split('/')[1], branch: 'main', path: 'data/content.js' };
+        modeLabel = '云端只读';
+        setInterval(ghPull, POLL_VISITOR);
+      }
       ghPull();
     }
+  }
+  /* ---------- 配置漂移自愈（防旧缓存分房）----------
+     智能检测：带时间戳拉取最新的 yjs-config.js，发现房间名/口令与本机运行版不一致
+     （= 本机缓存了旧配置文件，会和别的设备连进不同房间互不可见）→ 提示后自动刷新一次；
+     sessionStorage 记录刷新时间，2 分钟内绝不重复刷新（Pages 构建未完成时容忍旧版，防刷新循环）。 */
+  var CFG_WATCH_KEY = 'lm_cfg_reload';
+  function cfgWatch() {
+    try {
+      const last = +(sessionStorage.getItem(CFG_WATCH_KEY) || 0);
+      if (Date.now() - last < 120000) return;
+      fetch('js/yjs-config.js?t=' + Date.now()).then(function (r) { return r.ok ? r.text() : ''; }).then(function (txt) {
+        if (!txt) return;
+        const mRoom = txt.match(/room:\s*'([^']*)'/), mPw = txt.match(/password:\s*'([^']*)'/);
+        const cur = window.LMYJS_CONFIG || {};
+        const drift = (mRoom && mRoom[1] && mRoom[1] !== cur.room) || (mPw && mPw[1] && mPw[1] !== cur.password);
+        if (!drift) return;
+        sessionStorage.setItem(CFG_WATCH_KEY, String(Date.now()));
+        try { LMApp.toast('检测到网站配置已更新，正在自动刷新以保持多设备互联…'); } catch (eT) { /* noop */ }
+        setTimeout(function () { location.reload(); }, 1500);
+      }).catch(function () { /* 离线/网络抖动：下次再查 */ });
+    } catch (eW) { /* noop */ }
   }
   /* ---------- 事件接线 ---------- */
   function hello() { send({ type: 'hello', want: 1, page: (window.LMApp ? LMApp.state.pageId : '') }); }
@@ -740,13 +768,19 @@ window.LMCollab = (function () {
       } catch (e) { /* noop */ }
     }
     if (window.BroadcastChannel) {
-      try {
-        const bc = new BroadcastChannel('lm_collab_v1');
-        bc.onmessage = function (ev) { recv(ev.data); };
-        transports.push({ send: function (msg) { bc.postMessage(msg); } });
-      } catch (e2) { /* noop */ }
+      /* 访客极简：同浏览器互连（BroadcastChannel）也只在管理员登录后启用 —— 访客纯浏览零协同开销 */
+      var lmIsAdmin = false;
+      try { lmIsAdmin = sessionStorage.getItem('lm_admin') === '1'; } catch (eAdm) { /* noop */ }
+      if (lmIsAdmin) {
+        try {
+          const bc = new BroadcastChannel('lm_collab_v1');
+          bc.onmessage = function (ev) { recv(ev.data); };
+          transports.push({ send: function (msg) { bc.postMessage(msg); } });
+        } catch (e2) { /* noop */ }
+      }
     }
     if (transports.length) { paintChip(); hello(); setInterval(sweep, 6000); setInterval(hello, 8000); }
+    setTimeout(cfgWatch, 45000); setInterval(cfgWatch, 180000); /* 配置漂移自愈：45 秒后首查 + 每 3 分钟复查 */
     ['mousedown', 'keydown', 'touchstart'].forEach(function (ev) {
       document.addEventListener(ev, function () { window._lmLastAct = Date.now(); }, { passive: true });
     });
@@ -801,6 +835,7 @@ window.LMCollab = (function () {
     coEditAsk: coEditAsk,
     enforceBans: enforceBans,
     paintChip: paintChip,
+    refreshGh: ghInit, /* 普通管理员登录取回 Token 后重探云端通道（ghInit 已重入化，不会重复接线） */
     renderPanel: renderPanel,
     applyExternal: function (c, by) { /* Yjs 网状协同与旧通道共用同一个「远端应用」漏斗 */
       try { applyRemote({ content: c, ts: Date.now(), name: by || '其他设备' }); } catch (eA) { /* noop */ }

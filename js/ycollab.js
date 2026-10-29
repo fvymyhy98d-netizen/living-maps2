@@ -273,7 +273,9 @@
       toast('🟢 实时协同已就绪（Yjs Mesh）：自动直连 / TURN 兜底 / 离线可用');
     } catch (eBoot) { stub('协同网络初始化失败，已降级：本机互连 + 云端照常'); }
   }
+  var booted = false;
   function boot() {
+    if (booted) return; booted = true;
     loadAll().then(function () {
       try {
         var Y = window.Yjs;
@@ -293,6 +295,14 @@
       } catch (e) { stub('本地持久化初始化失败，已降级：本机互连 + 云端照常'); }
     }, function () { stub('实时协同库（Yjs）加载失败，已降级：本机互连 + 云端照常'); });
   }
-  if (document.readyState === 'complete') setTimeout(boot, 400);
-  else window.addEventListener('load', function () { setTimeout(boot, 400); });
+  /* 访客极简：未登录管理员的设备不启动实时协同（不连信令、不显示在线模块），只保留云端只读轮询；
+     管理员登录成功后由 app.js 调用 window.LMYCollabStart() 按需启动（登录前加载的仅为降级桩，不产生任何连接） */
+  function maybeBoot() {
+    var isAdmin = false;
+    try { isAdmin = sessionStorage.getItem('lm_admin') === '1'; } catch (eGate) { /* 无痕/受限环境按访客处理 */ }
+    if (isAdmin) boot();
+  }
+  if (document.readyState === 'complete') setTimeout(maybeBoot, 400);
+  else window.addEventListener('load', function () { setTimeout(maybeBoot, 400); });
+  window.LMYCollabStart = function () { setTimeout(boot, 60); };
 })();

@@ -801,6 +801,25 @@ window.LMApp = (function () {
             LMEditor.closeModal();
             render();
             toast('管理模式已开启：直接点击文字就能修改（像 Word 一样），改动自动保存');
+            /* 访客极简：管理员登录后才启动实时协同（信令 + 在线名单 + 同浏览器互连） */
+            try { if (window.LMYCollabStart) window.LMYCollabStart(); } catch (eC0) { /* noop */ }
+            /* 云端上传通道（团队保险箱）：普通管理员用「团队管理密码」解密根管理员分发的 GitHub 配置，
+               明文 Token 只进本机 sessionStorage，界面上任何地方都看不到、内容文件里只有密文 */
+            if (!r.root && window.LMStore) {
+              try {
+                const box = ((state.content.config || {}).collab || {}).tokenVault;
+                if (box) {
+                  LMStore.decryptForTeam(box, v).then(function (json) {
+                    const cfgT = JSON.parse(json);
+                    if (cfgT && cfgT.owner && cfgT.repo && cfgT.token) {
+                      LMStore.setGhCfg(cfgT);
+                      try { if (window.LMCollab && LMCollab.refreshGh) LMCollab.refreshGh(); } catch (e5) { /* noop */ }
+                      toast('☁️ 云端上传通道已开启：工具栏「☁️ 同步到 GitHub」可一键上传');
+                    }
+                  }).catch(function () { /* 通道未开启或团队密码已变更：上传时再提示 */ });
+                }
+              } catch (eV0) { /* noop */ }
+            }
             /* 协作昵称：每台设备只提醒一次，改一次永久生效 */
             if (window.LMCollab) {
               try {
