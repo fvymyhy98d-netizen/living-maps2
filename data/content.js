@@ -49,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793272859866,
+      "syncTs": 1793275351178,
       "roster": {}
     }
   },
@@ -77,7 +77,7 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "研究边界",
-          "text": "我们聚焦语言模型的基本原理与使用，暂不展开分布式训练与多模态。后续根据课程进度补充。"
+          "text": "我们聚焦语言模[[j:Jmvthsiw05ei,型的基本原理与使用，暂不展]]开分布式训练与多模态。后续根据课程进度补充。"
         },
         {
           "type": "heading",
@@ -174,15 +174,19 @@ window.SITE_CONTENT = {
           "items": [
             {
               "label": "Vaswani 等, Attention Is All You Need (2017)",
-              "url": "https://arxiv.org/abs/1706.03762"
+              "url": "https://arxiv.org/abs/1706.03762",
+              "id": "r1"
             },
             {
               "label": "示例来源：请替换为你们实际查阅的资料",
-              "url": "#"
+              "url": "#",
+              "id": "r2"
             }
-          ]
+          ],
+          "seq": 2
         }
-      ]
+      ],
+      "heroAlign": ""
     },
     {
       "id": "ecology",
@@ -281,7 +285,8 @@ window.SITE_CONTENT = {
           ],
           "seq": 2
         }
-      ]
+      ],
+      "heroAlign": ""
     },
     {
       "id": "cognition",
@@ -347,7 +352,8 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "text": "- 先问问题再选工具；区分**事实**与**推断**；\n- 从任务困难反查知识缺口，连接到领域地图的课程路径；\n- 做小规模尝试并保留输入输出；每周检查一次地图并留下记录。"
         }
-      ]
+      ],
+      "heroAlign": ""
     },
     {
       "id": "updates",
@@ -391,7 +397,8 @@ window.SITE_CONTENT = {
           "title": "待核实清单",
           "text": "- 培养方案中的课程关联（待对照最新培养方案）\n- 生态地图中的合作关系（待补充公开来源）"
         }
-      ]
+      ],
+      "heroAlign": ""
     },
     {
       "id": "feedback",
@@ -412,7 +419,8 @@ window.SITE_CONTENT = {
           "title": "我们会怎么处理",
           "text": "我们会定期查看反馈：**已修改 / 暂缓 / 不采纳**都会在「更新记录」页对应版本里写明依据。提问题时建议说清楚：针对哪个页面或哪项工作、遇到了什么问题、期望是什么。"
         }
-      ]
+      ],
+      "heroAlign": ""
     },
     {
       "id": "about",
@@ -462,9 +470,85 @@ window.SITE_CONTENT = {
           "title": "协作规范",
           "text": "重要内容标明来源与时间；区分事实、他人观点与团队推断；AI 的回答不作为事实证据；不伪造来源、反馈或更新记录。"
         }
+      ],
+      "heroAlign": ""
+    },
+    {
+      "id": "page-8",
+      "kind": "page",
+      "icon": "📎",
+      "label": "哈哈",
+      "title": "哈哈",
+      "description": "就是哈哈",
+      "heroAlign": "",
+      "blocks": [
+        {
+          "type": "table",
+          "title": "沈家豪",
+          "headers": [
+            "列1",
+            "列2",
+            "列3",
+            "列4",
+            "列5",
+            "列6"
+          ],
+          "rows": [
+            [
+              "",
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            [
+              "",
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            [
+              "",
+              "",
+              "",
+              "",
+              "",
+              ""
+            ],
+            [
+              "",
+              "",
+              "",
+              "",
+              "",
+              ""
+            ]
+          ],
+          "_ts": 1793275351177
+        }
       ]
     }
   ],
-  "discuss": []
+  "discuss": [],
+  "jumps": [
+    {
+      "id": "Jmvthsiw05ei",
+      "from": {
+        "page": "domain",
+        "bi": 1,
+        "text": "型的基本原理与使用，暂不展",
+        "cell": null
+      },
+      "to": {
+        "page": "domain",
+        "bi": 9,
+        "text": "以上为示例，请对照",
+        "cell": null
+      }
+    }
+  ]
 };
 /*CONTENT-END*/
