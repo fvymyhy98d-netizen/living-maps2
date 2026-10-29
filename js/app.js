@@ -861,6 +861,9 @@ window.LMApp = (function () {
             } catch (eF2) { /* noop */ }
             /* 访客极简：管理员登录后才启动实时协同（信令 + 在线名单 + 同浏览器互连） */
             try { if (window.LMYCollabStart) window.LMYCollabStart(); } catch (eC0) { /* noop */ }
+            /* 补启动旧协同通道（左下角徽章 + 同浏览器互连 + 心跳）：页面加载时还是访客，
+               通道注册被跳过——登录成功这一刻必须补调，否则「先开页面再登录」协同永不出现 */
+            try { if (window.LMCollab && LMCollab.startAsAdmin) LMCollab.startAsAdmin(); } catch (eS0) { /* noop */ }
             /* 云端上传通道（团队保险箱）：普通管理员用「团队管理密码」解密根管理员分发的 GitHub 配置，
                明文 Token 只进本机 sessionStorage，界面上任何地方都看不到、内容文件里只有密文 */
             if (!r.root && window.LMStore) {

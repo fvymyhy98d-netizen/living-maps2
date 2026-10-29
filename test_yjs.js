@@ -143,6 +143,10 @@ T('访客极简：未登录管理员不启动实时协同（maybeBoot 门禁 + �
     && src.indexOf('window.LMYCollabStart') > 0 && src.indexOf('if (booted) return;') > 0);
 T('访客极简：collab.js 访客分支不再注册传输层（无「协作中」徽章），同浏览器互连仅管理员启用',
   col.indexOf('访客只读不上云') < 0 && col.indexOf('lmIsAdmin') > 0);
+T('登录后补启动协同通道：registerAdminTransports 幂等（__bc 防重 + lm_admin 门禁）+ 登录成功回调调用 + ghInit 补探',
+  col.indexOf('function registerAdminTransports(') > 0 && col.indexOf('__bc') > 0
+    && col.indexOf('startAsAdmin: registerAdminTransports') > 0
+    && appSrc.indexOf('LMCollab.startAsAdmin') > 0 && col.indexOf('eG1') > 0);
 T('团队 Token 保险箱：AES-256-GCM + PBKDF2（store 加解密导出，明文 Token 不进界面/内容/云端）',
   sto.indexOf('encryptForTeam') > 0 && sto.indexOf('decryptForTeam') > 0
     && sto.indexOf('AES-GCM') > 0 && sto.indexOf('PBKDF2') > 0);

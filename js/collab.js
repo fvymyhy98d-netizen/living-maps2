@@ -866,6 +866,27 @@ window.LMCollab = (function () {
   }
   /* ---------- 事件接线 ---------- */
   function hello() { send({ type: 'hello', want: 1, page: (window.LMApp ? LMApp.state.pageId : '') }); }
+  var _sweepsOn = false;
+  function registerAdminTransports() { /* 同浏览器互连通道：页面加载时若已是管理员直接注册；
+     若加载时还是访客（先开页面后登录——最常见路径），由 app.js 登录成功回调补调本函数。
+     幂等：已注册过（__bc 标记）直接跳过；非管理员态直接返回（保持访客极简零开销）。
+     修复：「先开页面 → 再登录」后协同徽章/同浏览器互连/心跳定时器永不出现的时序洞 */
+    if (!window.BroadcastChannel) return;
+    let lmIsAdmin = false;
+    try { lmIsAdmin = sessionStorage.getItem('lm_admin') === '1'; } catch (eAdm) { /* noop */ }
+    if (!lmIsAdmin) return;
+    let seen = false;
+    transports.forEach(function (t2) { if (t2 && t2.__bc) seen = true; });
+    if (seen) return;
+    try {
+      const bc = new BroadcastChannel('lm_collab_v1');
+      bc.onmessage = function (ev) { recv(ev.data); };
+      transports.push({ send: function (msg) { bc.postMessage(msg); }, __bc: 1 });
+      paintChip(); hello();
+      if (!_sweepsOn) { _sweepsOn = true; setInterval(sweep, 6000); setInterval(hello, 8000); }
+      try { ghInit(); } catch (eG1) { /* noop */ } /* 访客期只读轮询：登录后补探一次，切到管理员频率 */
+    } catch (e2) { /* noop */ }
+  }
   function init() {
     if (window.LM_COLLAB_SERVER) {
       modeLabel = '服务器中转';
@@ -881,19 +902,8 @@ window.LMCollab = (function () {
         transports.push({ send: function (msg) { fetch('/collab/emit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg) }).catch(function () { /* noop */ }); } });
       } catch (e) { /* noop */ }
     }
-    if (window.BroadcastChannel) {
-      /* 访客极简：同浏览器互连（BroadcastChannel）也只在管理员登录后启用 —— 访客纯浏览零协同开销 */
-      var lmIsAdmin = false;
-      try { lmIsAdmin = sessionStorage.getItem('lm_admin') === '1'; } catch (eAdm) { /* noop */ }
-      if (lmIsAdmin) {
-        try {
-          const bc = new BroadcastChannel('lm_collab_v1');
-          bc.onmessage = function (ev) { recv(ev.data); };
-          transports.push({ send: function (msg) { bc.postMessage(msg); } });
-        } catch (e2) { /* noop */ }
-      }
-    }
-    if (transports.length) { paintChip(); hello(); setInterval(sweep, 6000); setInterval(hello, 8000); }
+    registerAdminTransports(); /* 页面加载时若已是管理员（登录过+刷新）直接注册；访客态则等待登录回调补调 */
+    if (transports.length) { paintChip(); hello(); if (!_sweepsOn) { _sweepsOn = true; setInterval(sweep, 6000); setInterval(hello, 8000); } }
     setTimeout(cfgWatch, 45000); setInterval(cfgWatch, 180000); /* 配置漂移自愈：45 秒后首查 + 每 3 分钟复查 */
     ['mousedown', 'keydown', 'touchstart'].forEach(function (ev) {
       document.addEventListener(ev, function () { window._lmLastAct = Date.now(); }, { passive: true });
@@ -937,6 +947,7 @@ window.LMCollab = (function () {
     unbanDevice: unbanDevice,
     banSelf: banSelf,
     clearAutoBan: clearAutoBan,
+    startAsAdmin: registerAdminTransports, /* 登录成功后补启动协同通道（app.js 回调调用） */
     dcSend: dcSend,
     lockBlock: function (el) { /* 点选块：外人锁着时静默不抢锁（浏览/选中不受影响），只有真正输入才会弹协商框 */
       try {
