@@ -75,5 +75,8 @@ eq('size-around-font', inlineFmt('@@22,@@f:hei,字@@@@'),
    （「调完颜色前面出现个 = 号」——外层高亮嵌套错配的残骸，渲染兜底清掉） */
 eq('heal-lone-hl', inlineFmt('具体==关系'), '具体关系');
 eq('heal-lone-hl-bold', inlineFmt('讲清楚**具体==关系**'), '讲清楚<strong>具体关系</strong>');
+/* 11) 带色高亮（修复㉚）：==#hex,文字== → 有色 mark（色板 7 色行内可用）；非法色值前缀按普通文字 */
+eq('hl-colored', inlineFmt('==#ffe08a,橙字=='), '<mark style="background:#ffe08a">橙字</mark>');
+eq('hl-colored-bad', inlineFmt('==#zz,字=='), '<mark>#zz,字</mark>');
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

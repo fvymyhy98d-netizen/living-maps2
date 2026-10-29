@@ -1492,7 +1492,14 @@ window.LMEditor = (function () {
       if (tg === 'EM' || tg === 'I') { out += '*' + inner + '*'; return; }
       if (tg === 'U') { out += '__' + inner + '__'; return; }
       if (tg === 'S' || tg === 'STRIKE' || tg === 'DEL') { out += '~~' + inner + '~~'; return; }
-      if (tg === 'MARK') { out += '==' + inner + '=='; return; }
+      if (tg === 'MARK') {
+        /* ★ 带色高亮往返（修复㉚）：mark 自带 background 色 → 还原 ==#hex,文字==（默认黄不写前缀），
+           编辑保存不再把彩色高亮打回默认黄 */
+        const hb = (n.getAttribute && n.getAttribute('style') || '').match(/background\s*:\s*([^;]+)/);
+        const hc = hb ? hb[1].trim() : '';
+        out += '==' + (/^#[0-9a-fA-F]{3,8}$/.test(hc) && hc.toLowerCase() !== '#fff3b0' ? hc + ',' : '') + inner + '==';
+        return;
+      }
       if (tg === 'SUP') { out += '^' + inner + '^'; return; }
       if (tg === 'SUB') { out += '~' + inner + '~'; return; }
       if (tg === 'CODE') { out += '`' + inner + '`'; return; }
@@ -1782,13 +1789,21 @@ window.LMEditor = (function () {
     ];
     const map = [], toks = [];
     function rec(str, base) {
-      let i = 0;
+      let i = 0, hlOpen = false; /* ★ hl 线性开闭状态（与 md.js 渲染配对一致）：开标记可带 #hex, 色值前缀 */
       while (i < str.length) {
         const rest = str.slice(i);
         let hit = null;
         for (let r = 0; r < RULES.length; r++) { const m = rest.match(RULES[r][1]); if (m) { hit = { t: RULES[r][0], m: m }; break; } }
         if (hit) {
-          toks.push({ a: base + i, b: base + i + hit.m[0].length, t: hit.t });
+          let len = hit.m[0].length;
+          /* ★ 带色高亮（修复㉚）：== 开标记紧跟 #hex, 前缀 → 并入开 tok（前缀不进可见字符），
+             选区文字匹配 / 换色 / 清除都以 tok 边界为准，与 md.js 的线性配对一致 */
+          if (hit.t === 'hl' && !hlOpen) {
+            const pv = rest.slice(2).match(/^(#[0-9a-fA-F]{3,8}),/);
+            if (pv) len = 2 + pv[0].length;
+          }
+          if (hit.t === 'hl') hlOpen = !hlOpen;
+          toks.push({ a: base + i, b: base + i + len, t: hit.t });
           /* 引用/跳转/链接的「内部文字」递归下钻：里层的 **、==、@@ 也按标记跳过，
              这样「跳转里带格式」「格式里选字」都能拿到正确的 可见字符→源下标 映射 */
           if (depth < 6 && (hit.t === 'ref' || hit.t === 'jump' || hit.t === 'link')) {
@@ -1796,7 +1811,7 @@ window.LMEditor = (function () {
             const pre = base + i + hit.m[0].length - inner.length - (hit.t === 'link' ? 1 : 2);
             rec(inner, pre);
           }
-          i += hit.m[0].length;
+          i += len;
           continue;
         }
         map.push(base + i);
@@ -1910,18 +1925,32 @@ window.LMEditor = (function () {
       const ks = w.toks.filter(function (k) { return k.t === ty && k.b >= s0 && k.a <= e0; });
       return ks.some(function (k) { return k.a < s0 || k.b > e0; }) && ks.some(function (k) { return k.a >= s0 && k.b <= e0; });
     });
-    const hlWrapped = t.slice(s0 - 2, s0) === '==' && t.slice(e0, e0 + 2) === '==';
+    /* ★ hlWrapped 用 tok 线性配对检测（修复㉚）：带色高亮的开 tok 是 ==#hex,（不止 2 字符），
+       旧版 t.slice(s0-2,s0)==='==' 对它失效 —— 相邻两个 hl tok（开紧贴选区左、闭紧贴选区右）
+       即为「选区正好是高亮内容」，与 md.js 的线性最近闭合配对一致 */
+    const hlToks = w.toks.filter(function (k) { return k.t === 'hl'; });
+    let hlWrapPair = null;
+    for (let ki = 0; ki + 1 < hlToks.length; ki++) {
+      if (hlToks[ki].b === s0 && hlToks[ki + 1].a === e0) { hlWrapPair = { o: hlToks[ki], c: hlToks[ki + 1] }; break; }
+    }
+    const hlWrapped = !!hlWrapPair;
     const open = t.lastIndexOf('@@', s0 - 1);
     /* 色值须以 # 或字母开头（纯数字是字号标记 @@28,x@@，换色会丢字号 → 走回退） */
     const atWrapped = open >= 0 && t.slice(e0, e0 + 2) === '@@' && /^[#a-zA-Z][#a-zA-Z0-9]*,$/.test(t.slice(open + 2, s0));
     let nt, msg;
     if (prop === 'hl') {
-      if (hlWrapped) { /* 选区正好是 ==…== 的内容 → 再点 = 取消 */
-        nt = t.slice(0, s0 - 2) + t.slice(s0, e0) + t.slice(e0 + 2);
-        msg = '已清除高亮（仅选中文字）';
+      if (hlWrapped) { /* 选区正好是 ==…== 的内容：∅ / 同色 = 取消；异色 = 原地换色（只改前缀） */
+        const cur = t.slice(hlWrapPair.o.a + 2, hlWrapPair.o.b).replace(/,$/, '');
+        if (!v || v === cur) {
+          nt = t.slice(0, hlWrapPair.o.a) + t.slice(hlWrapPair.o.b, hlWrapPair.c.a) + t.slice(hlWrapPair.c.b);
+          msg = '已清除高亮（仅选中文字）';
+        } else {
+          nt = t.slice(0, hlWrapPair.o.a + 2) + v + ',' + t.slice(hlWrapPair.o.b, hlWrapPair.c.a) + t.slice(hlWrapPair.c.b);
+          msg = '已换高亮颜色';
+        }
       } else if (v === '') {
         const rm = inter.filter(function (k) { return k.t === 'hl' && k.a >= s0 && k.b <= e0; });
-        if (!rm.length || rm.length % 2 || touchHl || inter.some(function (k) { return k.t === 'hl' && !(k.a >= s0 && k.b <= e0); })) return false;
+        if (!rm.length || touchHl || inter.some(function (k) { return k.t === 'hl' && !(k.a >= s0 && k.b <= e0); })) return false;
         nt = stripToks(t, w.toks, s0, e0, ['hl']).text;
         msg = '已清除高亮（仅选中文字）';
       } else {
@@ -1932,8 +1961,14 @@ window.LMEditor = (function () {
         if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false;
         if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return false;
         const r = stripToks(t, w.toks, s0, e0, ['@@o', '@@c', 'hl']);
-        nt = r.text.slice(0, r.s) + '==' + r.text.slice(r.s, r.e) + '==' + r.text.slice(r.e);
+        /* ★ 带色包裹（修复㉚）：色值写进 == 前缀（==#hex,文字==），色板 7 色行内全部可用 */
+        nt = r.text.slice(0, r.s) + '==' + (v ? v + ',' : '') + r.text.slice(r.s, r.e) + '==' + r.text.slice(r.e);
         msg = '已高亮选中文字';
+      }
+      /* ★ 行内高亮清干净后，整段底色（b.style.hl）还在会让人以为「清不掉」→ 一并清 */
+      if (msg.indexOf('清除高亮') >= 0 && b.style && b.style.hl) {
+        b.style.hl = '';
+        msg = '已清除高亮（含整段底色）';
       }
     } else {
       const tag = prop === 'grad' ? 'grad' + v : v;
@@ -1944,11 +1979,11 @@ window.LMEditor = (function () {
       } else if (atWrapped) { /* 异色 → 原地换色（补回闭合 @@） */
         nt = t.slice(0, open) + '@@' + tag + ',' + t.slice(s0, e0) + '@@' + t.slice(e0 + 2);
         msg = '已换' + kind + '（仅选中文字）';
-      } else if (hlWrapped && v !== '') { /* 选区是 ==…== 的内容 → 高亮转颜色/渐变 */
-        nt = t.slice(0, s0 - 2) + '@@' + tag + ',' + t.slice(s0, e0) + '@@' + t.slice(e0 + 2);
+      } else if (hlWrapped && v !== '') { /* 选区是 ==…== 的内容 → 高亮转颜色/渐变（tok 边界，兼容带色开标记） */
+        nt = t.slice(0, hlWrapPair.o.a) + '@@' + tag + ',' + t.slice(hlWrapPair.o.b, hlWrapPair.c.a) + '@@' + t.slice(hlWrapPair.c.b);
         msg = '已对选中文字应用' + kind + '（原高亮转为' + kind + '）';
       } else if (hlWrapped) {
-        nt = t.slice(0, s0 - 2) + t.slice(s0, e0) + t.slice(e0 + 2);
+        nt = t.slice(0, hlWrapPair.o.a) + t.slice(hlWrapPair.o.b, hlWrapPair.c.a) + t.slice(hlWrapPair.c.b);
         msg = '已清除高亮（仅选中文字）';
       } else if (v === '') { /* 清除：剥掉完整落在选区内的 @@ 配对 */
         const stack = [], rm = [];

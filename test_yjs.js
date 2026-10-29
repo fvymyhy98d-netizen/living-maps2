@@ -242,6 +242,22 @@ T('Token 记住：setGhCfg 支持 remember 写 localStorage（lm_gh_token_r）�
 T('root 上传弹窗：勾选框 ghRemember（记住 Token）+ collect 带 remember',
   edt2.indexOf('id="ghRemember"') > 0 && edt2.indexOf('remember: !!(root.querySelector(\'#ghRemember\')') > 0);
 
+/* ---------- 9.6) 修复㉚：高亮多色（==#hex, 前缀语法） ---------- */
+console.log('【9.6】修复㉚：高亮多色');
+const mds = srcOf('js/md.js');
+T('md.js 带色 mark 渲染：==#hex,文字== → <mark style=background>（色值严格校验）',
+  mds.indexOf('mark style="background:') > 0 && mds.indexOf('cv[1]') > 0);
+T('walkInline 前缀并入开 tok（hlOpen 线性配对，前缀不进可见字符）',
+  edt2.indexOf('let i = 0, hlOpen = false;') > 0
+    && edt2.indexOf('rest.slice(2).match(/^(#[0-9a-fA-F]{3,8}),/)') > 0);
+T('hlWrapped 用 tok 线性配对检测（兼容带色开标记）',
+  edt2.indexOf('hlToks[ki].b === s0 && hlToks[ki + 1].a === e0') > 0);
+T('包裹带色前缀 + 同色取消/异色换色/整段底色一并清',
+  edt2.indexOf("(v ? v + ',' : '')") > 0 && edt2.indexOf('已换高亮颜色') > 0
+    && edt2.indexOf("b.style.hl = '';") > 0);
+T('htmlToMd 往返：mark background → ==#hex,文字==（默认黄不写前缀）',
+  edt2.indexOf("hc.toLowerCase() !== '#fff3b0'") > 0);
+
 /* ---------- 8) 自动限时限制（banSelf）修复：三拦截全部打通 + 防锁死 ---------- */
 console.log('【8】密码试错自动限时限制（走通 + 防锁死）');
 T('banSelf 专用通道：绕过「不能屏蔽本机」守卫 + 轮询等签名密钥（waitBanKey 最多 3 秒）',
