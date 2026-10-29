@@ -2,7 +2,6 @@
  * 三张活地图 · 内容数据文件
  * 本文件由网站后台（管理员 → 同步到 GitHub）自动更新。
  * 手动编辑也可以：改 CONTENT-START 与 CONTENT-END 两个标记之间的 JSON 即可。
- * 之间的 JSON 即可。
  * ========================================================= */
 /*CONTENT-START*/
 window.SITE_CONTENT = {
@@ -49,8 +48,15 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793284735992,
-      "roster": {}
+      "syncTs": 1793292044300,
+      "roster": {},
+      "tokenVault": {
+        "v": 1,
+        "iters": 60000,
+        "salt": "inpaOjIR584i92l2bw7n9A==",
+        "iv": "fWqbrORLyYqLt05K",
+        "ct": "51d6AxXeZwH+murGnZG5mDGpnlJwVrFRcI5JuGcICIcpGRiayzyntckzq/NozA5eIZwWSh6b+XUxhdXUvo4TjQSdpgv2G6turYUBHiIeCTdWpzVK6cEOCRXj1c9Vq4cZDdzpHactdYbzB6MJrlD+zz6MYVO8ls9VarLES637hQRFvQGJwlJNlhoJyD6tcY2EwzA1dNgEvxB/N6Wbw0pVDpcLxLIrSJlr7DCLW/IC0TK7SEw+N/iGvnDi/7/nPSk97zfp+UeROTeTU8Oc5Z9noEcIJ7S2"
+      }
     }
   },
   "pages": [
@@ -93,9 +99,9 @@ window.SITE_CONTENT = {
           "level": 2,
           "text": "核心概念",
           "free": {
-            "x": 0,
-            "y": 414,
-            "w": 49
+            "x": 0.9,
+            "y": 426,
+            "w": 96.3
           }
         },
         {
@@ -129,9 +135,9 @@ window.SITE_CONTENT = {
             ]
           ],
           "free": {
-            "x": 51,
-            "y": 414,
-            "w": 49
+            "x": 2.8,
+            "y": 543,
+            "w": 94.4
           }
         },
         {
@@ -245,7 +251,8 @@ window.SITE_CONTENT = {
               "算法创新、论文与评测",
               "提出新方法，企业再工程化"
             ]
-          ]
+          ],
+          "_ts": 1793290941256
         },
         {
           "type": "chart",
@@ -430,7 +437,10 @@ window.SITE_CONTENT = {
           "text": "我们会定期查看反馈：**已修改 / 暂缓 / 不采纳**都会在「更新记录」页对应版本里写明依据。提问题时建议说清楚：针对哪个页面或哪项工作、遇到了什么问题、期望是什么。"
         }
       ],
-      "heroAlign": ""
+      "heroAlign": "",
+      "descStyle": {
+        "hl": "#fff3b0"
+      }
     },
     {
       "id": "about",
