@@ -177,9 +177,9 @@ console.log('【7】密码试错防护 / 上线断线 Toast / 冲突重推');
 T('密码试错防护：1 小时滑动窗口持久化（localStorage）+ 指数退避锁定 + 「系统繁忙」假象文案',
   appSrc.indexOf('lm_fail_hist') > 0 && appSrc.indexOf('f >= 7 ? 600000') > 0
     && appSrc.indexOf('系统繁忙，请') > 0 && appSrc.indexOf('0x2F') > 0);
-T('试错自动入黑名单：登录成功时补签 banDevice（1 小时内 ≥5 次失败；根管理员豁免，可解禁）',
-  appSrc.indexOf('已自动限制管理员入口') > 0 && appSrc.indexOf("banDevice(LMCollab.me().id") > 0
-    && appSrc.indexOf('根管理员身份不受自动限制') > 0);
+T('试错自动入黑名单：登录成功时走 banSelf 限时通道（1 小时内 ≥5 次失败；根管理员豁免并自动清除限时）',
+  appSrc.indexOf('LMCollab.banSelf(1800000)') > 0 && appSrc.indexOf('管理员入口将被限制 30 分钟') > 0
+    && appSrc.indexOf('根管理员身份不受限') > 0 && appSrc.indexOf('clearAutoBan()') > 0);
 T('上线/断线 Toast：hello/iam 新设备提示、bye 提示、TTL 清扫合并提示（多台不轰炸）',
   col.indexOf('已上线') > 0 && col.indexOf('已断线') > 0
     && col.indexOf('const gonePeers = [];') > 0);
