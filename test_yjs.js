@@ -384,6 +384,12 @@ T('手机端协作徽章缩小（42vw/11px/紧凑）避让底栏，管理工具�
   cssSrc.indexOf('body.mobile-view #collabChip{left:8px;bottom:8px;font-size:11px;padding:4px 9px;max-width:42vw;background:rgba(29,29,31,.72)}') > 0
     && cssSrc.indexOf('body.mobile-view #adminBar{bottom:44px}') > 0
     && cssSrc.indexOf('body.mobile-view #collabPanel{bottom:44px}') > 0);
+/* ---------- 9.12) 修复㊵：推框只消解浅压（深压归让位引擎，不再拆台） ---------- */
+console.log('【9.12】修复㊵：推框深压跳过（>24px 交让位引擎），浅压残留照常推框');
+T('fixFreeOverlapVisual 深压跳过 + 浅压推框共存（同一把 24px 尺子，互不越界）',
+  appSrc.indexOf('if ((natTop + r.height) - fd.top > 24) continue;') > 0
+    && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0
+    && appSrc.indexOf('function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
 
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');

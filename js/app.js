@@ -669,6 +669,11 @@ window.LMApp = (function () {
           const ox = Math.min(fd.right, r.right) - Math.max(fd.left, r.left);
           if (ox <= 16) continue; /* 水平擦边不管（与让位引擎同标准） */
           if (fd.top < natTop + r.height - 4 && fd.bot > natTop + 4) {
+            /* ★ 修复㊵：深压（压入块体 > 24px）交给让位引擎 —— freeDecide 的滞回阈值同为 24px，
+               深压时它已把块让到框下（margin 生效、平滑过渡）；这里若再推框会把刚让好的位拆掉：
+               框被弹回 → margin 回收 → 块弹回 → 又压住 → 反复横跳（「课程与学习路径自己飞走」、
+               「表格放不进想要的位置」的根源）。只消解 24px 内的浅压残留（让位引擎滞回内不管的部分） */
+            if ((natTop + r.height) - fd.top > 24) continue;
             const target = natTop + r.height + 6;
             const dy = Math.round(target - fd.top);
             if (dy > 4) {
