@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793327255311,
+      "syncTs": 1793327353321,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -99,9 +99,9 @@ window.SITE_CONTENT = {
           "level": 2,
           "text": "核心概念",
           "free": {
-            "x": 0.9,
+            "x": 2.8,
             "y": 426,
-            "w": 96.3
+            "w": 94.4
           }
         },
         {
