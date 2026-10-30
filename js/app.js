@@ -704,6 +704,50 @@ window.LMApp = (function () {
     if (!opts.silent) toast(opts.msg || '已保存（本浏览器）');
   }
   function applyEdit(msg) { commit({ msg: msg }); }
+  /* ★ 修复㉝（协同局部刷新）：远端整包到达时不再整页重建 —— 整页 innerHTML 替换会重放入场动画
+     （「闪来闪去」）、滚动位置与展开状态全丢。页面结构一致时只把「内容真的变了」的块逐个换掉：
+     滚动不跳、其他块纹丝不动、新块直接以最终状态插入（补 .in 不再播入场动画）；
+     本机正在输入的块跳过（本机输入优先，失焦后由下一包/挂起队列对齐）；结构变化才整页兜底 */
+  function renderBlockAt(pageId, i) {
+    const col = app.querySelector('.blocks');
+    if (!col) return false;
+    const p = state.content.pages.find(function (x) { return x.id === pageId; });
+    if (!p || !p.blocks || !p.blocks[i]) return false;
+    const old = col.querySelector('[data-idx="' + i + '"]');
+    if (!old) return false;
+    if (old.contains(document.activeElement)) return false; /* 本机正在这块里输入：不动它 */
+    let nu = null;
+    try {
+      const holder = document.createElement('div');
+      holder.innerHTML = blockHTML(p.blocks[i], pageId, i);
+      nu = holder.firstElementChild;
+    } catch (e) { return false; }
+    if (!nu) return false;
+    if (nu.classList.contains('reveal')) nu.classList.add('in'); /* 局部插入直接显示：不闪 */
+    old.replaceWith(nu);
+    return true;
+  }
+  function applyRemoteContent(nc) {
+    const before = state.content;
+    state.content = nc;
+    try {
+      const pg0 = before.pages.find(function (x) { return x.id === state.pageId; });
+      const pg1 = nc.pages.find(function (x) { return x.id === state.pageId; });
+      const sameShape = pg0 && pg1 && pg0.id === pg1.id && pg0.blocks && pg1.blocks
+        && pg0.blocks.length === pg1.blocks.length
+        && pg0.blocks.every(function (b, i) { return b.id === pg1.blocks[i].id; });
+      if (!sameShape) { render(); hPush(); return false; } /* 结构变化（插入/删除/调序/换页）：整页兜底（低频） */
+      let any = false;
+      for (let i = 0; i < pg1.blocks.length; i++) {
+        let changed = true;
+        try { changed = JSON.stringify(pg0.blocks[i]) !== JSON.stringify(pg1.blocks[i]); } catch (eD) { changed = true; }
+        if (changed) { if (renderBlockAt(state.pageId, i)) any = true; }
+      }
+      if (any) { adjustImages(); adjustFreeLayoutSafe(); }
+      hPush(); /* ★ 撤销基准随远端内容同步（与 render 尾 hPush 同效，重复调用无副作用） */
+      return any;
+    } catch (e) { render(); hPush(); return false; }
+  }
   /* ★ 修复㉜「不保存修改」：进入管理模式的瞬间拍下内容快照，之后随时可以一键回到这一版
      （相当于 Word 关闭时选「不保存」）。恢复走统一 commit：写本机 + 记历史 + 协同广播全网收敛。
      注意：恢复的是「进入管理模式那一刻」的整包 —— 协同期间其他设备同步来的修改也会一并回退，
@@ -1633,6 +1677,7 @@ window.LMApp = (function () {
     esc: esc, md: md, currentId: currentId, ensureConfig: ensureConfig,
     commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayoutSafe,
     fixFreeOverlapVisual: fixFreeOverlapVisual, discardChanges: discardChanges,
+    applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,
     adjustImages: adjustImages,
     setViewMode: setViewMode, applyView: applyView, isMobileDevice: isMobileDevice,

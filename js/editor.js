@@ -699,6 +699,11 @@ window.LMEditor = (function () {
     else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到你进入管理模式时的版本？此后的一切改动（包括协同期间其他设备同步来的修改）都会被撤销，恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
     else if (k === 'password') passwordModal();
   });
+  /* ★ 修复㉝：手机端格式工具条把手（⌨️）点击开合 —— 事件委托挂在 document，renderToolbar 重建 DOM 也不丢 */
+  document.addEventListener('click', function (e) {
+    const tg = e.target.closest ? e.target.closest('#editBar .eb-toggle') : null;
+    if (tg) { tg.closest('#editBar').classList.toggle('open'); }
+  });
 
   /* ---------- GitHub 同步设置（双视图）----------
      根管理员：完整配置界面（本机专属通道 + 团队保险箱分发）；普通管理员：只见「确认上传」一键操作，
@@ -1267,7 +1272,11 @@ window.LMEditor = (function () {
       document.body.classList.remove('multi-mode');
       return;
     }
-    if (!bar) { bar = document.createElement('div'); bar.id = 'editBar'; document.body.appendChild(bar); }
+    if (!bar) {
+      bar = document.createElement('div'); bar.id = 'editBar'; document.body.appendChild(bar);
+      /* ★ 修复㉝：手机端格式工具条默认收成右上角把手（点 ⌨️ 展开 / 再点收起），桌面端照常展开 */
+      if (!bar.dataset.init) { bar.dataset.init = '1'; bar.classList.toggle('open', !document.body.classList.contains('mobile-view')); }
+    }
     const b = activeBlock();
     const isText = isTextType(b);
     const s = (isText && b.style) ? b.style : (tb.hero ? (heroStyleRef() || {}) : {});
@@ -1340,7 +1349,8 @@ window.LMEditor = (function () {
       + '<button class="tb-btn" data-tb="hrins" tabindex="-1" title="插入分隔线">─ 分隔线</button>'
       + '</span>'
       + '<span class="tb-div"></span>'
-      + '<button class="tb-btn wide primary" data-tb="sync" tabindex="-1">☁ 同步</button>';
+      + '<button class="tb-btn wide primary" data-tb="sync" tabindex="-1">☁ 同步</button>'
+      + '<button class="eb-toggle" type="button" tabindex="-1" title="收起 / 展开格式工具（手机端）">⌨️</button>';
     /* 内容没变就不重建工具栏：防止下拉刚点开就被重渲染吞掉，也省下每次保存的重建开销 */
     if (bar.__lmHtml !== tHtml) { bar.__lmHtml = tHtml; bar.innerHTML = tHtml; }
     refreshHandles();
@@ -4065,15 +4075,19 @@ window.LMEditor = (function () {
     if (dx * dx + dy * dy > 144) return; /* 位移 >12px：是滚动/拖拽不是轻点 */
     const t = e.target;
     if (!t || !t.closest) return;
-    if (t.closest('#editBar,#brushPop,#navGear,#gearPop,.popover,#adminBar,.modal-mask,.cfm-mask,.block-tools,.blk-typebar,.blk-handles,.crop-bar,#collabPanel,button,input,textarea,a,.fb-grip,.fb-hd,.ih')) return;
+    if (t.closest('#editBar,#brushPop,#navGear,#gearPop,.popover,#adminBar,.modal-mask,.cfm-mask,.block-tools,.blk-typebar,.blk-handles,.crop-bar,#collabPanel,button,input,textarea,a,.fb-grip,.fb-hd,.ih,.jumplink')) return;
     const el = t.closest('[data-edit]');
-    if (!el) return;
-    if (document.activeElement === el) return; /* 编辑中：单击移动光标，放行 */
+    /* ★ 修复㉝：从「只认文字」扩展到「点块任意位置」——此前只有点在文字（contenteditable）上
+       才会选中块浮现操作栏，点块的空白/图片/表格边框等区域毫无反应（focusin 不触发） */
+    const blk = t.closest('.block-wrap[data-idx],.free-box[data-idx]');
+    if (!el && !blk) return;
+    if (el && document.activeElement === el) return; /* 编辑中：单击移动光标，放行 */
     const now = Date.now();
-    if (lastEditTap.el === el && now - lastEditTap.t < 400) { lastEditTap = { t: 0, el: null }; return; } /* 双击：放行原生聚焦进编辑 */
-    lastEditTap = { t: now, el: el };
-    e.preventDefault(); /* 第一击：阻止 contenteditable 原生聚焦与合成 click */
-    const wrap = el.closest('.block-wrap[data-idx],.free-box[data-idx]');
+    const key = el || blk;
+    if (lastEditTap.el === key && now - lastEditTap.t < 400) { lastEditTap = { t: 0, el: null }; return; } /* 双击：放行原生聚焦进编辑 */
+    lastEditTap = { t: now, el: key };
+    e.preventDefault(); /* 第一击：阻止原生聚焦与合成 click，只做「选中块浮现操作栏」 */
+    const wrap = blk || (el ? el.closest('.block-wrap[data-idx],.free-box[data-idx]') : null);
     if (wrap && !isNaN(+wrap.getAttribute('data-idx'))) selectBlock(+wrap.getAttribute('data-idx')); /* 单击：浮现操作栏 */
   }, true);
   document.addEventListener('focusin', function (e) {

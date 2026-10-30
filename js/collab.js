@@ -225,7 +225,7 @@ window.LMCollab = (function () {
                                       协作模式下对方每次保存不再引发本机整页重绘，这是“开协作就卡”的主因之一 */
     try { same = JSON.stringify(before) === JSON.stringify(c); } catch (e5) { /* noop */ }
     if (same) return;
-    try { LMApp.state.content = c; LMApp.render(); } catch (e) { return; }
+    try { LMApp.applyRemoteContent(c); } catch (e) { return; }
     try { pushFeedFrom(before, c, by); } catch (eF0) { /* noop */ }
     setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
     LMApp.toast('🔄 已同步「' + (by || '其他设备') + '」的修改');
@@ -733,8 +733,7 @@ window.LMCollab = (function () {
       try { if (JSON.stringify(c) === JSON.stringify(LMApp.state.content)) return; } catch (eC) { return; }
       if (localBusy() || !verifyBanList(c)) return;
       try {
-        LMApp.state.content = mergeBlocks(c);
-        LMApp.render();
+        LMApp.applyRemoteContent(mergeBlocks(c));
         if (window.LMStore) LMStore.saveLocal(LMApp.state.content);
       } catch (eD) { return; }
       setTimeout(function () { repaintLocks(); enforceBans(); }, 60);

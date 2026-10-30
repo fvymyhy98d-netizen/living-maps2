@@ -300,7 +300,7 @@ T('手机操作栏：点按浮现 6 秒无操作淡出（armToolsAutohide + opac
 T('手机双击进编辑：第一击 preventDefault 只选中块，400ms 内第二击放行原生聚焦（滚动/拖拽位移>12px 放行）',
   edt2.indexOf('var lastEditTap = { t: 0, el: null }, editTapStart = null;') > 0
     && edt2.indexOf("dx * dx + dy * dy > 144") > 0
-    && edt2.indexOf("lastEditTap.el === el && now - lastEditTap.t < 400") > 0);
+    && edt2.indexOf("lastEditTap.el === key && now - lastEditTap.t < 400") > 0);
 T('手机端自由框手柄不再常显（selected/free-drag/focus-within 才出现）',
   cssSrc.indexOf('body.admin.mobile-view .fb-grip,body.admin.mobile-view .fb-hd{display:none}') > 0
     && cssSrc.indexOf('body.admin.mobile-view .free-box.selected .fb-grip') > 0);
@@ -312,6 +312,31 @@ T('并排重叠兜底：fixFreeOverlapVisual 只抬不降（锁定段外显示�
     && appSrc.indexOf('function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
 T('手机端并排框入场只淡入不位移（滚动合成减负，访客同样受益；桌面观感不变）',
   cssSrc.indexOf('body.mobile-view .free-box.reveal{transform:none}') > 0);
+
+/* ---------- 9.9) 修复㉝：手机工具条收成把手 / 点块任意位置浮现操作栏 / 协同局部刷新 / 手机排版兜底 ---------- */
+console.log('【9.9】修复㉝：工具条把手 · 点块浮现 · 协同局部刷新 · 排版兜底');
+T('editBar 手机端收成右上角 ⌨️ 把手（默认收起、点开恢复、桌面无把手常展开）',
+  edt2.indexOf('class="eb-toggle"') > 0
+    && edt2.indexOf("tg.closest('#editBar').classList.toggle('open')") > 0
+    && edt2.indexOf("bar.classList.toggle('open', !document.body.classList.contains('mobile-view'))") > 0
+    && cssSrc.indexOf('body.admin .eb-toggle{display:none}') > 0
+    && cssSrc.indexOf('body.admin.mobile-view #editBar:not(.open) > *:not(.eb-toggle){display:none}') > 0);
+T('点块任意位置浮现操作栏：touchend 从 data-edit 扩展到整个 block-wrap/free-box（双击文字仍进编辑）',
+  edt2.indexOf("const blk = t.closest('.block-wrap[data-idx],.free-box[data-idx]');") > 0
+    && edt2.indexOf('const wrap = blk || (el ? el.closest') > 0);
+T('协同局部刷新：applyRemoteContent 结构一致时逐块 diff 替换（reveal 补 .in 不闪、编辑中块跳过），结构变化才整页兜底',
+  appSrc.indexOf('function applyRemoteContent(nc)') > 0
+    && appSrc.indexOf('function renderBlockAt(pageId, i)') > 0
+    && appSrc.indexOf('if (old.contains(document.activeElement)) return false;') > 0
+    && appSrc.indexOf("nu.classList.contains('reveal')") > 0
+    && appSrc.indexOf('applyRemoteContent: applyRemoteContent') > 0
+    && col.indexOf('LMApp.applyRemoteContent(c)') > 0
+    && col.indexOf('LMApp.applyRemoteContent(mergeBlocks(c))') > 0);
+T('撤销基准随远端局部更新同步（applyRemoteContent 尾部 hPush）',
+  appSrc.indexOf('hPush(); /* ★ 撤销基准随远端内容同步') > 0);
+T('手机排版兜底：free-box 不溢出屏 + 长词/链接自动断行',
+  cssSrc.indexOf('body.mobile-view .free-box{max-width:calc(100vw - 16px)}') > 0
+    && cssSrc.indexOf('body.mobile-view .free-box .b-p,body.mobile-view .free-box p{overflow-wrap:anywhere;word-break:break-word}') > 0);
 
 /* ---------- 8) 自动限时限制（banSelf）修复：三拦截全部打通 + 防锁死 ---------- */
 console.log('【8】密码试错自动限时限制（走通 + 防锁死）');
