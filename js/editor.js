@@ -409,13 +409,25 @@ window.LMEditor = (function () {
       /* 自由框是绝对定位：↑/↓ = 整格移动 —— ↑ 跳到上一模块的上面，↓ 跳到下一模块的下面（带平滑动画） */
       if (b2 && b2.free) { freeJump(page, i, act === 'up' ? 'up' : 'down'); return; }
     }
+    /* ★ 修复52：↑↓ 换位跳过自由框 —— 自由框是绝对定位、不占文档流高度，与它交换数组顺序
+       视觉上零变化（「点了没反应」）。现在 ↑/↓ 自动跳过相邻的自由框，与最近一个文档流模块
+       换位（跳过几个就一次到位）；想挪动自由框本身，选中它按 ↑/↓ = 整格移动（freeJump） */
+    function flowNeighbor(idx, dir) {
+      let j = idx + dir;
+      while (j >= 0 && j < page.blocks.length && page.blocks[j] && page.blocks[j].free) j += dir;
+      return (j >= 0 && j < page.blocks.length) ? j : -1;
+    }
     if (act === 'up' && i > 0) {
-      const t = page.blocks[i - 1]; page.blocks[i - 1] = page.blocks[i]; page.blocks[i] = t;
-      LMApp.applyEdit('已上移'); return;
+      const j = flowNeighbor(i, -1);
+      if (j < 0) { LMApp.toast('上面已经没有可换位的文档流模块了'); return; }
+      const t = page.blocks[j]; page.blocks[j] = page.blocks[i]; page.blocks[i] = t;
+      LMApp.applyEdit('已上移（与上一个文档流模块换位）'); return;
     }
     if (act === 'down' && i < page.blocks.length - 1) {
-      const t = page.blocks[i + 1]; page.blocks[i + 1] = page.blocks[i]; page.blocks[i] = t;
-      LMApp.applyEdit('已下移'); return;
+      const j = flowNeighbor(i, 1);
+      if (j < 0) { LMApp.toast('下面已经没有可换位的文档流模块了'); return; }
+      const t = page.blocks[j]; page.blocks[j] = page.blocks[i]; page.blocks[i] = t;
+      LMApp.applyEdit('已下移（与下一个文档流模块换位）'); return;
     }
   });
   /* ---------- 管理员工具条 ---------- */
@@ -3719,7 +3731,11 @@ window.LMEditor = (function () {
     wrap.style.top = r0.top + 'px';
     document.body.classList.add('block-dragging');
 
-    const offX = e.clientX - r0.left, offY = e.clientY - r0.top;
+    /* ★ 修复52：拖动克隆的跟随偏移钳制 —— 旧版保持「抓取点相对位置」（offY = 鼠标到块顶的距离），
+       抓在高块（如三行段落）中下部时整块悬在鼠标上方一大截（「差一个身位」），矮块却察觉不到，
+       同一个手势体验不一致。现在钳制为「块顶咬住鼠标」：offX ≤ 80px、offY ≤ 24px，
+       无论抓哪里，块都整齐地挂在鼠标右下角一小段 —— 所有块统一 */
+    const offX = Math.min(e.clientX - r0.left, 80), offY = Math.min(e.clientY - r0.top, 24);
     let scrollDir = 0, raf = null, moved = false, lastY = e.clientY;
 
     function flowList() {

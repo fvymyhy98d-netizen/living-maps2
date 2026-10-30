@@ -442,6 +442,16 @@ T('非 free 块统一 ⇤⇆⇥（sep 分组）+ halign 处理器自动标准宽
     && edt2.indexOf("if (v && v !== 'left' && !b2.free && b2.type !== 'image' && b2.width == null) b2.width = 68;") > 0
     && appSrc.indexOf("const al = b.hAlign || b.wAlign;") > 0
     && appSrc.indexOf("al === 'center' ? 'margin-left:auto;margin-right:auto;'") > 0);
+/* ---------- 9.19) 修复52：↑↓ 换位跳过自由框 + 拖动克隆跟随偏移钳制（块顶咬鼠标） ---------- */
+console.log('【9.19】修复52：换位跳过 free 块（消除「点了没反应」）· 拖动统一「块顶咬鼠标」');
+T('flowNeighbor 跳过自由框换位 + 边界 toast + 克隆 offX≤80/offY≤24 钳制',
+  edt2.indexOf('function flowNeighbor(idx, dir)') > 0
+    && edt2.indexOf('while (j >= 0 && j < page.blocks.length && page.blocks[j] && page.blocks[j].free) j += dir;') > 0
+    && edt2.indexOf("LMApp.toast('上面已经没有可换位的文档流模块了')") > 0
+    && edt2.indexOf('已上移（与上一个文档流模块换位）') > 0
+    && edt2.indexOf('已下移（与下一个文档流模块换位）') > 0
+    && edt2.indexOf('const offX = Math.min(e.clientX - r0.left, 80), offY = Math.min(e.clientY - r0.top, 24);') > 0);
+
 
 
 T('⌨️ 把手 pointerdown+pointerup 双确认（触屏隐式捕获下「按下后滑开」不再误触发开合）',
