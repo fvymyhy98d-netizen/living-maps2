@@ -294,6 +294,10 @@ living-maps/
 - **回归（修复㊱）**：`node --check` 通过；`test_yjs.js` **113/113**、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 - **修复㊲（推框单轮单推）**：修复㉟的推框循环一轮内会对多个重叠块连环推——框压住块 A 被推到 A 底、随即压住块 B 又被推……一轮就把框推到页尾（瞬移观感）。改为**单轮只推一次**（第一个重叠块），剩余重叠留给下一轮（每次交互/滚动都会再跑兜底）渐进消解。
 - **回归（修复㊲）**：`node --check` 通过；`test_yjs.js` **113/113**、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
+- **修复㊳（手机两处手感）**：
+  **① 访客滑动时有些块「突然向上弹」**——入场动画是 `translateY(30px)` 上滑 + 0.9s 过渡：首屏模块在加载时已触发（看不到位移），**滚动到的模块才启动动画**，快滚时观感就是"突然弹"（列表等高块尤其明显）。修复㉝已让自由框在手机上只淡入不位移，本次**扩展到手机端全部内容块**——统一平滑淡入；桌面保持原 30px 上滑不变；
+  **② 管理员点模块操作要点两下**——6 秒无操作后操作栏"淡出"的实现是**直接移除 selected**，操作栏随之 `pointer-events:none`：此时点按钮，点击**穿透**到块（重新选中、唤醒操作栏），第二次点击才真正命中按钮。改为**待机态**：加 `.tools-idle` 降到 35% 透明度但**保持可点**——看得见、点一下按钮直接生效并顺带恢复全亮，任何触摸（pointerdown）都会自动唤醒并重置计时。
+- **回归（修复㊳）**：`node --check` 通过；`test_yjs.js` **113/113**（9.8/9.9 节两条断言同步更新为待机态与统一淡入版本）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 
 ## 三·补11、Yjs 网状实时协同（Mesh P2P · Cloudflare 信令版，2026-10-28 第六轮修订）
 

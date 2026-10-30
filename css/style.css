@@ -772,11 +772,17 @@ body.admin.mobile-view .free-box:focus-within .fb-grip,body.admin.mobile-view .f
    桌面端 hover/selected 的 display:flex 常态一字不动 */
 body.admin.mobile-view .block-wrap .block-tools,body.admin.mobile-view .free-box .block-tools{display:flex;opacity:0;pointer-events:none;transition:opacity .5s ease}
 body.admin.mobile-view .block-wrap.selected .block-tools,body.admin.mobile-view .free-box.selected .block-tools{display:flex !important;opacity:1 !important;pointer-events:auto !important}
+/* ★ 修复㊳：6 秒无操作后的「待机」态 —— 半透明但保持可点：之前直接移除 selected 会让操作栏
+   pointer-events:none，用户点按钮时点击穿透到块、白白多要点一次才能唤醒；现在看得见（35% 透明度）、
+   点一下按钮直接生效并顺带恢复全亮 */
+body.admin.mobile-view .block-wrap.tools-idle .block-tools,body.admin.mobile-view .free-box.tools-idle .block-tools{opacity:.35 !important}
 body.admin.mobile-view .blk-typebar,body.admin.mobile-view .blk-handles{transition:opacity .5s ease}
 body.admin.mobile-view .block-wrap:not(.selected) .blk-typebar,body.admin.mobile-view .block-wrap:not(.selected) .blk-handles{opacity:0;pointer-events:none}
 /* ★ 修复㉜：手机端并排框/文本框入场只做淡入不做 30px 位移——.9s 的 transform 过渡在滚动经过时启动，
    absolute+阴影+半透明层的合成开销大，低端机表现为滚动到并排区「卡一下」（访客同样受益）；桌面端观感不变 */
-body.mobile-view .free-box.reveal{transform:none}
+/* ★ 修复㊳：位移入场扩展到手机端全部内容块——快滚时块进入视口才启动 30px 上滑，观感是「突然向上弹」
+   （列表等高块尤其明显）；手机端统一只做平滑淡入，桌面保持原 30px 上滑动画不变 */
+body.mobile-view .reveal{transform:none}
 body.mobile-view .free-box .block-tools{max-width:calc(100vw - 20px)}
 body.mobile-view .free-box{padding:10px 12px}
 /* ★ 修复㉝：手机端自由框排版兜底 —— 框不溢出屏幕、长词/链接自动断行（并排两框在窄屏不再互相挤爆） */

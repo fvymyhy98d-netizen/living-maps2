@@ -293,10 +293,14 @@ T('密码云端重验：本地失败自动拉云端 content.js 用最新密码�
     && appSrc.indexOf('verifyPasswordSmart(v).then(function (r) {') > 0
     && appSrc.indexOf('state.content.config.admin = rc.config.admin') > 0
     && appSrc.indexOf("cache: 'no-store'") > 0);
-T('手机操作栏：点按浮现 6 秒无操作淡出（armToolsAutohide + opacity 过渡），有操作自动重置计时',
+T('手机操作栏：点按浮现 6 秒无操作进入待机（半透明可点，不摘 selected），有操作恢复全亮并重置计时',
   edt2.indexOf('function armToolsAutohide()') > 0 && edt2.indexOf("classList.contains('mobile-view')") > 0
-    && edt2.indexOf("addEventListener('pointerdown', function () { if (toolsHideT) armToolsAutohide(); }, true);") > 0
-    && cssSrc.indexOf('body.admin.mobile-view .block-wrap .block-tools,body.admin.mobile-view .free-box .block-tools{display:flex;opacity:0;pointer-events:none;transition:opacity .5s ease}') > 0);
+    && edt2.indexOf("w.classList.add('tools-idle')") > 0
+    && edt2.indexOf("w.classList.remove('tools-idle')") > 0
+    && edt2.indexOf("addEventListener('pointerdown'") > 0
+    && edt2.indexOf("document.querySelectorAll('.tools-idle').forEach") > 0
+    && cssSrc.indexOf('body.admin.mobile-view .block-wrap .block-tools,body.admin.mobile-view .free-box .block-tools{display:flex;opacity:0;pointer-events:none;transition:opacity .5s ease}') > 0
+    && cssSrc.indexOf('body.admin.mobile-view .block-wrap.tools-idle .block-tools,body.admin.mobile-view .free-box.tools-idle .block-tools{opacity:.35 !important}') > 0);
 T('手机双击进编辑：第一击 preventDefault 只选中块，400ms 内第二击放行原生聚焦（滚动/拖拽位移>12px 放行）',
   edt2.indexOf('var lastEditTap = { t: 0, el: null }, editTapStart = null;') > 0
     && edt2.indexOf("dx * dx + dy * dy > 144") > 0
@@ -312,8 +316,9 @@ T('并排重叠兜底：fixFreeOverlapVisual 推框写数据（框压块→框�
     && appSrc.indexOf('adjustFreeLayout(); /* 框位已持久更新：让位引擎按新位置立即对齐（原版，不再产生兜底抬升） */') > 0
     && appSrc.indexOf('adjustFreeLayout: adjustFreeLayoutSafe') > 0
     && appSrc.indexOf('function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
-T('手机端并排框入场只淡入不位移（滚动合成减负，访客同样受益；桌面观感不变）',
-  cssSrc.indexOf('body.mobile-view .free-box.reveal{transform:none}') > 0);
+T('手机端入场动画统一只淡入不位移（访客同样受益；桌面保持 30px 上滑不变）',
+  cssSrc.indexOf('body.mobile-view .reveal{transform:none}') > 0
+    && cssSrc.indexOf('body.mobile-view .free-box.reveal{transform:none}') < 0);
 
 /* ---------- 9.9) 修复㉝：手机工具条收成把手 / 点块任意位置浮现操作栏 / 协同局部刷新 / 手机排版兜底 ---------- */
 console.log('【9.9】修复㉝：工具条把手 · 点块浮现 · 协同局部刷新 · 排版兜底');

@@ -3503,18 +3503,23 @@ window.LMEditor = (function () {
     if (box) addHandles(box);
     else { tb.imgSel = null; removeHandles(); }
   }
-  /* ★ 修复㉜（手机端操作栏）：点按块浮现操作栏，6 秒无任何操作自动淡出（CSS opacity 过渡）。
-     桌面端 hover 常态一字不动；手机端有操作（pointerdown）就重新计时 */
+  /* ★ 修复㉜（手机端操作栏）：点按块浮现操作栏，6 秒无任何操作进入「待机」（半透明、保持可点）。
+     桌面端 hover 常态一字不动；手机端有操作（pointerdown）就恢复全亮并重新计时。
+     ★ 修复㊳：待机不再移除 selected（那会让操作栏 pointer-events:none、点按钮要点两下）——
+     改为加 .tools-idle 降透明度，任何 pointerdown 先摘掉待机态再重置计时 */
   var toolsHideT = 0;
   function armToolsAutohide() {
     if (!document.body || !document.body.classList.contains('mobile-view')) return;
     if (toolsHideT) clearTimeout(toolsHideT);
     toolsHideT = setTimeout(function () {
       toolsHideT = 0;
-      document.querySelectorAll('.block-wrap.selected,.free-box.selected').forEach(function (w) { w.classList.remove('selected'); });
+      document.querySelectorAll('.block-wrap.selected,.free-box.selected').forEach(function (w) { w.classList.add('tools-idle'); });
     }, 6000);
   }
-  document.addEventListener('pointerdown', function () { if (toolsHideT) armToolsAutohide(); }, true);
+  document.addEventListener('pointerdown', function () {
+    document.querySelectorAll('.tools-idle').forEach(function (w) { w.classList.remove('tools-idle'); });
+    if (toolsHideT) armToolsAutohide();
+  }, true);
   /* ---------- Word 式块选中：点击任意内容块 → 蓝框 + 四角手柄（拖动调宽） ---------- */
   function selectBlock(idx) {
     tb.active = idx;
