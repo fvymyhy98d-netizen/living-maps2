@@ -48,14 +48,14 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793343243108,
+      "syncTs": 1793357606835,
       "roster": {},
       "tokenVault": {
         "v": 1,
         "iters": 60000,
-        "salt": "r5MhhpPOWGJKRXMuiE2qXA==",
-        "iv": "96PBPSWq6APlOhky",
-        "ct": "UITPXjFzz2jc5PiAc/kgJMLVj3cTGDUcRAPbdRj9tHdM5XadZHl6wqNjTXPntQ1WqNFv9dQ9nj02zgCgre7MC6IlbufF5ube1dcXY1IDuHmv+AeNJC+hSJYooTEOcFvFggh3XsBafofzh9Cb/qiQ5nvPT2k9v42+Luqnjiji/sGzBJXii4aPww4J6ty+jqBtWZi7PGGG32jcVxvG3MIBE3TjfZ3AkzkcGYSdYNog0VE6kTh2UmhprrAsQPbh5mhx3pBrIzsFDBuTj4XBkJOCbJpFLEUD"
+        "salt": "p4SaADqscA75V7X30ywa3w==",
+        "iv": "1yX3Ue5fHpAjSxNB",
+        "ct": "bpg1HKMX8o04obVen3ZDwIDfnOK+MbKb88JYtfxmzUgm65AhYKqNt33nxz8SA8Qrd4KTfztR8XyL8l5ea1gdiivULBlhvQcXAgdvBeVbXyuNaGDS5m5xoElwSa8zAhttj5cN2aPk/q9TSwI6/4uyaAPf2s/BWdUjIgyDR0dWW3WzEqpcwZz/j7ndAU/nA8BQwuekL0giz0FqVe10or0PMwRbKkCsBC0euFYhRo66og6WX9VVenRjm7M4olRQpJ97B2mxmpDmlj+x6D283pJeOpDbpwSX"
       }
     }
   },
@@ -160,7 +160,7 @@ window.SITE_CONTENT = {
           "level": 2,
           "text": "核心概念",
           "free": {
-            "x": 2.2,
+            "x": 2.8,
             "y": 1056,
             "w": 94.4
           }
@@ -196,8 +196,8 @@ window.SITE_CONTENT = {
             ]
           ],
           "free": {
-            "x": 0.3,
-            "y": 1332,
+            "x": 2.8,
+            "y": 1244,
             "w": 94.4
           }
         }
