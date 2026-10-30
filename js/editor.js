@@ -3461,6 +3461,10 @@ window.LMEditor = (function () {
     if (!isNaN(myIdx) && tb.active !== myIdx) selectBlock(myIdx);
     const x0 = e.clientX, y0 = e.clientY;
     const f0 = { x: +b.free.x || 0, w: +b.free.w || 40, h: b.free.h ? +b.free.h : wrap.offsetHeight };
+    /* ★ 修复53：调高的下限 = 内容实际高度（scrollHeight 含 padding，+2px 边框余量），不再硬编码 50px——
+       旧版把「核心概念」这类一行标题缩到 50px 时，文字（约 70px 高）直接溢出格子（字超出白色背景）；
+       现在最小只能缩到内容刚好装下，已溢出的框一拖也会自动回弹到内容高度 */
+    const minH = Math.max(50, (wrap.scrollHeight || 0) + 2);
     const col = document.querySelector('.blocks');
     const colW = (col ? col.getBoundingClientRect().width : window.innerWidth) || 1;
     let lastX = e.clientX, lastY = e.clientY;
@@ -3476,7 +3480,7 @@ window.LMEditor = (function () {
       }
       b.free.x = Math.round(x * 10) / 10;
       b.free.w = Math.round(w * 10) / 10;
-      if (dir === 's' || dir === 'se') b.free.h = Math.max(50, Math.round(f0.h + dy));
+      if (dir === 's' || dir === 'se') b.free.h = Math.max(minH, Math.round(f0.h + dy));
       wrap.style.left = b.free.x + '%';
       wrap.style.width = b.free.w + '%';
       /* ★ 同 startFreeMove：实时让位 v2（连续模型 + 滞回，低频重算，平滑跟随不抖） */

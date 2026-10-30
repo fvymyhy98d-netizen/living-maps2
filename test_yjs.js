@@ -451,6 +451,12 @@ T('flowNeighbor 跳过自由框换位 + 边界 toast + 克隆 offX≤80/offY≤2
     && edt2.indexOf('已上移（与上一个文档流模块换位）') > 0
     && edt2.indexOf('已下移（与下一个文档流模块换位）') > 0
     && edt2.indexOf('const offX = Math.min(e.clientX - r0.left, 80), offY = Math.min(e.clientY - r0.top, 24);') > 0);
+/* ---------- 9.20) 修复53：自由框调高下限 = 内容实际高度（不再硬编码 50px，字不溢出格子） ---------- */
+console.log('【9.20】修复53：调高下限改 minH = max(50, scrollHeight+2)，缩不到位溢出文字');
+T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度钳制',
+  edt2.indexOf('const minH = Math.max(50, (wrap.scrollHeight || 0) + 2);') > 0
+    && edt2.indexOf('if (dir === \'s\' || dir === \'se\') b.free.h = Math.max(minH, Math.round(f0.h + dy));') > 0);
+
 
 
 
