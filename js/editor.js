@@ -409,25 +409,33 @@ window.LMEditor = (function () {
       /* 自由框是绝对定位：↑/↓ = 整格移动 —— ↑ 跳到上一模块的上面，↓ 跳到下一模块的下面（带平滑动画） */
       if (b2 && b2.free) { freeJump(page, i, act === 'up' ? 'up' : 'down'); return; }
     }
-    /* ★ 修复52：↑↓ 换位跳过自由框 —— 自由框是绝对定位、不占文档流高度，与它交换数组顺序
-       视觉上零变化（「点了没反应」）。现在 ↑/↓ 自动跳过相邻的自由框，与最近一个文档流模块
-       换位（跳过几个就一次到位）；想挪动自由框本身，选中它按 ↑/↓ = 整格移动（freeJump） */
-    function flowNeighbor(idx, dir) {
-      let j = idx + dir;
-      while (j >= 0 && j < page.blocks.length && page.blocks[j] && page.blocks[j].free) j += dir;
-      return (j >= 0 && j < page.blocks.length) ? j : -1;
+    /* ★ 修复52/54：↑↓ 换位 —— 自由框是绝对定位、不占文档流高度，与它交换数组顺序视觉零变化。
+       ★ 修复54：邻居是自由框时执行「真互换」——把自由框**放回文档流**（自动归位，解除自由摆放）
+       再交换：本模块上/下移一格，自由框回到流里被顶到另一侧。想保留自由摆放的挪法：
+       选中自由框按 ↑/↓ = 整格移动（freeJump），或直接拖 ⠿ */
+    function swapWith(j, msg) {
+      const t = page.blocks[j]; page.blocks[j] = page.blocks[i]; page.blocks[i] = t;
+      LMApp.applyEdit(msg);
+      /* 自由框被放回流后让位几何全变：下一拍全量重算（渲染已在 applyEdit 内完成） */
+      setTimeout(function () { try { if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout(); } catch (eX) { /* noop */ } }, 30);
     }
     if (act === 'up' && i > 0) {
-      const j = flowNeighbor(i, -1);
-      if (j < 0) { LMApp.toast('上面已经没有可换位的文档流模块了'); return; }
-      const t = page.blocks[j]; page.blocks[j] = page.blocks[i]; page.blocks[i] = t;
-      LMApp.applyEdit('已上移（与上一个文档流模块换位）'); return;
+      const prev = page.blocks[i - 1];
+      if (prev && prev.free) {
+        delete prev.free; /* ★ 修复54：自由框放回文档流（自动归位）参与互换 */
+        swapWith(i - 1, '已上移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）');
+        return;
+      }
+      swapWith(i - 1, '已上移'); return;
     }
     if (act === 'down' && i < page.blocks.length - 1) {
-      const j = flowNeighbor(i, 1);
-      if (j < 0) { LMApp.toast('下面已经没有可换位的文档流模块了'); return; }
-      const t = page.blocks[j]; page.blocks[j] = page.blocks[i]; page.blocks[i] = t;
-      LMApp.applyEdit('已下移（与下一个文档流模块换位）'); return;
+      const next = page.blocks[i + 1];
+      if (next && next.free) {
+        delete next.free; /* ★ 修复54：自由框放回文档流（自动归位）参与互换 */
+        swapWith(i + 1, '已下移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）');
+        return;
+      }
+      swapWith(i + 1, '已下移'); return;
     }
   });
   /* ---------- 管理员工具条 ---------- */
@@ -3735,11 +3743,11 @@ window.LMEditor = (function () {
     wrap.style.top = r0.top + 'px';
     document.body.classList.add('block-dragging');
 
-    /* ★ 修复52：拖动克隆的跟随偏移钳制 —— 旧版保持「抓取点相对位置」（offY = 鼠标到块顶的距离），
+    /* ★ 修复52/54：拖动克隆的跟随偏移钳制 —— 旧版保持「抓取点相对位置」（offY = 鼠标到块顶的距离），
        抓在高块（如三行段落）中下部时整块悬在鼠标上方一大截（「差一个身位」），矮块却察觉不到，
-       同一个手势体验不一致。现在钳制为「块顶咬住鼠标」：offX ≤ 80px、offY ≤ 24px，
-       无论抓哪里，块都整齐地挂在鼠标右下角一小段 —— 所有块统一 */
-    const offX = Math.min(e.clientX - r0.left, 80), offY = Math.min(e.clientY - r0.top, 24);
+       同一个手势体验不一致。钳制为「块顶贴住鼠标」：offX ≤ 48px、offY ≤ 12px（54 收紧：更贴手），
+       无论抓哪里，块都整齐地挂在鼠标正下方一点 —— 所有块统一 */
+    const offX = Math.min(e.clientX - r0.left, 48), offY = Math.min(e.clientY - r0.top, 12);
     let scrollDir = 0, raf = null, moved = false, lastY = e.clientY;
 
     function flowList() {

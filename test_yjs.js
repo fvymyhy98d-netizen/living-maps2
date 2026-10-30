@@ -442,15 +442,15 @@ T('非 free 块统一 ⇤⇆⇥（sep 分组）+ halign 处理器自动标准宽
     && edt2.indexOf("if (v && v !== 'left' && !b2.free && b2.type !== 'image' && b2.width == null) b2.width = 68;") > 0
     && appSrc.indexOf("const al = b.hAlign || b.wAlign;") > 0
     && appSrc.indexOf("al === 'center' ? 'margin-left:auto;margin-right:auto;'") > 0);
-/* ---------- 9.19) 修复52：↑↓ 换位跳过自由框 + 拖动克隆跟随偏移钳制（块顶咬鼠标） ---------- */
-console.log('【9.19】修复52：换位跳过 free 块（消除「点了没反应」）· 拖动统一「块顶咬鼠标」');
-T('flowNeighbor 跳过自由框换位 + 边界 toast + 克隆 offX≤80/offY≤24 钳制',
-  edt2.indexOf('function flowNeighbor(idx, dir)') > 0
-    && edt2.indexOf('while (j >= 0 && j < page.blocks.length && page.blocks[j] && page.blocks[j].free) j += dir;') > 0
-    && edt2.indexOf("LMApp.toast('上面已经没有可换位的文档流模块了')") > 0
-    && edt2.indexOf('已上移（与上一个文档流模块换位）') > 0
-    && edt2.indexOf('已下移（与下一个文档流模块换位）') > 0
-    && edt2.indexOf('const offX = Math.min(e.clientX - r0.left, 80), offY = Math.min(e.clientY - r0.top, 24);') > 0);
+/* ---------- 9.19/9.21) 修复52+54：↑↓ 与自由框真互换（自动放回流）+ 拖动克隆块顶贴鼠标 ---------- */
+console.log('【9.19】修复52+54：换位遇自由框 = 放回流再互换 · 拖动统一「块顶贴鼠标」');
+T('↑↓ 邻居为自由框时 delete free 放回流再 swapWith 互换 + 延时重算让位 + 克隆 offX≤48/offY≤12',
+  edt2.indexOf('function swapWith(j, msg) {') > 0
+    && edt2.indexOf('delete prev.free; /* ★ 修复54：自由框放回文档流（自动归位）参与互换 */') > 0
+    && edt2.indexOf('delete next.free; /* ★ 修复54：自由框放回文档流（自动归位）参与互换 */') > 0
+    && edt2.indexOf('已上移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）') > 0
+    && edt2.indexOf('已下移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）') > 0
+    && edt2.indexOf('const offX = Math.min(e.clientX - r0.left, 48), offY = Math.min(e.clientY - r0.top, 12);') > 0);
 /* ---------- 9.20) 修复53：自由框调高下限 = 内容实际高度（不再硬编码 50px，字不溢出格子） ---------- */
 console.log('【9.20】修复53：调高下限改 minH = max(50, scrollHeight+2)，缩不到位溢出文字');
 T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度钳制',
