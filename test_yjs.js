@@ -415,14 +415,13 @@ console.log('【9.15】修复㊸：切页作废残留选中 · ⌨️ 按下确�
 T('renderToolbar 切页检测：页变化即作废 tb.active/imgSel/pressBi/hero 残留（不再挂到新页同位块）',
   edt2.indexOf('if (renderToolbar._pg !== (pgNow ? pgNow.id : null)) {') > 0
     && edt2.indexOf('tb.hero = null; tb.heroField = null; tb.heroTextField = null;') > 0);
-/* ---------- 9.16) 修复㊹：孤儿让位回收（框拖走后空白不回补） ---------- */
-console.log('【9.16】修复㊹：无框深压且非宿主的残留 margin 自动清零回弹');
-T('fixFreeOverlapVisual 孤儿回收：实测几何复核（深压阈值 24 / _freeHost 宿主保护 / 清后全量重算）',
-  appSrc.indexOf('let orphan = false;') > 0
-    && appSrc.indexOf("if (fd.w._freeHost === f.w) { pressed = true; return; }") > 0
-    && appSrc.indexOf('if (fd.top < natTop + r.height - 24) pressed = true;') > 0
-    && appSrc.indexOf('if (!pressed) { f.w.style.marginTop = \'\'; orphan = true; }') > 0
-    && appSrc.indexOf('if (orphan) adjustFreeLayout();') > 0);
+/* ---------- 9.16) 修复㊾：回滚修复㊹的孤儿让位回收（过渡中实测误判 → 乱飞/重叠/拖动差身位） ---------- */
+console.log('【9.16】修复㊾：孤儿回收已回滚（过渡中实测 natTop 不可靠），fixFreeOverlapVisual 不再做 margin 清零');
+T('孤儿回收代码已移除（回到 freeDecide 全量重算唯一权威），漂移自愈段保持原样',
+  appSrc.indexOf('let orphan = false;') < 0
+    && appSrc.indexOf('if (orphan) adjustFreeLayout();') < 0
+    && appSrc.indexOf('let healed = false;') > 0
+    && appSrc.indexOf('fd.top > flowBottom + 800') > 0);
 
 
 T('⌨️ 把手 pointerdown+pointerup 双确认（触屏隐式捕获下「按下后滑开」不再误触发开合）',

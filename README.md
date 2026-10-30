@@ -317,6 +317,8 @@ living-maps/
 - **回归（修复㊸）**：`node --check` 通过；`test_yjs.js` **121/121**（新增 9.15 节 3 条）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 - **修复㊹（框拖走后留下的空白不回补）**：free 框压过的块会带让位 `margin-top`，正常情况下框拖走后由让位引擎全量重算归零回弹；但任何"框位置变了却没触发全量重算"的路径（协同局部刷新、部分位移逻辑等）都会留下**孤儿让位**——块上方凭空空一段不回补（核心概念上方、本页来源上方）。**修复**：显示层复查新增**孤儿回收**——用实测几何独立复核，块若**不再被任何框深压**（阈值 24px，与让位引擎一致）**也不是任何框的让位宿主**（`_freeHost` 宿主保护，多框夹缝的让位量不受影响），而 `margin-top` 仍 > 0，即清零回弹，清完立即全量重算一次。只清"确定无框压"的块，绝不影响让位中的块。
 - **回归（修复㊹）**：`node --check` 通过；`test_yjs.js` **122/122**（新增 9.16 节 1 条）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
+- **修复㊾（回滚修复㊹的孤儿让位回收：拖动与鼠标差一个身位、块重叠乱飞复发）**：实测证实孤儿回收**有害**——`margin-top` 带 0.3s 过渡，过渡进行中用 `getBoundingClientRect` 还原 `natTop` 会偏移，导致**误判「无框压」→ 误清正在让位的 margin（块与框重叠出现）→ 又触发一次全量重算（margin 动画整体重放 = 页面乱飞）→ 布局在抓框前后持续抖动（⠿ 拖动时框与鼠标差一个身位）**。孤儿回收整段移除，`let healed` 漂移自愈段保持原样；孤儿 margin 的根因路径（协同局部刷新 `applyRemoteContent` 等）本就会在末尾走 `adjustFreeLayoutSafe` 全量重算，让位量由 `freeDecide` 唯一权威计算，不再重复兜底。
+- **回归（修复㊾）**：`node --check` 通过；`test_yjs.js` **122/122**（9.16 改为回滚验证断言）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 
 ## 三·补11、Yjs 网状实时协同（Mesh P2P · Cloudflare 信令版，2026-10-28 第六轮修订）
 
