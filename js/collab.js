@@ -22,6 +22,7 @@ window.LMCollab = (function () {
   var TS_KEY = 'lm_collab_ts_v1', DEV_KEY = 'lm_collab_dev_v1', NAME_KEY = 'lm_collab_name_v1',
       ROSTER_KEY = 'lm_collab_roster_v1', CHIP_ID = 'collabChip', PANEL_ID = 'collabPanel', MASK_ID = 'banMask';
   var LOCK_TTL = 12000, LOCK_BEAT = 4000, PEER_TTL = 25000;
+  var GONE_TTL = 120000; /* ★ 修复73：断线后宽限 2 分钟，还没回来就当它不会再回来，从在线名单移除 */
   var GH_PUSH_MIN = 6000, POLL_ACTIVE = 2000, POLL_IDLE = 8000, POLL_HIDDEN = 60000, POLL_VISITOR = 90000;
   var me = readDevice();
   var lastTs = +(localStorage.getItem(TS_KEY) || 0);
@@ -32,6 +33,15 @@ window.LMCollab = (function () {
   var pointerDown = false;
   var pointerAt = 0;   /* ★ 修复72：指针按下的时刻（0=未按下）；超过 20 秒视为松手事件丢失，自动复位 */
   var lastKeyAt = 0;   /* ★ 修复72：最后一次按键的时刻 —— localBusy 只认「真的在打字」 */
+  /* ★ 修复73：设备在线状态机 —— 区分「在线 / 断线（网络中断，会自己回来）/ 已退出（关页）」。
+     liveSeen: id -> {id,name,page,self,state,last,lostAt}，state = online | lost
+     leftIds：收到 bye（对方关页退出）的设备号 -> 时刻，短暂屏蔽 Yjs awareness 的残留状态，
+              免得刚提示「已退出页面」又被残留 presence 顶回「在线」 */
+  var liveSeen = {};
+  var leftIds = {};
+  var peerToastAt = {};                    /* id -> 上次上下线提示时刻（8 秒去抖） */
+  var presenceQuiet = Date.now() + 8000;   /* 启动静默期：两边同时打开页面不互相刷屏 */
+  var presenceTicking = false;
   var transports = []; /* 可同时挂多层：bc / server / gh */
   var modeLabel = '本机互连';
 
@@ -87,7 +97,7 @@ window.LMCollab = (function () {
     try { localStorage.setItem(NAME_KEY, n); } catch (e) { return false; }
     me.name = n;
     try { const d = JSON.parse(localStorage.getItem(DEV_KEY) || '{}'); d.name = n; localStorage.setItem(DEV_KEY, JSON.stringify(d)); } catch (e2) { /* noop */ }
-    hello(); paintChip(); renderPanel();
+    hello(); paintChip(); refreshPanel();
     return true;
   }
   function shortId(id) { return String(id || '').slice(-6).toUpperCase(); }
@@ -287,16 +297,17 @@ window.LMCollab = (function () {
     try {
       switch (msg.type) {
       case 'hello':
-        if (!peers[msg.from]) { LMApp.toast('🟢 「' + (msg.name || '设备') + '」已上线'); }
         peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page };
+        clearLeft(msg.from); /* 回来了：清掉「已退出页面」的短暂屏蔽 */
         if (msg.want) { /* 新设备要全量：只让「设备号最小」的那台回，避免多台同时灌 */
           const ids = Object.keys(peers).concat([me.id]).sort();
           if (ids[0] === me.id && validContent(LMApp.state.content)) send({ type: 'state', to: msg.from, content: LMApp.state.content });
         }
-        paintChip(); renderPanel(); break;
+        presenceTick(); break;
       case 'iam':
-        if (!peers[msg.from]) { LMApp.toast('🟢 「' + (msg.name || '设备') + '」已上线'); }
-        peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page }; paintChip(); renderPanel(); break;
+        peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page };
+        clearLeft(msg.from);
+        presenceTick(); break;
       case 'state':
         if (msg.to && msg.to !== me.id) break;
         applyRemote(msg); break;
@@ -323,9 +334,13 @@ window.LMCollab = (function () {
         repaintLocks(); break;
       }
       case 'bye': {
+        /* ★ 修复73：bye = 对方主动关页退出（不是断线）——立刻从在线名单移除并提示「已退出页面」；
+           同时记下 leftIds，短暂屏蔽 Yjs awareness 的残留状态，免得刚提示退出又变回在线 */
         const goneName = (peers[msg.from] && peers[msg.from].name) || msg.name || '设备';
-        delete peers[msg.from]; paintChip(); renderPanel();
-        if (msg.from) LMApp.toast('🔴 「' + goneName + '」已断线');
+        delete peers[msg.from];
+        if (msg.from) leftIds[msg.from] = Date.now();
+        delete liveSeen[msg.from];
+        peerToast({ id: msg.from, name: goneName, self: false }, 'left');
         break;
       }
       }
@@ -436,19 +451,115 @@ window.LMCollab = (function () {
              花名册里的设备也完全不计 → 两台在线时徽章只显示 1 台。
      现在并集逻辑统一抽到 deviceList()，徽章与面板都数「去重后的实时在线设备数（含本机）」，
      两处必然一致 */
-  function deviceList() {
-    const list = onlineList().slice();
-    const seen = {};
-    list.forEach(function (p) { seen[p.id] = 1; });
-    /* ★ 修复71：Yjs Awareness（**实时在线**）必须先于花名册处理 —— 否则同一台设备会先被
-       花名册以"最近活跃"入列（recent:true），presence 因去重跳过它 → 它永远算不进在线台数，
-       面板会显示"在线设备 1 台（另 1 台最近活跃）" */
+  /* ★ 修复73：当前「活着」的设备快照 = 本机 + 旧通道 peers + Yjs awareness（按设备号合并） */
+  function presenceSnapshot() {
+    const snap = {};
+    try { if (window.LMApp && LMApp.state) snap[me.id] = { id: me.id, name: me.name, fp: me.fp, page: LMApp.state.pageId || '', self: true }; } catch (e0) { /* noop */ }
+    Object.keys(peers).forEach(function (k) {
+      const p2 = peers[k] || {};
+      snap[k] = { id: k, name: p2.name || '', fp: p2.fp || '', page: p2.page || '' };
+    });
     try {
       const yj = window.LMYCollab;
       if (yj && yj.presence) yj.presence().forEach(function (p3) {
-        if (!p3 || seen[p3.id]) return;
-        seen[p3.id] = 1;
-        list.push({ id: p3.id, name: p3.name, fp: '', page: p3.page || '', self: !!p3.self, editing: (p3.editing == null ? null : p3.editing) });
+        if (!p3 || !p3.id || p3.self || leftIds[p3.id]) return; /* 刚「关页退出」的：忽略 awareness 残留 */
+        const cur = snap[p3.id];
+        if (!cur) snap[p3.id] = { id: p3.id, name: p3.name || '', fp: '', page: p3.page || '' };
+        else if (!cur.name && p3.name) cur.name = p3.name;
+      });
+    } catch (eY) { /* noop */ }
+    /* 退出记录 60 秒自然作废（对方刷新回来时由 hello/iam 立刻清掉） */
+    const nowL = Date.now();
+    Object.keys(leftIds).forEach(function (k) { if (nowL - (+leftIds[k] || 0) > 60000) delete leftIds[k]; });
+    return snap;
+  }
+  /* ★ 修复73：状态归并（纯函数，test_yjs 直接截出来跑）——
+     snap 里有的 → 在线（新出现 = join，断线回来 = back）；
+     snap 里没有但之前在线 → lost（断线，先留在名单里显示「已断线 N 秒」）；
+     lost 超过 goneTtl 还没回来 → gone（从名单移除 = 认为它不会再回来）。
+     只做状态迁移并返回事件列表，弹提示/重绘交给 presenceTick，便于单测 */
+  function presenceReduce(liveSeen, snap, now, goneTtl) {
+    const events = [];
+    Object.keys(snap).forEach(function (k) {
+      const s2 = snap[k], cur = liveSeen[k];
+      if (!cur) {
+        liveSeen[k] = { id: k, name: s2.name || '', fp: s2.fp || '', page: s2.page || '', self: !!s2.self, state: 'online', last: now, lostAt: 0 };
+        if (!s2.self) events.push({ kind: 'join', id: k, d: liveSeen[k] });
+        return;
+      }
+      cur.name = s2.name || cur.name;
+      cur.page = s2.page || cur.page;
+      cur.fp = s2.fp || cur.fp;
+      cur.last = now;
+      if (cur.state !== 'online') { cur.state = 'online'; cur.lostAt = 0; events.push({ kind: 'back', id: k, d: cur }); }
+    });
+    Object.keys(liveSeen).forEach(function (k) {
+      const d = liveSeen[k];
+      if (!d || snap[k]) return;
+      if (d.state === 'online') { d.state = 'lost'; d.lostAt = now; events.push({ kind: 'lost', id: k, d: d }); }
+      else if (now - (+d.lostAt || 0) > goneTtl) { delete liveSeen[k]; events.push({ kind: 'gone', id: k, d: d }); }
+    });
+    return events;
+  }
+  /* 上线 / 断线 / 退出 / 重连 / 超时移除 的提示（8 秒去抖 + 启动静默期，多台不轰炸） */
+  function peerToast(d, kind) {
+    if (!d) return;
+    const now = Date.now();
+    if (!d.self && now >= presenceQuiet && now - (peerToastAt[d.id] || 0) > 8000) {
+      peerToastAt[d.id] = now;
+      const nm = '「' + (d.name || '设备') + '」';
+      if (kind === 'join') LMApp.toast('🟢 ' + nm + ' 已上线' + (d.page ? '（在 ' + d.page + '）' : ''));
+      else if (kind === 'back') LMApp.toast('🟢 ' + nm + ' 已重新连上');
+      else if (kind === 'lost') LMApp.toast('🔌 ' + nm + ' 已断线（网络中断，正在重连…）');
+      else if (kind === 'left') LMApp.toast('👋 ' + nm + ' 已退出页面');
+      else if (kind === 'gone') LMApp.toast('⚪ ' + nm + ' ' + Math.round(GONE_TTL / 60000) + ' 分钟没回来，已从在线设备中移除');
+    }
+    try { paintChip(); } catch (e1) { /* noop */ }
+    refreshPanel();
+  }
+  function panelOpen() { const p0 = document.getElementById(PANEL_ID); return !!(p0 && p0.classList.contains('show')); }
+  /* 面板只在「已经打开」时重绘 —— 否则收到 hello/iam 会把面板弹出来（旧版就是这样） */
+  function refreshPanel() { try { if (panelOpen()) renderPanel(); } catch (e0) { /* noop */ } }
+  function clearLeft(id) { if (id) delete leftIds[id]; }
+  /* 2 秒一拍的设备状态机：判定 断线 / 重连 / 超时移除，并刷新徽章与面板 */
+  function presenceTick() {
+    if (presenceTicking) return [];
+    presenceTicking = true;
+    let evs = [];
+    try {
+      evs = presenceReduce(liveSeen, presenceSnapshot(), Date.now(), GONE_TTL);
+      evs.forEach(function (ev) { peerToast(ev.d, ev.kind); });
+      if (!evs.length) { try { paintChip(); refreshPanel(); } catch (e1) { /* noop */ } }
+    } catch (e) { /* 状态机永不抛出影响协作 */ }
+    presenceTicking = false;
+    return evs;
+  }
+  function deviceList() {
+    const list = [];
+    const seen = {};
+    Object.keys(liveSeen).forEach(function (k) {
+      const d = liveSeen[k];
+      if (!d) return;
+      seen[k] = 1;
+      list.push({
+        id: k, name: d.name, fp: d.fp, page: d.page, self: !!d.self,
+        lost: d.state === 'lost',
+        lostSec: d.state === 'lost' ? Math.max(0, Math.round((Date.now() - (+d.lostAt || 0)) / 1000)) : 0,
+        editing: null
+      });
+    });
+    /* 兜底：状态机还没跑过第一拍时也至少列本机（否则面板会短暂「0 台」且没有本机行） */
+    if (!seen[me.id]) {
+      seen[me.id] = 1;
+      list.push({ id: me.id, name: me.name, fp: me.fp, page: (window.LMApp ? LMApp.state.pageId : ''), self: true, lost: false, lostSec: 0, editing: null });
+    }
+    /* 「谁在编辑」标记从 Yjs awareness 贴回来（不新增设备，只补标记；断线设备不算在编辑） */
+    try {
+      const yj = window.LMYCollab;
+      if (yj && yj.presence) yj.presence().forEach(function (p3) {
+        if (!p3 || !p3.id || p3.editing == null) return;
+        const hit = list.filter(function (x) { return x.id === p3.id && !x.lost; })[0];
+        if (hit) hit.editing = p3.editing;
       });
     } catch (eY2) { /* noop */ }
     const now = Date.now();
@@ -460,15 +571,33 @@ window.LMCollab = (function () {
         if (now - (+o.lastSeen || 0) < 180000) list.push({ id: k, name: o.name, fp: o.fp, page: o.page || '', self: false, recent: true });
       });
     } catch (e) { /* noop */ }
+    /* 排序：本机 → 在线 → 断线 → 最近活跃 */
+    const rank = function (p) { return p.self ? 0 : (p.lost ? 2 : (p.recent ? 3 : 1)); };
+    list.sort(function (a, b) { return rank(a) - rank(b) || String(a.name || '').localeCompare(String(b.name || '')); });
     return list;
   }
-  /* 实时在线台数（含本机；"最近活跃"的花名册设备不计入）—— 徽章与面板用的是同一个数 */
+  /* 实时在线台数（含本机；断线与「最近活跃」都不计）—— 徽章与面板用的是同一个数 */
   function liveCount() {
-    try { return Math.max(1, deviceList().filter(function (p) { return !p.recent; }).length); } catch (e) { return 1; }
+    try {
+      let n = 0;
+      Object.keys(liveSeen).forEach(function (k) { const d = liveSeen[k]; if (d && d.state === 'online') n++; });
+      return Math.max(1, n);
+    } catch (e) { return 1; }
+  }
+  /* ★ 修复73：断线台数（单独报，不再混进「在线」） */
+  function lostCount() {
+    try {
+      let n = 0;
+      Object.keys(liveSeen).forEach(function (k) { const d = liveSeen[k]; if (d && d.state === 'lost') n++; });
+      return n;
+    } catch (e) { return 0; }
   }
   /* ★ 修复71：徽章每 6 秒对齐一次 —— 设备上下线/花名册过期不一定都有事件触发重绘，
      否则会出现"面板 2 台、徽章还是 1 台"的过期显示（paintChip 幂等，无 transports 时自动收掉徽章） */
   setInterval(function () { try { paintChip(); } catch (e) { /* noop */ } }, 6000);
+  /* ★ 修复73：设备状态机 2 秒一拍 —— 断线（信号消失）/ 重连（信号回来）/ 超时移除都在这里判定；
+     面板开着时同步重绘，所以「已断线 N 秒」是活的（旧版面板是点开那一刻的快照，设备掉了还显示 2 台） */
+  setInterval(function () { try { presenceTick(); } catch (e2) { /* noop */ } }, 2000);
   /* ---------- Yjs 层取数（ycollab.js 未启用时安全返回空值，不影响旧通道） ---------- */
   /* 保留：Yjs「其他设备数」（不含本机）。徽章/面板已统一走 deviceList()/liveCount()，
      这个只留作诊断与外部脚本调用 —— 注意它数的是**其他设备**，别当总台数用 */
@@ -495,10 +624,13 @@ window.LMCollab = (function () {
         renderPanel();
       });
     }
-    /* ★ 修复71：与设备面板「在线设备 N 台」**同一个数**（本机 + peers + 花名册 + Yjs Awareness 去重） */
+    /* ★ 修复71/73：与设备面板同一个数（本机 + 在线设备，去重）；断线的单独报出来，不再悄悄少一台 */
     const n = liveCount();
-    chip.innerHTML = '<span class="dot"></span>协作中 · ' + n + ' 台设备（' + modeLabel + yChannelLabel() + '）';
-    chip.title = '我：' + me.name + '（#' + shortId(me.id) + '）— 点开看在线设备';
+    const lost = lostCount();
+    const txt = '<span class="dot' + (lost ? ' warn' : '') + '"></span>协作中 · ' + n + ' 台设备'
+      + (lost ? '（' + lost + ' 台已断线）' : '') + '（' + modeLabel + yChannelLabel() + '）';
+    if (chip.innerHTML !== txt) chip.innerHTML = txt; /* ★ 修复73：2 秒一拍也不重复重排 DOM */
+    chip.title = '我：' + me.name + '（#' + shortId(me.id) + '）— 点开看在线 / 断线设备';
   }
   function renderPanel() {
     let pan = document.getElementById(PANEL_ID);
@@ -508,13 +640,19 @@ window.LMCollab = (function () {
       pan.addEventListener('click', function (e) { if (e.target === pan) pan.classList.remove('show'); });
     }
     const admin = !!(window.LMApp && LMApp.state.admin);
-    /* 实时在线 + 花名册 3 分钟内活跃 + Yjs Awareness（并集按设备号去重）
-       ★ 修复71：并集逻辑已抽到 deviceList()，徽章与本面板共用同一口径 */
+    /* ★ 修复73：名单来自设备状态机（在线 + 断线），花名册只补「最近活跃」 */
     const list = deviceList();
-    const live = list.filter(function (p) { return !p.recent; }).length;
-    let html = '<div class="cp-t">在线设备 ' + live + ' 台' + (live < list.length ? '（另 ' + (list.length - live) + ' 台最近活跃）' : '') + '</div>';
+    const live = list.filter(function (p) { return !p.recent && !p.lost; }).length;
+    const lost = list.filter(function (p) { return p.lost; }).length;
+    const recent = list.filter(function (p) { return p.recent; }).length;
+    let html = '<div class="cp-t">在线设备 ' + live + ' 台'
+      + (lost ? '（另 ' + lost + ' 台已断线）' : '')
+      + (recent ? '（另 ' + recent + ' 台最近活跃）' : '') + '</div>';
     html += list.map(function (p) {
-      return '<div class="cp-row"><b>' + escHtml(p.name || '设备') + (p.self ? '（本机）' : '') + (p.recent ? '<span class="cp-recent">最近活跃</span>' : '') + (p.editing != null ? '<span class="cp-edit">✍ 编辑中</span>' : '') + '</b>'
+      return '<div class="cp-row' + (p.lost ? ' cp-row-lost' : '') + '"><b>' + escHtml(p.name || '设备') + (p.self ? '（本机）' : '')
+        + (p.recent ? '<span class="cp-recent">最近活跃</span>' : '')
+        + (p.lost ? '<span class="cp-lost">⚠ 已断线 ' + p.lostSec + ' 秒</span>' : '')
+        + (p.editing != null ? '<span class="cp-edit">✍ 编辑中</span>' : '') + '</b>'
         + '<span class="cp-id">#' + escHtml(shortId(p.id)) + '</span>'
         + '<span class="cp-pg">' + escHtml(p.page || '') + '</span></div>';
     }).join('');
@@ -528,7 +666,7 @@ window.LMCollab = (function () {
     html += admin
       ? '<div class="cp-note">改名 / 查看全部设备 / 屏蔽管理：右上角 ⚙ 设置 → 协作与设备</div>'
       : '<div class="cp-note">设备昵称由管理员在 ⚙ 设置里统一管理（同昵称多设备允许，靠设备号区分）</div>';
-    pan.innerHTML = html;
+    if (pan.innerHTML !== html) pan.innerHTML = html; /* ★ 修复73：2 秒定时重绘不闪烁 */
     pan.classList.add('show');
   }
   function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -538,14 +676,10 @@ window.LMCollab = (function () {
       Object.keys(locks).forEach(function (k) {
         if (now - locks[k].ts > LOCK_TTL) { delete locks[k]; delete coEdit[k]; repaintLocks(); }
       });
-      const gonePeers = [];
-      Object.keys(peers).forEach(function (k) {
-        if (now - peers[k].ts > PEER_TTL) { gonePeers.push(peers[k].name || '设备'); delete peers[k]; }
-      });
-      if (gonePeers.length) { /* 断线提醒（掉线 25 秒无心跳 / 异常关闭未发 bye 的兜底），多台合并一条不轰炸 */
-        LMApp.toast('🔴 ' + gonePeers.map(function (n2) { return '「' + n2 + '」'; }).join('') + (gonePeers.length > 1 ? ' 等 ' + gonePeers.length + ' 台设备' : '') + ' 已断线');
-        paintChip(); renderPanel();
-      }
+      Object.keys(peers).forEach(function (k) { if (now - peers[k].ts > PEER_TTL) delete peers[k]; });
+      /* ★ 修复73：断线 / 退出 / 重连 / 超时移除 全部交给设备状态机（2 秒一拍）——
+         旧版这里只认旧通道 peers，Yjs 掉线根本没有提示 */
+      presenceTick();
       send({ type: 'iam', page: (window.LMApp ? LMApp.state.pageId : '') });
       notifyPagePeers(); /* 同页多人提醒（进页/名单变化后按 key 去重，同人只提示一次） */
     } catch (e) { /* 心跳循环永不中断 */ }
@@ -969,7 +1103,7 @@ window.LMCollab = (function () {
       } catch (e) { /* noop */ }
     }
     registerAdminTransports(); /* 页面加载时若已是管理员（登录过+刷新）直接注册；访客态则等待登录回调补调 */
-    if (transports.length) { paintChip(); hello(); if (!_sweepsOn) { _sweepsOn = true; setInterval(sweep, 6000); setInterval(hello, 8000); } }
+    if (transports.length) { presenceTick(); paintChip(); hello(); if (!_sweepsOn) { _sweepsOn = true; setInterval(sweep, 6000); setInterval(hello, 8000); } }
     setTimeout(cfgWatch, 45000); setInterval(cfgWatch, 180000); /* 配置漂移自愈：45 秒后首查 + 每 3 分钟复查 */
     ['mousedown', 'keydown', 'touchstart'].forEach(function (ev) {
       document.addEventListener(ev, function () { window._lmLastAct = Date.now(); }, { passive: true });
@@ -1045,6 +1179,8 @@ window.LMCollab = (function () {
     paintChip: paintChip,
     refreshGh: ghInit, /* 普通管理员登录取回 Token 后重探云端通道（ghInit 已重入化，不会重复接线） */
     renderPanel: renderPanel,
+    presenceTick: presenceTick, /* ★ 修复73：awareness 增减时由 ycollab 立刻催一拍，不必等 2 秒定时 */
+    devices: function () { return deviceList(); },
     applyExternal: function (c, by) { /* Yjs 网状协同与旧通道共用同一个「远端应用」漏斗 */
       /* ★ 修复72：force 绕过墙上时钟门（Y.Doc 只会给更新的整包）；返回值告诉调用方「真的应用了吗」
          —— 包被挂起（本机正在输入）时状态还没更新，调用方不能再把旧内容回写 Y.Doc */

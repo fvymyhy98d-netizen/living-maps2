@@ -884,6 +884,10 @@ body.mobile-view .blk-typebar button{padding:5px 9px;font-size:12px}
 #collabPanel .cp-id{color:#86868b;font-size:11px;font-family:ui-monospace,Consolas,monospace}
 #collabPanel .cp-pg{margin-left:auto;color:#0071e3;font-size:11px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #collabPanel .cp-note{color:#86868b;font-size:11px;margin-top:8px;line-height:1.5}
+/* ★ 修复73：断线设备行（橙色告警）——与「在线」区分，断了多久一眼可见 */
+#collabPanel .cp-lost{color:#c93400;font-weight:600;font-size:11px;margin-left:6px}
+#collabPanel .cp-row-lost b{color:#86868b}
+#collabChip .dot.warn{background:#ff9f0a}
 /* ★ 修复㊴：手机端协作徽章缩小避让 —— 之前 60vw 宽的「协作中·…」长胶囊（bottom:12px）与底部居中的
    管理工具栏 #adminBar（bottom:22px、最宽 94vw）互相压住；徽章缩到 42vw、字号/内边距同步收紧、
    背景更透；管理工具栏与设备面板整体上移 22px 给徽章让出整条底边，手机上两者不再叠 */

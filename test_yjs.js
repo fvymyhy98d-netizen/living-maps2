@@ -191,9 +191,10 @@ T('密码试错防护：1 小时滑动窗口持久化（localStorage）+ 指数�
 T('试错自动入黑名单：登录成功时走 banSelf 限时通道（1 小时内 ≥5 次失败；根管理员豁免并自动清除限时）',
   appSrc.indexOf('LMCollab.banSelf(1800000)') > 0 && appSrc.indexOf('管理员入口将被限制 30 分钟') > 0
     && appSrc.indexOf('根管理员身份不受限') > 0 && appSrc.indexOf('clearAutoBan()') > 0);
-T('上线/断线 Toast：hello/iam 新设备提示、bye 提示、TTL 清扫合并提示（多台不轰炸）',
-  col.indexOf('已上线') > 0 && col.indexOf('已断线') > 0
-    && col.indexOf('const gonePeers = [];') > 0);
+T('上线/断线提示统一走设备状态机：上线 / 断线 / 已退出页面 / 重新连上 / 超时移除（8 秒去抖 + 启动静默期）',
+  col.indexOf('已上线') > 0 && col.indexOf('已断线') > 0 && col.indexOf('已退出页面') > 0
+    && col.indexOf('function peerToast(d, kind) {') > 0
+    && col.indexOf('const gonePeers = [];') < 0);
 T('Toast 手机端不遮屏：宽度上限 min(86vw, 420px)，多行圆角 14px',
   fs.readFileSync(path.join(DIR, 'css/style.css'), 'utf8').indexOf('max-width:min(86vw,420px)') > 0);
 T('409 冲突尾随重推：拉最新后 6 秒重试一次（防最后一笔只留本机），防覆盖守卫仍然生效',
@@ -464,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '72';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '73';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -648,26 +649,32 @@ T('collab.js：deviceList/liveCount 抽出 + 徽章改用它 + 旧 max(1+peers, 
     && col.indexOf('const n = liveCount();') > 0
     && col.indexOf('const list = deviceList();') > 0
     && col.indexOf('Math.max(1 + Object.keys(peers).length, yPeerCount())') < 0);
-/* 真实执行 deviceList/liveCount：本机 + 一台 Yjs presence 设备（同时也在花名册 10 秒内）
-   → 必须算 2 台在线（旧徽章公式 max(1, getStates-1=1) 只得 1 台） */
+/* 真实执行 deviceList/liveCount/lostCount（修复73 起名单来自设备状态机 liveSeen）：
+   在线 2 台（本机 + hbyc）+ 断线 1 台 → 「在线 2 台」，断线那台仍留在名单里但不算在线 */
 (function () {
   const a = col.indexOf('function deviceList() {');
   const z = col.indexOf('/* ★ 修复71：徽章每 6 秒对齐一次', a);
-  const code = (a >= 0 && z > a) ? col.slice(a, z) + '\nreturn { deviceList: deviceList, liveCount: liveCount };' : '';
+  const code = (a >= 0 && z > a) ? col.slice(a, z) + '\nreturn { deviceList: deviceList, liveCount: liveCount, lostCount: lostCount };' : '';
   let ok = false;
   try {
-    const api = new Function('onlineList', 'roster', 'window', code)(
-      function () { return [{ id: 'SELF', name: '设备189c', page: 'updates', self: true }]; },
-      function () { return { HBYC: { name: '设备hbyc', page: 'home', lastSeen: Date.now() - 10000 } }; },
-      { LMYCollab: { presence: function () { return [{ id: 'SELF', name: '设备189c', self: true }, { id: 'HBYC', name: '设备hbyc', page: 'home' }]; } } }
+    const liveSeen = {
+      SELF: { id: 'SELF', name: '设备189c', page: 'updates', self: true, state: 'online', last: Date.now(), lostAt: 0 },
+      HBYC: { id: 'HBYC', name: '设备hbyc', page: 'home', self: false, state: 'online', last: Date.now(), lostAt: 0 },
+      GONE: { id: 'GONE', name: '设备断线', page: 'home', self: false, state: 'lost', last: Date.now() - 90000, lostAt: Date.now() - 30000 }
+    };
+    const api = new Function('liveSeen', 'roster', 'window', 'me', code)(
+      liveSeen,
+      function () { return { OLD: { name: '设备很久以前', page: 'home', lastSeen: Date.now() - 600000 } }; },
+      { LMYCollab: { presence: function () { return []; } } },
+      { id: 'SELF', name: '设备189c', fp: '' }
     );
     const list = api.deviceList();
-    const hbyc = list.filter(function (p) { return p.id === 'HBYC'; })[0];
-    ok = api.liveCount() === 2 && !!hbyc && !hbyc.recent && list.length === 2;
+    const gone = list.filter(function (p) { return p.id === 'GONE'; })[0];
+    ok = api.liveCount() === 2 && api.lostCount() === 1 && list.length === 3
+      && !!gone && gone.lost === true && gone.lostSec >= 29;
   } catch (e) { ok = false; }
-  T('两台在线（本机 + presence 里的 189c/hbyc）= 2 台；同时进花名册的在线设备不会被降级成"最近活跃"', ok);
+  T('在线 2 台（本机 + hbyc）与断线 1 台分开计；断线设备仍留在面板里（lost 标记 + 已断线秒数）', ok);
 })();
-
 /* ---------- 9.37) 修复72：编辑停手后对方不同步（把「光标停在框里」当成了「正在输入」） ---------- */
 console.log('【9.37】修复72：停手即同步 —— localBusy 只认「真在打字」· 挂起包定时分流 · Yjs 通道免墙上时钟门');
 T('collab.js：localBusy 改判「按键 1.2s 内才算输入中」+ 指针 20s 兜底 + 定时 flushPending + 指针丢失复位',
@@ -712,6 +719,43 @@ T('打字停手 1.2s 的保存不再要求「此刻仍聚焦」，切后台/切�
     && edt.indexOf('function flushLiveEdit() {') > 0
     && edt.indexOf("window.addEventListener('pagehide', flushLiveEdit);") > 0
     && edt.indexOf("document.addEventListener('visibilitychange', function () { if (document.hidden) flushLiveEdit(); });") > 0);
+
+/* ---------- 9.38) 修复73：设备断线 / 退出 / 重连 / 超时移除（面板实时刷新） ---------- */
+console.log('【9.38】修复73：设备状态机（在线 / 断线 / 已退出 / 超时移除）+ 面板 2 秒实时重绘');
+T('collab.js：GONE_TTL + presenceReduce/presenceTick/peerToast + 面板重绘守卫 + 徽章报断线台数 + bye 记为退出',
+  col.indexOf('var GONE_TTL = 120000;') > 0
+    && col.indexOf('function presenceReduce(liveSeen, snap, now, goneTtl) {') > 0
+    && col.indexOf('function presenceTick() {') > 0
+    && col.indexOf("LMApp.toast('👋 ' + nm + ' 已退出页面')") > 0
+    && col.indexOf("LMApp.toast('🔌 ' + nm + ' 已断线（网络中断，正在重连…）')") > 0
+    && col.indexOf("LMApp.toast('⚪ ' + nm + ' ' + Math.round(GONE_TTL / 60000) + ' 分钟没回来，已从在线设备中移除')") > 0
+    && col.indexOf('if (pan.innerHTML !== html) pan.innerHTML = html;') > 0
+    && col.indexOf("' 台已断线）'") > 0
+    && col.indexOf('leftIds[msg.from] = Date.now();') > 0
+    && col.indexOf('setInterval(function () { try { presenceTick(); } catch (e2) { /* noop */ } }, 2000);') > 0);
+/* 真实执行 presenceReduce：在线 → 断线（保留在名单）→ 超时移除；断线后又回来 = 「重新连上」 */
+(function () {
+  const a1 = col.indexOf('function presenceReduce(');
+  const z1 = col.indexOf('\n  }', a1);
+  const code = (a1 >= 0 && z1 > a1) ? col.slice(a1, z1 + 4) : '';
+  let ok = true, st = {};
+  try {
+    const run = new Function('return ' + code.replace('function presenceReduce', 'function') + ';')();
+    const T0 = 1700000000000, GONE = 120000;
+    const SELF = { SELF: { id: 'SELF', name: '本机', self: true } };
+    let ev = run(st, Object.assign({}, SELF, { A: { id: 'A', name: '设备A', page: 'home' } }), T0, GONE);
+    ok = ok && st.SELF && st.SELF.state === 'online' && ev.length === 1 && ev[0].kind === 'join' && ev[0].id === 'A';
+    ev = run(st, SELF, T0 + 5000, GONE);
+    ok = ok && ev.length === 1 && ev[0].kind === 'lost' && st.A.state === 'lost' && st.A.lostAt === T0 + 5000;
+    ev = run(st, Object.assign({}, SELF, { A: { id: 'A', name: '设备A' } }), T0 + 10000, GONE);
+    ok = ok && ev.length === 1 && ev[0].kind === 'back' && st.A.state === 'online';
+    ev = run(st, SELF, T0 + 20000, GONE);
+    ok = ok && ev.length === 1 && ev[0].kind === 'lost';
+    ev = run(st, SELF, T0 + 20000 + GONE + 1000, GONE);
+    ok = ok && ev.length === 1 && ev[0].kind === 'gone' && !st.A;
+  } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
+  T('断线判定：消失 → lost（仍留在名单，带「已断线 N 秒」）→ 超过 GONE_TTL → gone（移除）；中途回来 = back', ok);
+})();
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

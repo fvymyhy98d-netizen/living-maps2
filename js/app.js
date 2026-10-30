@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '72';
+var LM_ASSET_VER = '73';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1467,7 +1467,7 @@ window.LMApp = (function () {
     /* ---- 协作与设备 ---- */
     const cm = pop.querySelector('#gpCollabMode');
     if (cm) cm.textContent = window.LMCollab
-      ? ('通道：' + LMCollab.mode() + '；在线 ' + LMCollab.onlineList().length + ' 台（左下角徽章点开看名单）')
+      ? ('通道：' + LMCollab.mode() + '；在线 ' + (LMCollab.devices ? LMCollab.devices().filter(function (p) { return !p.recent && !p.lost; }).length : LMCollab.onlineList().length) + ' 台（左下角徽章点开看名单）')
       : '协同模块未加载';
     const nick = pop.querySelector('#gpNick');
     if (nick && window.LMCollab) nick.value = LMCollab.me().name;

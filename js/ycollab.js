@@ -251,7 +251,12 @@
       });
       document.addEventListener('focusout', function () { if (myEditing != null) { myEditing = null; setAw(); paintPeers(); } });
       window.addEventListener('hashchange', setAw);
-      aw.on('change', function () { paintPeers(); try { if (window.LMCollab && LMCollab.paintChip) LMCollab.paintChip(); } catch (e2) { /* noop */ } });
+      aw.on('change', function () {
+        paintPeers();
+        /* ★ 修复73：awareness 增减（有人上线 / 断线 / 恢复）立刻推进一拍设备状态机，不必等 2 秒定时 */
+        try { if (window.LMCollab && LMCollab.presenceTick) LMCollab.presenceTick(); } catch (e3) { /* noop */ }
+        try { if (window.LMCollab && LMCollab.paintChip) LMCollab.paintChip(); } catch (e2) { /* noop */ }
+      });
       /* 远端更新（origin 非 'lm-local'）→ 合并应用；本机写入不回灌 */
       ymap.observe(function (ev, tr) {
         if (tr && tr.origin === 'lm-local') return;
