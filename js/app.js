@@ -327,9 +327,16 @@ window.LMApp = (function () {
         + '<span class="fb-hd" data-h="s" title="调高"></span><span class="fb-hd" data-h="se" title="拖角调整大小"></span>';
     } else if (b.type !== 'image' && b.width != null) {
       /* Word 式四角拖宽：非图片块记录 width%（让位间距由 adjustFreeLayout 动态计算，不持久化）；
-         wAlign='right'：取消并排时「原最右的块贴页面右缘」（宽度不足整行时 margin-left:auto 右对齐） */
+         ★ 修复51：水平对齐由 hAlign 统一裁决（⇤贴左 / ⇆居中 / ⇥贴右）——
+         center 用 margin:0 auto（与图片/表格的 ha-center 同视觉），wAlign 仅作取消并排时的回落值：
+         hAlign 存在时 wAlign 不再生效，用户点对齐钮的结果永远可预期 */
       const wp = Math.min(100, Math.max(20, Math.round(+b.width) || 100));
-      if (wp < 100) wrapSt += 'width:' + wp + '%;' + (b.wAlign === 'right' ? 'margin-left:auto;' : '');
+      if (wp < 100) {
+        const al = b.hAlign || b.wAlign;
+        wrapSt += 'width:' + wp + '%;'
+          + (al === 'right' ? 'margin-left:auto;'
+            : (al === 'center' ? 'margin-left:auto;margin-right:auto;' : ''));
+      }
     }
     return '<div class="' + wrapCls + '" data-page="' + esc(pageId) + '" data-idx="' + i + '"' + (wrapSt ? ' style="' + wrapSt + '"' : '') + '>'
       + tools + wrapX + '<div class="block-body">' + inner + '</div></div>';

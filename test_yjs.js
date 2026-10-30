@@ -217,8 +217,10 @@ T('取消并排：pickFullGroup 校验同组且全选（跨组/选不全不可�
   edt2.indexOf('function pickFullGroup(') > 0 && edt2.indexOf('组没选全') > 0
     && edt2.indexOf('function doUnarrange(') > 0 && edt2.indexOf("b.wAlign = 'right'") > 0
     && edt2.indexOf("data-tb=\"unarrange\"") > 0 && edt2.indexOf("case 'unarrange': doUnarrange();") > 0);
-T('取消并排渲染：wAlign=right 的窄块 margin-left:auto 贴页面右缘（app.js 渲染层支持，无 wAlign 行为不变）',
-  appSrc.indexOf("b.wAlign === 'right' ? 'margin-left:auto;' : ''") > 0);
+T('取消并排渲染：wAlign=right 的窄块 margin-left:auto 贴页面右缘（修复51 后 wAlign 作回落值，hAlign 优先）',
+  appSrc.indexOf("const al = b.hAlign || b.wAlign;") > 0
+    && appSrc.indexOf("al === 'right' ? 'margin-left:auto;'") > 0
+    && appSrc.indexOf("al === 'center' ? 'margin-left:auto;margin-right:auto;'") > 0);
 
 /* ---------- 9.5) 修复㉙：调宽挤开并排框 / 文本框占位 / 跳转空白弹性匹配 / Token 记住 ---------- */
 console.log('【9.5】修复㉙：并排调宽互挤 · 空文本框占位 · 跳转空白匹配 · Token 记住');
@@ -432,6 +434,14 @@ T('free 操作栏语义分组（.sep 分隔线）+ ⤓底对齐（freeBottomAlig
     && edt2.indexOf('下方没有其他模块，已贴到文档流底部') > 0
     && edt2.indexOf('⌂</button>') > 0
     && cssSrc.indexOf('.block-tools .sep{width:1px;align-self:stretch;margin:5px 1px;background:rgba(0,0,0,.14);border-radius:1px;flex:none}') > 0);
+/* ---------- 9.18) 修复51：所有文档流块统一水平对齐钮（全宽块点居中/贴右先变标准宽度 68%） ---------- */
+console.log('【9.18】修复51：对齐钮扩到全部非 free 块 · 全宽块自动 68% 标准宽 · hAlign 裁决 margin');
+T('非 free 块统一 ⇤⇆⇥（sep 分组）+ halign 处理器自动标准宽 + 渲染层 hAlign 优先（center 支持）',
+  edt2.indexOf("} else if (!isFree) {") > 0
+    && edt2.indexOf('居中：全宽块会先变到标准宽度 68% 再水平居中') > 0
+    && edt2.indexOf("if (v && v !== 'left' && !b2.free && b2.type !== 'image' && b2.width == null) b2.width = 68;") > 0
+    && appSrc.indexOf("const al = b.hAlign || b.wAlign;") > 0
+    && appSrc.indexOf("al === 'center' ? 'margin-left:auto;margin-right:auto;'") > 0);
 
 
 T('⌨️ 把手 pointerdown+pointerup 双确认（触屏隐式捕获下「按下后滑开」不再误触发开合）',

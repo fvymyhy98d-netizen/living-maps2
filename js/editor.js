@@ -304,10 +304,15 @@ window.LMEditor = (function () {
         + '<button type="button" data-act="ftop"' + pg + ' title="顶对齐：框的上缘与上一个内容块的下缘对齐（只位移，零缝隙）">⤒</button>'
         + '<button type="button" data-act="fbottom"' + pg + ' title="底对齐：框的下缘与下一个内容块的顶部对齐（只位移，零缝隙）">⤓</button>'
         + '<span class="sep" title=""></span>';
-    } else if (isImg || isTbl) {
-      alignBtns = '<button type="button" data-act="halign" data-val="left"' + pg + ' title="贴左">⇤</button>'
-        + '<button type="button" data-act="halign" data-val="center"' + pg + ' title="居中">⇆</button>'
-        + '<button type="button" data-act="halign" data-val="right"' + pg + ' title="贴右">⇥</button>';
+    } else if (!isFree) {
+      /* ★ 修复51：所有文档流块统一水平对齐钮（原来只有图片/表格有）——
+         文本/图表/文件等块默认全宽，点「居中/贴右」时自动先变到标准宽度 68%（与图片默认一致，
+         Word 式）再对齐，所见即所得；宽度可用四角拖角继续调。间距仍是文档流标准间距，不是自由摆放 */
+      alignBtns = '<span class="sep" title=""></span>'
+        + '<button type="button" data-act="halign" data-val="left"' + pg + ' title="贴左：内容块靠左（全宽块看不出变化，可先拖角调窄）">⇤</button>'
+        + '<button type="button" data-act="halign" data-val="center"' + pg + ' title="居中：全宽块会先变到标准宽度 68% 再水平居中（拖角可再调宽窄）">⇆</button>'
+        + '<button type="button" data-act="halign" data-val="right"' + pg + ' title="贴右：全宽块会先变到标准宽度 68% 再靠右（拖角可再调宽窄）">⇥</button>'
+        + '<span class="sep" title=""></span>';
     }
     return '<div class="block-tools">'
       + (isFree ? '' : '<button type="button" data-drag="' + i + '" title="按住拖动调整顺序：其他块自动让路，拖到屏幕上下边缘会自动滚页">⠿</button>')
@@ -375,8 +380,11 @@ window.LMEditor = (function () {
     if (act === 'halign') {
       const b2 = page.blocks[i]; if (!b2) return;
       const v = btn.getAttribute('data-val') || '';
+      /* ★ 修复51：全宽的文档流块点「居中/贴右」时先变到标准宽度 68%（与图片默认一致）再对齐——
+         否则全宽块对齐毫无视觉变化，用户以为按钮坏了；图片用自身 widthPct 体系不走此分支 */
+      if (v && v !== 'left' && !b2.free && b2.type !== 'image' && b2.width == null) b2.width = 68;
       if (v) b2.hAlign = v; else delete b2.hAlign;
-      LMApp.applyEdit(v === 'left' ? '已贴左（上下不变）' : (v === 'right' ? '已贴右（上下不变）' : '已居中'));
+      LMApp.applyEdit(v === 'left' ? '已贴左（上下不变）' : (v === 'right' ? '已贴右（块宽 68%，可拖角再调）' : '已居中（块宽 68%，可拖角再调）'));
       return;
     }
     if (act === 'herohide' || act === 'heroshow') {
