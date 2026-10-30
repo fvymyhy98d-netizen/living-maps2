@@ -674,6 +674,10 @@ window.LMApp = (function () {
                框被弹回 → margin 回收 → 块弹回 → 又压住 → 反复横跳（「课程与学习路径自己飞走」、
                「表格放不进想要的位置」的根源）。只消解 24px 内的浅压残留（让位引擎滞回内不管的部分） */
             if ((natTop + r.height) - fd.top > 24) continue;
+            /* ★ 修复㊷：框顶在块顶上方 = 用户把框从上方放置的姿态 —— 浅压放行，否则 ↑ 微调/拖放时
+               框永远穿不过 0~24px 的浅压墙、被一步弹回原位（「永远没法把速览放到核心概念底下」、
+               前置基础一行反复弹跳的根源）。轻微重叠（≤24px）是放置过渡态，再上移一点即深压让位 */
+            if (fd.top <= natTop) continue;
             const target = natTop + r.height + 6;
             const dy = Math.round(target - fd.top);
             if (dy > 4) {

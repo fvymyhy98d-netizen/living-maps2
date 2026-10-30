@@ -403,6 +403,13 @@ T('手机 editBar：tab 吸左 + 工具单行横向滚动；⌨️ 收起/展开
   cssSrc.indexOf('body.mobile-view .tb-tab{position:sticky;left:0;z-index:2;background:rgba(246,247,249,.96);flex:none}') > 0
     && cssSrc.indexOf('body.mobile-view .tb-grp{flex-wrap:nowrap;justify-content:flex-start;flex:0 0 auto;min-width:0}') > 0
     && cssSrc.indexOf('body.admin.mobile-view #editBar.open .eb-toggle{position:fixed;top:60px;right:8px;width:28px;height:28px;font-size:13px;margin-left:0}') > 0);
+/* ---------- 9.14) 修复㊷：浅压放行「从上方放置」姿态（框顶高于块顶时不推框） ---------- */
+console.log('【9.14】修复㊷：框从上方压块的浅压放行（骑压姿态仍推），↑ 微调可穿越浅压墙');
+T('fixFreeOverlapVisual 姿态判定：fd.top<=natTop（从上方放置）浅压放行，骑压浅压仍推框',
+  appSrc.indexOf('if (fd.top <= natTop) continue;') > 0
+    && appSrc.indexOf('★ 修复㊷：框顶在块顶上方 = 用户把框从上方放置的姿态') > 0
+    && appSrc.indexOf('if ((natTop + r.height) - fd.top > 24) continue;') > 0
+    && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0);
 
 
 
