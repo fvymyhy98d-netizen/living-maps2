@@ -464,7 +464,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '68';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '69';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -511,7 +511,7 @@ T('登录弹窗 pwEye 切换 type=password/text 并 focus 回输入框',
 /* ---------- 9.25) 修复60：自由框去白底（透明文本框）+ 管理态淡虚线 ---------- */
 console.log('【9.25】修复60：自由框背景透明 · 访客无框 · 管理态淡蓝虚线 · 白卡阴影移除');
 T('自由框 background:transparent + shadow:none + admin 淡蓝虚线 + 旧白底规则不再出现',
-  cssSrc.indexOf('.free-box{position:absolute;background:transparent;border:1px dashed transparent;border-radius:14px;') > 0
+  cssSrc.indexOf('.free-box{position:absolute;z-index:20;background:transparent;border:1px dashed transparent;border-radius:14px;') > 0
     && cssSrc.indexOf('body.admin .free-box{border-color:rgba(0,113,227,.14)}') > 0
     && cssSrc.indexOf('.free-box{position:absolute;background:rgba(255,255,255') < 0);
 
@@ -588,6 +588,15 @@ T('freeScan 去掉「清零 margin 再量」：改 computedStyle 让位量 + acc
     && appSrc.indexOf('f.natTop = r.top + sy - accM;') > 0
     && appSrc.indexOf('const cur = parseFloat(getComputedStyle(f.w).marginTop) || 0;') > 0
     && appSrc.indexOf('/* margin 已清零 → 此即自然基线 */') < 0);
+
+/* ---------- 9.34) 修复69：自由框不再被文档流块盖住（"文本框跑到后面去了"） ---------- */
+console.log('【9.34】修复69：自由框 z-index:20 常浮于文档流之上，拖动 60 / 选中 80 层次不变');
+T('free-box 基础层级 20 + free-drag 60 + selected/multi 80 三档仍在（流块仍是 auto → 恒在框下面）',
+  cssSrc.indexOf('.free-box{position:absolute;z-index:20;') > 0
+    && cssSrc.indexOf('.free-box.free-drag{transition:none !important;cursor:grabbing;z-index:60}') > 0
+    && cssSrc.indexOf('.blocks > .block-wrap:has(.multi-sel){z-index:80}') > 0
+    && cssSrc.indexOf('.blocks > .block-wrap:not(.free-box){position:relative}') > 0
+    && appSrc.indexOf("wrapCls += ' free-box';") > 0);
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

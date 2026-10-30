@@ -464,7 +464,13 @@ body.admin .col-grip:hover{background:rgba(0,113,227,.18);border-radius:3px}
    自由文本框（像 Word：拖 ⠿ 移动 / 拖边角缩放 / 字号随框宽自动缩放）
    ========================================================= */
 .blocks{position:relative}
-.free-box{position:absolute;background:transparent;border:1px dashed transparent;border-radius:14px;
+/* ★ 修复69（"文本框跑到后面去了"）：自由框原本没有 z-index，而文档流块是 position:relative（z-index:auto）
+   —— 二者同处一个层叠层级，只能按 DOM 顺序绘制：只要自由框排在某个流块（表格/图片/卡片）**前面**，
+   重叠时就被那个块盖住 → 看不见、点不到、像是"跑到表格后面去了"。
+   这里给自由框一个基础层级（20），让它始终浮在文档流之上（Word 文本框语义）；
+   拖动时 .free-drag(60)、选中时 .selected(80)、块排序克隆 .dragging(300) 仍然更高，层次不乱 */
+
+.free-box{position:absolute;z-index:20;background:transparent;border:1px dashed transparent;border-radius:14px;
   padding:12px 14px;box-shadow:none}
 /* ★ 修复60：自由框去白底——白卡（rgba(255,255,255,.85)+阴影）会盖住压在下面的文档流文字，
    用户明确要求"透明的文本框"。访客视角完全透明无边框（文字直接浮在页面上，与普通段落同观感）；

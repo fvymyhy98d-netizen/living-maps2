@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '68';
+var LM_ASSET_VER = '69';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -704,6 +704,12 @@ window.LMApp = (function () {
       frees.forEach(function (fd) {
         if (!fd.b.free) return;
         if (fd.top > flowBottom + 800) {
+          /* ★ 修复69：自愈是唯一会把「浮动文本框」变回「普通文档流块」的地方（表现：框突然消失、
+            内容跑到页面/块列表末尾）。误触发时这里留一条现场日志，便于定位（框顶/内容底/阈值） */
+          try {
+            console.warn('[布局自愈] 自由框判定漂出页面范围 → 已归还文档流',
+              { 框顶: Math.round(fd.top), 内容底: Math.round(flowBottom), 触发阈值: Math.round(flowBottom + 800), 摘要: String(fd.b.title || fd.b.text || '').slice(0, 20) });
+          } catch (eW) { /* noop */ }
           const g = fd.b.free.g;
           frees.forEach(function (fd2) {
             if (!fd2.b.free) return;
