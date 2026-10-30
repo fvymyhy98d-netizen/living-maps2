@@ -653,18 +653,36 @@ window.LMApp = (function () {
         setTimeout(function () { adjustFreeLayoutSafe(); }, 60); /* 归位后按新布局重算让位 */
         return; /* 本帧让位几何已失效 */
       }
-      flows.forEach(function (f) {
-        const r = f.w.getBoundingClientRect();
-        const cur = parseFloat(f.w.style.marginTop) || 0;
-        const natTop = r.top + sy - cur; /* 当前顶端 − 已有 margin = 自然基线 */
-        let need = 0;
-        frees.forEach(function (fd) {
+      /* ★ 修复㉟：框压流块的消解改为「推框」而非「抬块」——此前兜底抬 margin 与 freeDecide 的
+         24px 滞回重算互相打架：freeDecide 每轮清 margin 按滞回算出不足值 → 兜底再抬 → 下一轮
+         又被清 → margin 在两值间振荡（拖动/↑↓ 移动时图片图表文本框「同时乱飞」、块与框叠死的根源）。
+         现在：深压（>24px）仍由 freeDecide 抬块（🔒 锁定段一字未动）；浅压残留由这里把「框」整体
+         下移到块底之下 —— 只动框不动块，且写回数据 free.y 持久生效，下轮 freeDecide 按新框位
+         一次算准，不再振荡 */
+      let moved = false;
+      frees.forEach(function (fd) {
+        flows.forEach(function (f) {
+          const r = f.w.getBoundingClientRect();
+          const cur = parseFloat(f.w.style.marginTop) || 0;
+          const natTop = r.top + sy - cur;
           const ox = Math.min(fd.right, r.right) - Math.max(fd.left, r.left);
-          if (ox > 16 && fd.top < natTop + r.height && fd.bot > natTop) need = Math.max(need, fd.bot - natTop);
+          if (ox <= 16) return; /* 水平擦边不管（与让位引擎同标准） */
+          if (fd.top < natTop + r.height - 4 && fd.bot > natTop + 4) {
+            const target = natTop + r.height + 6;
+            const dy = Math.round(target - fd.top);
+            if (dy > 4) {
+              fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);
+              fd.w.style.top = fd.b.free.y + 'px';
+              fd.top += dy; fd.bot += dy;
+              moved = true;
+            }
+          }
         });
-        const want = Math.round(Math.max(0, need));
-        if (want > cur + 1) f.w.style.marginTop = want + 'px'; /* 只抬不降：杜绝回弹「飞上去」 */
       });
+      if (moved) {
+        try { LMStore.saveLocal(state.content); } catch (eS) { /* noop */ } /* 推框写数据要落盘，刷新不丢 */
+        adjustFreeLayout(); /* 框位已持久更新：让位引擎按新位置立即对齐（原版，不再产生兜底抬升） */
+      }
     } catch (e) { /* 显示层兜底，任何异常静默 */ }
   }
   /* 包装版：所有走 LMApp.adjustFreeLayout 的调用自动带上显示层复查（锁定段内部互调不受影响） */

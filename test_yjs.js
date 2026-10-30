@@ -304,10 +304,12 @@ T('手机双击进编辑：第一击 preventDefault 只选中块，400ms 内第�
 T('手机端自由框手柄不再常显（selected/free-drag/focus-within 才出现）',
   cssSrc.indexOf('body.admin.mobile-view .fb-grip,body.admin.mobile-view .fb-hd{display:none}') > 0
     && cssSrc.indexOf('body.admin.mobile-view .free-box.selected .fb-grip') > 0);
-T('并排重叠兜底：fixFreeOverlapVisual 只抬不降（锁定段外显示层复查，freeDecide/YIELD-V4 零改动）',
+T('并排重叠兜底：fixFreeOverlapVisual 推框写数据（框压块→框下移到块底，持久不振荡；锁定段零改动）',
   appSrc.indexOf('function fixFreeOverlapVisual()') > 0
     && appSrc.indexOf("if (!col || col._freeSession) return;") > 0
-    && appSrc.indexOf("if (want > cur + 1) f.w.style.marginTop = want + 'px';") > 0
+    && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0
+    && appSrc.indexOf('if (moved) {') > 0
+    && appSrc.indexOf('adjustFreeLayout(); /* 框位已持久更新：让位引擎按新位置立即对齐（原版，不再产生兜底抬升） */') > 0
     && appSrc.indexOf('adjustFreeLayout: adjustFreeLayoutSafe') > 0
     && appSrc.indexOf('function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
 T('手机端并排框入场只淡入不位移（滚动合成减负，访客同样受益；桌面观感不变）',
