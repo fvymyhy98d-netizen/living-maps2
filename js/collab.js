@@ -30,6 +30,8 @@ window.LMCollab = (function () {
   var myLock = null;
   var pending = null;
   var pointerDown = false;
+  var pointerAt = 0;   /* ★ 修复72：指针按下的时刻（0=未按下）；超过 20 秒视为松手事件丢失，自动复位 */
+  var lastKeyAt = 0;   /* ★ 修复72：最后一次按键的时刻 —— localBusy 只认「真的在打字」 */
   var transports = []; /* 可同时挂多层：bc / server / gh */
   var modeLabel = '本机互连';
 
@@ -110,17 +112,36 @@ window.LMCollab = (function () {
   }
   /* ---------- 消息收发 ---------- */
   function validContent(c) { return !!c && Array.isArray(c.pages); }
-  function bump(ts) { ts = +ts || 0; if (ts > lastTs) { lastTs = ts; try { localStorage.setItem(TS_KEY, String(ts)); } catch (e) { /* noop */ } } }
+  /* ★ 修复72：未来时间戳不许写进 lastTs —— 对端时钟快几分钟，它的包一应用就把本机
+     lastTs 顶到「未来」，此后按本机时间戳来的更新都 <= lastTs 被当过期包丢弃：
+     症状不是「慢半拍」，而是「这一段时间内彻底不进来」 */
+  function bump(ts) {
+    ts = +ts || 0;
+    if (ts > Date.now() + 60000) ts = Date.now();
+    if (ts > lastTs) { lastTs = ts; try { localStorage.setItem(TS_KEY, String(ts)); } catch (e) { /* noop */ } }
+  }
   function send(msg) {
     msg = msg || {}; msg.t = 'lm1'; msg.from = me.id; msg.name = me.name; msg.fp = me.fp; msg.ts = Date.now();
     transports.forEach(function (tr) { try { tr.send(msg); } catch (e) { /* noop */ } });
   }
+  /* ★ 修复72（「对方改完，我这边一直不动」）：什么才算「本机正忙、远端包先挂起」——
+     只认「真的在动手」：① 弹窗/裁剪层打开；② 指针按下（拖拽中，含 20 秒兜底）；
+     ③ 最近一次按键在 1.2 秒内。
+     旧逻辑把「光标停在某个可编辑框里」也算忙 —— 两台设备实测的现场正是这样：点开文本框
+     看到 ✍ 标记后人就不动了，对方改完的内容全部进 pending；而 pending 只靠 mouseup /
+     focusout 两个事件分流，人一停手就永远不分流 →「徽标能看到在编辑、内容迟迟不出现」。
+     拖拽还要防「在窗口外松手」：mouseup 收不到时 pointerDown 会一直为真，同样永久挂起，
+     所以按下时刻一并记下，超过 20 秒自动复位。 */
+  var BUSY_KEY_WIN = 1200;   /* 按键后 1.2 秒内算「输入中」 */
+  var BUSY_PTR_MAX = 20000;  /* 指针按下最多认 20 秒 */
   function localBusy() {
     if (!window.LMApp) return true;
     if (document.querySelector('.modal-mask,.crop-overlay')) return true;
-    if (pointerDown) return true;
-    const ae = document.activeElement;
-    if (ae && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) return true;
+    if (pointerDown) {
+      if (Date.now() - (pointerAt || 0) > BUSY_PTR_MAX) { pointerDown = false; pointerAt = 0; }
+      else return true;
+    }
+    if (lastKeyAt && Date.now() - lastKeyAt < BUSY_KEY_WIN) return true;
     return false;
   }
   /* ---------- 冲突保护②：块级后写优先 ----------
@@ -230,17 +251,34 @@ window.LMCollab = (function () {
     setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
     LMApp.toast('🔄 已同步「' + (by || '其他设备') + '」的修改');
   }
+  /* ★ 修复72：过期包诊断（内容不同步时先看这一行；5 秒最多一条，避免刷屏） */
+  var _warnStaleAt = 0;
+  function warnStale(ts) {
+    const now = Date.now();
+    if (now - _warnStaleAt < 5000) return;
+    _warnStaleAt = now;
+    try {
+      console.warn('[协同·过期包] 丢弃了一次远端更新 → lastTs=' + lastTs + '（本机 ' + now
+        + '，偏差 ' + Math.round((lastTs - now) / 1000) + 's）'
+        + (lastTs > now + 60000 ? ' ← 本机 lastTs 在未来：两台设备时钟差太多，请在控制台执行 LMCollab.diag() 对比' : ''));
+    } catch (eW) { /* noop */ }
+  }
   function applyRemote(msg) {
     const c = msg.content;
-    if (!validContent(c)) return;
-    if (+(msg.ts || 0) <= lastTs) return; /* 过期包忽略（后写优先） */
-    if (localBusy()) { pending = { content: c, ts: msg.ts, by: msg.name }; return; }
-    if (verifyBanList(c)) doApply(c, msg.ts, msg.name); /* 管理员设备会核对屏蔽名单签名，坏条目剔除后再用 */
+    if (!validContent(c)) return false;
+    /* ★ 修复72：force = Yjs 网状通道专用。Y.Doc 本身就只给出「更新的整包」（因果有序），
+       不该再拿墙上时钟挡一道 —— 任一端时钟快一点，更新就被静默丢掉，
+       表现正是「徽标上看得到有人在编辑，内容却怎么都不同步」 */
+    if (!msg.force && +(msg.ts || 0) <= lastTs) { warnStale(msg.ts); return false; } /* 过期包忽略（后写优先） */
+    if (localBusy()) { pending = { content: c, ts: msg.ts, by: msg.name }; return false; }
+    if (verifyBanList(c)) { doApply(c, msg.ts, msg.name); return true; } /* 管理员设备会核对屏蔽名单签名，坏条目剔除后再用 */
+    return false;
   }
   function flushPending() {
-    if (!pending || localBusy()) return;
+    if (!pending || localBusy()) return false;
     const p = pending; pending = null;
-    if (verifyBanList(p.content)) doApply(p.content, p.ts, p.by);
+    if (verifyBanList(p.content)) { doApply(p.content, p.ts, p.by); return true; }
+    return false;
   }
   function recv(msg) {
     if (!msg || msg.t !== 'lm1' || !window.LMApp) return;
@@ -937,8 +975,22 @@ window.LMCollab = (function () {
       document.addEventListener(ev, function () { window._lmLastAct = Date.now(); }, { passive: true });
     });
     window.addEventListener('hashchange', function () { setTimeout(notifyPagePeers, 900); }); /* 切页后等渲染稳定再提醒 */
-    document.addEventListener('mousedown', function () { pointerDown = true; }, true);
-    document.addEventListener('mouseup', function () { pointerDown = false; flushPending(); }, true);
+    document.addEventListener('mousedown', function () { pointerDown = true; pointerAt = Date.now(); }, true);
+    document.addEventListener('mouseup', function () { pointerDown = false; pointerAt = 0; flushPending(); }, true);
+    /* ★ 修复72：指针事件丢失兜底（拖拽时在窗口外松手 / 触屏 pointercancel / 切后台再回来）——
+       旧逻辑一旦收不到 mouseup，pointerDown 恒为真，远端包就永远挂起（只有刷新才恢复） */
+    document.addEventListener('pointercancel', function () { pointerDown = false; pointerAt = 0; }, true);
+    window.addEventListener('blur', function () { pointerDown = false; pointerAt = 0; flushPending(); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) return;
+      pointerDown = false; pointerAt = 0; flushPending();
+    });
+    /* ★ 修复72：挂起包定时分流 —— 不再只等 mouseup / focusout：用户只是「停手不动」时，
+       对方的内容也能在 1 秒内自己出现，不必再点一下页面 */
+    setInterval(function () { if (pending) flushPending(); }, 800);
+    /* ★ 修复72：记录「真的在打字」的时刻（localBusy 只认这个，不再认「光标停在哪」） */
+    document.addEventListener('keydown', function () { lastKeyAt = Date.now(); }, true);
+    document.addEventListener('input', function () { lastKeyAt = Date.now(); }, true);
     document.addEventListener('focusin', function (e) {
       if (!window.LMApp || !LMApp.state.admin) return;
       const t = e.target;
@@ -994,7 +1046,26 @@ window.LMCollab = (function () {
     refreshGh: ghInit, /* 普通管理员登录取回 Token 后重探云端通道（ghInit 已重入化，不会重复接线） */
     renderPanel: renderPanel,
     applyExternal: function (c, by) { /* Yjs 网状协同与旧通道共用同一个「远端应用」漏斗 */
-      try { applyRemote({ content: c, ts: Date.now(), name: by || '其他设备' }); } catch (eA) { /* noop */ }
+      /* ★ 修复72：force 绕过墙上时钟门（Y.Doc 只会给更新的整包）；返回值告诉调用方「真的应用了吗」
+         —— 包被挂起（本机正在输入）时状态还没更新，调用方不能再把旧内容回写 Y.Doc */
+      try { return applyRemote({ content: c, ts: Date.now(), name: by || '其他设备', force: true }) === true; } catch (eA) { return false; }
+    },
+    diag: function () { /* ★ 修复72：协同自检（两台设备各在控制台执行 LMCollab.diag() 对比） */
+      const o = {
+        本机时间: new Date().toLocaleString(),
+        lastTs偏差秒: Math.round((lastTs - Date.now()) / 1000),
+        正在输入: localBusy(),
+        距上次按键毫秒: lastKeyAt ? Date.now() - lastKeyAt : -1,
+        指针按住: pointerDown,
+        挂起的包: pending ? (pending.by || '未知') : '',
+        正在编辑块: myEditing,
+        Yjs就绪: !!(window.LMYCollab && window.LMYCollab.yjs),
+        Yjs同伴: (window.LMYCollab && window.LMYCollab.peerCount) ? window.LMYCollab.peerCount() : 0,
+        在线设备: liveCount(),
+        通道: modeLabel
+      };
+      try { console.log('【协同自检】', o); } catch (eD) { /* noop */ }
+      return o;
     }
   };
 })();

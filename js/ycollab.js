@@ -141,10 +141,13 @@
         }
       });
       applying = true;
-      LMCollab.applyExternal(c, by);
+      var okApply = LMCollab.applyExternal(c, by);
       applying = false;
-      /* 合并结果（块级后写优先后）回写 Y.Doc —— 全网收敛到同一份；diff 后通常零写入 */
-      pushLocal(LMApp.state.content);
+      /* 合并结果（块级后写优先后）回写 Y.Doc —— 全网收敛到同一份；diff 后通常零写入。
+         ★ 修复72：只有「真的应用了」才回写 —— 包被挂起（本机正在输入）时
+         LMApp.state.content 还是旧的，此时回写等于把旧内容塞回 Y.Doc 广播全网，
+         会把对方刚改好的内容冲掉（两边来回打架） */
+      if (okApply !== false) pushLocal(LMApp.state.content);
     } catch (e) { applying = false; }
   }
   function allKeys() { var out = []; try { ymap.keys().forEach(function (k) { out.push(k); }); } catch (e) { /* noop */ } return out; }

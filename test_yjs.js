@@ -464,7 +464,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '71';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '72';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -667,6 +667,51 @@ T('collab.js：deviceList/liveCount 抽出 + 徽章改用它 + 旧 max(1+peers, 
   } catch (e) { ok = false; }
   T('两台在线（本机 + presence 里的 189c/hbyc）= 2 台；同时进花名册的在线设备不会被降级成"最近活跃"', ok);
 })();
+
+/* ---------- 9.37) 修复72：编辑停手后对方不同步（把「光标停在框里」当成了「正在输入」） ---------- */
+console.log('【9.37】修复72：停手即同步 —— localBusy 只认「真在打字」· 挂起包定时分流 · Yjs 通道免墙上时钟门');
+T('collab.js：localBusy 改判「按键 1.2s 内才算输入中」+ 指针 20s 兜底 + 定时 flushPending + 指针丢失复位',
+  col.indexOf('var BUSY_KEY_WIN = 1200;') > 0
+    && col.indexOf('var BUSY_PTR_MAX = 20000;') > 0
+    && col.indexOf('if (lastKeyAt && Date.now() - lastKeyAt < BUSY_KEY_WIN) return true;') > 0
+    && col.indexOf('if (Date.now() - (pointerAt || 0) > BUSY_PTR_MAX) { pointerDown = false; pointerAt = 0; }') > 0
+    && col.indexOf('setInterval(function () { if (pending) flushPending(); }, 800);') > 0
+    && col.indexOf("document.addEventListener('pointercancel'") > 0
+    && col.indexOf('if (ae && (ae.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName))) return true;') < 0);
+/* 真实执行 localBusy：光标停在可编辑框里但 5 秒没按键 = 不忙（旧逻辑恒为忙 → 远端包永远挂起） */
+(function () {
+  const a0 = col.indexOf('function localBusy() {');
+  const z0 = col.indexOf('\n  }', a0); /* 注意：源码是 CRLF，只能匹配到 '\n  }'（不带行尾换行） */
+  const code = (a0 >= 0 && z0 > a0) ? col.slice(a0, z0 + 4) : '';
+  const mk = function (down, at, key) {
+    try {
+      return new Function('document', 'window', 'pointerDown', 'pointerAt', 'lastKeyAt',
+        'var BUSY_KEY_WIN = 1200, BUSY_PTR_MAX = 20000;' + code + '\nreturn localBusy;')(
+        { querySelector: function () { return null; }, activeElement: { isContentEditable: true, tagName: 'P' } },
+        { LMApp: {} }, down, at, key);
+    } catch (e) { return null; }
+  };
+  const now = Date.now();
+  const idleFocus = mk(false, 0, now - 5000);
+  const typing = mk(false, 0, now);
+  const stuckPtr = mk(true, now - 25000, now - 5000);
+  T('光标停在文本框里、5 秒没按键 = 不忙（远端内容立即应用，不再等用户点一下页面）', !!idleFocus && idleFocus() === false);
+  T('真的在打字（1.2 秒内有按键）= 忙（远端包照旧挂起，不打断本机输入）', !!typing && typing() === true);
+  T('指针按住超过 20 秒（mouseup 丢失）= 自动复位，不再永久挂起', !!stuckPtr && stuckPtr() === false);
+})();
+T('Yjs 通道 force 绕过墙上时钟门 · 过期包留诊断 · 未来时间戳不进 lastTs · 未真正应用时不回写 Y.Doc',
+  col.indexOf('force: true') > 0
+    && col.indexOf('if (!msg.force && +(msg.ts || 0) <= lastTs) { warnStale(msg.ts); return false; }') > 0
+    && col.indexOf('function warnStale(ts) {') > 0
+    && col.indexOf('if (ts > Date.now() + 60000) ts = Date.now();') > 0
+    && col.indexOf('diag: function () {') > 0
+    && src.indexOf('var okApply = LMCollab.applyExternal(c, by);') > 0
+    && src.indexOf('if (okApply !== false) pushLocal(LMApp.state.content);') > 0);
+T('打字停手 1.2s 的保存不再要求「此刻仍聚焦」，切后台/切标签/关页面前立刻补一次保存广播',
+  edt.indexOf('if (liveEdit.el && liveEdit.el.isConnected) saveEdited(liveEdit.el);') > 0
+    && edt.indexOf('function flushLiveEdit() {') > 0
+    && edt.indexOf("window.addEventListener('pagehide', flushLiveEdit);") > 0
+    && edt.indexOf("document.addEventListener('visibilitychange', function () { if (document.hidden) flushLiveEdit(); });") > 0);
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

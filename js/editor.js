@@ -1322,9 +1322,20 @@ window.LMEditor = (function () {
     if (liveEdit.t1) clearTimeout(liveEdit.t1);
     liveEdit.t1 = setTimeout(function () {
       liveEdit.t1 = 0;
-      if (liveEdit.el && document.activeElement === liveEdit.el) saveEdited(liveEdit.el); /* 停手 1.2s 保存 */
+      /* ★ 修复72：不再要求「此刻仍聚焦在这个框上」—— 点了框边 / 拖了把手 / 焦点被工具条拿走时
+         document.activeElement 已不是它，旧逻辑就此放弃这次同步（对方一直收不到） */
+      if (liveEdit.el && liveEdit.el.isConnected) saveEdited(liveEdit.el); /* 停手 1.2s 保存 */
     }, 1200);
   });
+  /* ★ 修复72：切走标签页 / 切后台 / 关页面前，把「刚打完、还没等到停手 1.2 秒」的内容立刻保存并广播 */
+  function flushLiveEdit() {
+    if (liveEdit.el && liveEdit.el.isConnected) saveEdited(liveEdit.el);
+    liveStopEdit();
+  }
+  window.addEventListener('blur', flushLiveEdit);
+  window.addEventListener('pagehide', flushLiveEdit);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) flushLiveEdit(); });
+
   /* Markdown 源码框失焦 → 自动保存源码 */
   document.addEventListener('focusout', function (e) {
     if (!window.LMApp || !LMApp.state.admin) return;
