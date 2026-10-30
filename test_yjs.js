@@ -397,8 +397,8 @@ T('键入态显示「✕ 退出键入」红钮（body.typing），pointerdown �
     && edt2.indexOf("document.body.classList.add('typing')") > 0
     && edt2.indexOf("document.body.classList.remove('typing')") > 0
     && edt2.indexOf('ae.blur()') > 0
-    && cssSrc.indexOf('body.typing .edit-exit{display:block}') > 0
-    && cssSrc.indexOf('body.typing #adminBar{bottom:88px}') > 0);
+    && cssSrc.indexOf('body.mobile-view.typing .edit-exit{display:block}') > 0
+    && cssSrc.indexOf('body.mobile-view.typing #adminBar{bottom:88px}') > 0);
 T('手机 editBar：tab 吸左 + 工具单行横向滚动；⌨️ 收起/展开都钉在右上角且更小',
   cssSrc.indexOf('body.mobile-view .tb-tab{position:sticky;left:0;z-index:2;background:rgba(246,247,249,.96);flex:none}') > 0
     && cssSrc.indexOf('body.mobile-view .tb-grp{flex-wrap:nowrap;justify-content:flex-start;flex:0 0 auto;min-width:0}') > 0
@@ -410,6 +410,22 @@ T('fixFreeOverlapVisual 姿态判定：fd.top<=natTop（从上方放置）浅压
     && appSrc.indexOf('★ 修复㊷：框顶在块顶上方 = 用户把框从上方放置的姿态') > 0
     && appSrc.indexOf('if ((natTop + r.height) - fd.top > 24) continue;') > 0
     && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0);
+/* ---------- 9.15) 修复㊸：彻查回归批次（跨页残留选中 / ⌨️ 滑出误触 / typing 桌面泄漏） ---------- */
+console.log('【9.15】修复㊸：切页作废残留选中 · ⌨️ 按下确认 · typing 限定手机端');
+T('renderToolbar 切页检测：页变化即作废 tb.active/imgSel/pressBi/hero 残留（不再挂到新页同位块）',
+  edt2.indexOf('if (renderToolbar._pg !== (pgNow ? pgNow.id : null)) {') > 0
+    && edt2.indexOf('tb.hero = null; tb.heroField = null; tb.heroTextField = null;') > 0);
+T('⌨️ 把手 pointerdown+pointerup 双确认（触屏隐式捕获下「按下后滑开」不再误触发开合）',
+  edt2.indexOf("ebToggleDown = !!(e.target && e.target.closest && e.target.closest('#editBar .eb-toggle'));") > 0
+    && edt2.indexOf('if (tg && ebToggleDown)') > 0
+    && edt2.indexOf("tg.closest('#editBar').classList.toggle('open')") > 0);
+T('键入态红钮与管理条抬升只作用于手机端（桌面键入无红钮、管理条不跳位）',
+  cssSrc.indexOf('body.mobile-view.typing .edit-exit{display:block}') > 0
+    && cssSrc.indexOf('body.mobile-view.typing #adminBar{bottom:88px}') > 0
+    && cssSrc.indexOf('body.typing .edit-exit{display:block}') < 0
+    && cssSrc.indexOf('body.typing #adminBar{bottom:88px}') < 0);
+
+
 
 
 

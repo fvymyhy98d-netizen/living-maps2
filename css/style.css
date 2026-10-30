@@ -866,13 +866,15 @@ body.mobile-view .blk-typebar button{padding:5px 9px;font-size:12px}
 body.mobile-view #collabChip{left:8px;bottom:8px;font-size:11px;padding:4px 9px;max-width:42vw;background:rgba(29,29,31,.72)}
 body.mobile-view #adminBar{bottom:44px}
 body.mobile-view #collabPanel{bottom:44px}
-/* ★ 修复㊶：手机键入时的「✕ 退出键入」红钮（body.typing 时显示）—— 悬在「协作中」胶囊上方；
-   键入时管理工具条临时再抬高，三层互不叠：胶囊 → 红钮 → 工具条。点红钮 = 当前编辑元素失焦收键盘 */
+/* ★ 修复㊶：手机键入时的「✕ 退出键入」红钮（键入时显示）—— 悬在「协作中」胶囊上方；
+   键入时管理工具条临时再抬高，三层互不叠：胶囊 → 红钮 → 工具条。点红钮 = 当前编辑元素失焦收键盘。
+   ★ 修复㊸（彻查回归）：两者都限定手机端 —— 旧规则不带 .mobile-view，桌面键入时也会冒出红钮、
+   底部管理条无故跳位 */
 .edit-exit{display:none;position:fixed;left:8px;bottom:46px;z-index:282;background:#d70015;color:#fff;
   border:none;border-radius:980px;padding:8px 15px;font-size:12.5px;font-weight:600;letter-spacing:.5px;
   box-shadow:0 4px 14px rgba(215,0,21,.4);cursor:pointer;-webkit-tap-highlight-color:transparent}
-body.typing .edit-exit{display:block}
-body.typing #adminBar{bottom:88px}
+body.mobile-view.typing .edit-exit{display:block}
+body.mobile-view.typing #adminBar{bottom:88px}
 /* ⚙ 设置面板里的设备列表与屏蔽管理 */
 .gp-devlist,.gp-dev{display:block}
 .gp-dev{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px dashed rgba(0,0,0,.08);flex-wrap:wrap}

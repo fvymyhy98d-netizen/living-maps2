@@ -701,10 +701,17 @@ window.LMEditor = (function () {
     else if (k === 'password') passwordModal();
   });
   /* ★ 修复㉝：手机端格式工具条把手（⌨️）点击开合 —— 事件委托挂在 document，renderToolbar 重建 DOM 也不丢。
-     ★ 修复㉟：改用 pointerup —— 触屏上 click 合成事件偶发丢失（尤其快速轻点），pointerup 全平台必达且只触发一次 */
+     ★ 修复㉟：改用 pointerup —— 触屏上 click 合成事件偶发丢失（尤其快速轻点），pointerup 全平台必达且只触发一次。
+     ★ 修复㊸（彻查回归）：触屏指针有隐式捕获 —— 按下后滑出再松手，pointerup 仍派发到按下元素，
+     旧写法会把「滑开取消」误判成点击；现在 pointerdown 也必须落在把手上才算一次有效开合 */
+  var ebToggleDown = false;
+  document.addEventListener('pointerdown', function (e) {
+    ebToggleDown = !!(e.target && e.target.closest && e.target.closest('#editBar .eb-toggle'));
+  }, true);
   document.addEventListener('pointerup', function (e) {
     const tg = e.target.closest ? e.target.closest('#editBar .eb-toggle') : null;
-    if (tg) { tg.closest('#editBar').classList.toggle('open'); }
+    if (tg && ebToggleDown) { tg.closest('#editBar').classList.toggle('open'); }
+    ebToggleDown = false;
   });
   /* ★ 修复㊶：手机键入时的「✕ 退出键入」红钮 —— 键盘弹出后想收键盘，点空白处极易误触其他块；
      红钮常驻「协作中」胶囊上方（body.typing 时显示），点一下当前编辑元素直接失焦、键盘收起。
@@ -1296,6 +1303,17 @@ window.LMEditor = (function () {
   const GRADS = [['', ''], ['1', ''], ['2', ''], ['3', ''], ['4', ''], ['5', ''], ['6', '']];
 
   function renderToolbar() {
+    /* ★ 修复㊸（彻查回归）：切页后作废跨页残留的选中态 —— tb.active/imgSel 是「页内索引」，
+       activeBlock 按「当前页 + 索引」取块，切页不清会把选中框/操作栏挂到新页同位置的块上 */
+    const pgNow = pageOf();
+    if (renderToolbar._pg !== (pgNow ? pgNow.id : null)) {
+      renderToolbar._pg = pgNow ? pgNow.id : null;
+      if (tb.active != null || tb.imgSel != null || tb.pressBi != null || tb.hero != null) {
+        tb.active = null; tb.imgSel = null; tb.pressBi = null;
+        tb.hero = null; tb.heroField = null; tb.heroTextField = null;
+        removeHandles();
+      }
+    }
     let bar = document.getElementById('editBar');
     if (!window.LMApp || !LMApp.state.admin) {
       if (bar) bar.remove();
