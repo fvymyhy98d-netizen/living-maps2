@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793375541079,
+      "syncTs": 1793376062282,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -372,18 +372,6 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "- 先问问题再选工具；区分**事实**与**推断**；\n- 从任务困难反查知识缺口，连接到领域地图的课程路径；\n- 做小规模尝试并保留输入输出；每周检查一次地图并留下记录。"
-        },
-        {
-          "type": "paragraph",
-          "size": "normal",
-          "text": "",
-          "style": {},
-          "free": {
-            "x": 14.8,
-            "y": 273,
-            "w": 44,
-            "ride": 0
-          }
         }
       ],
       "heroAlign": ""
@@ -422,7 +410,8 @@ window.SITE_CONTENT = {
               "",
               ""
             ]
-          ]
+          ],
+          "_ts": 1793376062281
         },
         {
           "type": "callout",
