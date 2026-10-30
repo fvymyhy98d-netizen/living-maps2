@@ -187,6 +187,8 @@ textarea.input{resize:vertical;line-height:1.55}
 button.page-row.new-page{width:100%;justify-content:center;color:var(--muted);font-size:13.5px;cursor:pointer;padding:14px;margin-top:2px;transition:border-color .2s ease,color .2s ease}
 button.page-row.new-page:hover{border-color:var(--blue);color:var(--blue);background:rgba(0,113,227,.05)}
 .page-row.page-new{background:rgba(0,113,227,.04);border:1px solid rgba(0,113,227,.25)}
+/* ★ 修复75：页面管理里的「↳ 嵌套」标记（第 3 层条目） */
+.page-nest{font-size:11px;font-weight:600;color:var(--blue);background:rgba(0,113,227,.12);border-radius:980px;padding:3px 8px;white-space:nowrap;flex:none}
 
 /* ---------- 轻提示 Toast ---------- */
 .toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(8px);background:rgba(29,29,31,.92);color:#fff;padding:10px 20px;border-radius:14px;font-size:13px;z-index:300;opacity:0;transition:opacity .3s ease,transform .3s ease;pointer-events:none;max-width:min(86vw,420px);text-align:center}
@@ -957,5 +959,70 @@ td.jump-flash,th.jump-flash{animation:jumpGlow 1.7s ease}
 .cp-edit{margin-left:6px;font-size:11px;color:#34c759}
 .block-wrap.lm-peer-edit{box-shadow:0 0 0 2px var(--peer-c,#0a84ff),0 0 14px -4px var(--peer-c,#0a84ff)}
 .lm-peer-tag{position:absolute;top:-22px;left:8px;z-index:81;background:var(--peer-c,#0a84ff);color:#fff;font-size:12px;line-height:1;padding:5px 9px;border-radius:8px;pointer-events:none;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+
+/* =========================================================
+   ★ 修复75：第 3 层「嵌套条目」（子页面 + 条目块 + 条目树）
+   ========================================================= */
+/* 面包屑：子页面顶部显示「首页 › 认知地图 › 神经网络」 */
+.crumb{max-width:780px;margin:18px auto -4px;padding:0 22px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;color:var(--text2)}
+.crumb a{color:var(--blue);padding:3px 9px;border-radius:9px;background:rgba(0,113,227,.08);transition:background .2s ease}
+.crumb a:hover{background:rgba(0,113,227,.16)}
+.crumb-sep{color:var(--line)}
+.crumb-cur{color:var(--text);font-weight:600;padding:3px 9px;border-radius:9px;background:rgba(0,0,0,.05)}
+.crumb-kids{margin-left:auto;font-size:12px;color:var(--text2)}
+
+/* 条目块：卡片网格 / 单列列表（与首页 map-card 同一套视觉语言） */
+.entry-grid{display:grid;gap:14px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.entry-list{display:flex;flex-direction:column;gap:8px}
+.entry-note{margin:-6px 0 12px;font-size:14px;color:var(--text2)}
+.entry-card{display:flex;flex-direction:column;gap:6px;padding:18px 20px;border-radius:var(--radius);border:1px solid var(--line);background:var(--bg2);color:var(--text);transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease,border-color .2s ease}
+.entry-card:hover{transform:translateY(-4px);box-shadow:0 16px 34px rgba(0,0,0,.10);border-color:transparent}
+.entry-card:active{transform:translateY(-1px) scale(.99)}
+.entry-ico{font-size:20px;line-height:1.1}
+.entry-t{font-size:17px;font-weight:700;letter-spacing:-.01em}
+.entry-d{font-size:13px;color:var(--text2);line-height:1.55}
+.entry-go{margin-top:8px;font-size:13px;font-weight:600;color:var(--blue)}
+.entry-row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:14px;border:1px solid var(--line);background:var(--bg2);color:var(--text);transition:box-shadow .2s ease,transform .2s ease}
+.entry-row:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.09)}
+.entry-row .entry-t{font-size:15px}
+.entry-row .entry-d{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.entry-row .entry-go{margin-top:0;margin-left:auto}
+.entry-add{align-items:center;justify-content:center;border-style:dashed;background:transparent;color:var(--text2);font-size:14px;min-height:96px;font-weight:600}
+.entry-add:hover{color:var(--blue);border-color:var(--blue);background:rgba(0,113,227,.05);transform:none;box-shadow:none}
+.entry-empty{padding:16px 18px;border:1px dashed var(--line);border-radius:14px;color:var(--text2);font-size:14px;grid-column:1/-1}
+body.mobile-view .entry-grid{grid-template-columns:1fr !important}
+body.mobile-view .crumb{padding:0 16px;font-size:12px}
+body.mobile-view .entry-row .entry-d{display:none}
+
+/* 条目树（🛠️ → 🗂 条目树）：缩进文件夹树，每行右侧固定操作位 */
+.tree-root{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:12px;background:rgba(0,113,227,.08);font-size:15px;margin-bottom:8px}
+.tree-wrap{max-height:50vh;overflow:auto;-webkit-overflow-scrolling:touch;padding:2px 0 4px}
+.tree-row{display:flex;align-items:center;gap:6px;padding:5px 6px;border-radius:10px;transition:background .15s ease}
+.tree-row:hover{background:rgba(0,0,0,.045)}
+.tree-row[data-d="1"]{padding-left:26px}
+.tree-row[data-d="2"]{padding-left:46px}
+.tree-row[data-d="3"]{padding-left:66px}
+.tree-row[data-d="4"],.tree-row[data-d="5"],.tree-row[data-d="6"]{padding-left:86px}
+.tree-row[data-d="1"] .tree-name::before,
+.tree-row[data-d="2"] .tree-name::before,
+.tree-row[data-d="3"] .tree-name::before,
+.tree-row[data-d="4"] .tree-name::before,
+.tree-row[data-d="5"] .tree-name::before,
+.tree-row[data-d="6"] .tree-name::before{content:'↳';color:var(--line);margin-right:2px;font-size:12px}
+.tree-name{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:9px;max-width:44%;min-width:0;color:var(--text);font-size:14px;transition:background .15s ease,color .15s ease}
+.tree-name:hover{background:rgba(0,113,227,.12);color:var(--blue)}
+.tree-ico{font-size:15px;line-height:1;flex:none}
+.tree-t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tree-badge{font-size:11px;color:var(--text2);background:rgba(0,0,0,.05);border-radius:980px;padding:2px 8px;white-space:nowrap;flex:none}
+.tree-badge.kids{background:rgba(0,113,227,.12);color:var(--blue);font-weight:600}
+.tree-warn{font-size:11px;color:#b25000;background:rgba(255,149,0,.16);border-radius:980px;padding:2px 8px;white-space:nowrap;flex:none}
+.tree-acts{margin-left:auto;display:flex;gap:2px;flex:none}
+.tree-acts button{width:28px;height:28px;border-radius:9px;background:rgba(0,0,0,.05);font-size:13px;line-height:1;color:var(--text);display:flex;align-items:center;justify-content:center;transition:background .15s ease,color .15s ease}
+.tree-acts button:hover{background:rgba(0,113,227,.16);color:var(--blue)}
+.tree-acts button.danger:hover{background:rgba(215,0,21,.14);color:#d70015}
+body.mobile-view .tree-name{max-width:32%}
+body.mobile-view .tree-acts button{width:26px;height:26px}
+body.mobile-view .tree-wrap{max-height:46vh}
+
 
 

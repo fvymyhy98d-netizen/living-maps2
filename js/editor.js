@@ -134,6 +134,7 @@ window.LMEditor = (function () {
     files: { name: '附件列表', icon: '📎' },
     md: { name: 'Markdown', icon: '📝' },
     sources: { name: '来源引用', icon: '🔗' },
+    entries: { name: '嵌套条目', icon: '▤' },
     hr: { name: '分隔线', icon: '─' }
   };
 
@@ -148,6 +149,7 @@ window.LMEditor = (function () {
       case 'files': return { type: type, title: '学习资料与附件', items: [] };
       case 'sources': return { type: type, title: '本页来源', items: [] };
       case 'md': return { type: type, text: '## 这里是小标题\n\n正文支持 **加粗**、*斜体*、__下划线__、~~删除线~~、==高亮==\n\n- 列表一\n- 列表二\n\n| 列A | 列B |\n|---|---|\n| 内容1 | 内容2 |' };
+      case 'entries': return { type: type, title: '相关条目', mode: 'card', cols: 3, note: '' };
       case 'hr': return { type: type };
     }
     return { type: type };
@@ -193,6 +195,12 @@ window.LMEditor = (function () {
       case 'md': return ''
         + field('Markdown 源码', F.area('text', b.text, '# 标题、- 列表、| 表格 |、**加粗**、[链接](网址)', 12),
           '页面上也可以直接在块里编辑：输入时实时预览，点「✓ 转换保存」生效。');
+      case 'entries': return ''
+        + field('栏目标题（可留空）', F.text('title', b.title, '例如：相关条目、下级关键词'))
+        + field('版式', F.select('mode', [['card', '卡片网格'], ['list', '单列列表']], b.mode || 'card'))
+        + field('每行几个（卡片版式）', F.select('cols', [[2, '2 个'], [3, '3 个'], [4, '4 个']], b.cols || 3))
+        + field('说明文字（可留空）', F.text('note', b.note, '显示在标题下面的一行小字'))
+        + '<p class="modal-note">卡片内容不在这里填：它们就是<b>本页的子条目</b>。去「🛠️ → 🗂 条目树」给本页加分支，这里会自动出现卡片；点卡片进去就是原来的编辑器，表格 / 文本框 / 拖动排序全都在。</p>';
       case 'hr': return '<p class="modal-note">分隔线：一条水平分割，用于分区（无其他设置）。</p>';
     }
     return '';
@@ -235,6 +243,12 @@ window.LMEditor = (function () {
         b.items = pairs(form.querySelector('[name=items]').value).map(function (p) { return { label: p[0] || '来源', url: p[1] || '#' }; });
         break;
       case 'md': b.text = val('text'); break;
+      case 'entries':
+        b.title = val('title');
+        b.mode = val('mode') === 'list' ? 'list' : 'card';
+        b.cols = Math.min(Math.max(+val('cols') || 3, 1), 4);
+        b.note = val('note');
+        break;
       case 'hr': break;
     }
     return b;
@@ -346,6 +360,9 @@ window.LMEditor = (function () {
       LMApp.applyEdit('已添加卡片：点击卡片上的文字即可编辑');
       return;
     }
+    /* ★ 修复75：条目块里的「＋ 新建条目」磁贴 —— 等于在条目树里给本页加一个分支 */
+    const entryAdd = e.target.closest ? e.target.closest('[data-entryadd]') : null;
+    if (entryAdd) { openPageForm(null, entryAdd.getAttribute('data-entryadd')); return; }
     /* 块类型切换条（选中标题/正文块时显示在块下方） */
     const tt = e.target.closest ? e.target.closest('.blk-typebar [data-tt]') : null;
     if (tt) {
@@ -770,6 +787,7 @@ window.LMEditor = (function () {
       + '<button class="btn btn-primary" data-panel="sync" type="button">☁️ 同步到 GitHub</button>'
       + '<button class="btn btn-mini" data-panel="site" type="button">🏠 网站信息</button>'
       + '<button class="btn btn-mini" data-panel="pages" type="button">📄 页面管理</button>'
+      + '<button class="btn btn-mini" data-panel="tree" type="button">🗂 条目树</button>'
       + '<button class="btn btn-mini" data-panel="fixlayout" type="button">🩺 整理布局</button>'
       + '<button class="btn btn-mini" data-panel="hist" type="button">🕘 历史版本</button>'
       + '<button class="btn btn-mini" data-panel="backup" type="button">💾 备份 / 恢复</button>'
@@ -791,6 +809,7 @@ window.LMEditor = (function () {
     else if (k === 'site') siteModal();
     else if (k === 'hist') histModal();
     else if (k === 'pages') pagesModal();
+    else if (k === 'tree') treeModal(); /* ★ 修复75：第 3 层嵌套条目的树状控制台 */
     else if (k === 'fixlayout') LMApp.fixLayout();
     else if (k === 'backup') backupModal();
     else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到最近一次「同步到 GitHub」上传的版本（从未同步过则回到进入管理模式时的版本）？此后的一切改动会被撤销（包括协同期间其他设备同步来的修改），恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
@@ -1024,6 +1043,8 @@ window.LMEditor = (function () {
     const rows = c.pages.filter(function (p) { return p.id !== 'home'; }).map(function (p) {
       const i = c.pages.indexOf(p);
       return '<div class="page-row" data-i="' + i + '">'
+        /* ★ 修复75：嵌套条目在页面管理里也列出来（方便批量改字），但要标明它是第 3 层、层级与增删归条目树管 */
+        + (p.parent ? '<span class="page-nest" title="嵌套条目：层级与增删在「🗂 条目树」里改">↳ 嵌套</span>' : '')
         + '<input class="input" type="text" data-k="icon" value="' + LMApp.esc(p.icon || '') + '" placeholder="图标" style="max-width:64px;flex:none;text-align:center" title="点击弹出图标面板，也可以直接键入 emoji">'
         + '<input class="input" type="text" data-k="label" value="' + LMApp.esc(p.label || '') + '" placeholder="导航名">'
         + '<input class="input" type="text" data-k="title" value="' + LMApp.esc(p.title || '') + '" placeholder="页面大标题">'
@@ -1120,12 +1141,225 @@ window.LMEditor = (function () {
       root.querySelectorAll('[data-delpage]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           const i = +btn.getAttribute('data-delpage');
-          confirmModal('删除页面', '确定删除该页面及其全部内容？删除后可按 Ctrl+Z 撤销。', '确认删除', function () {
-            c.pages.splice(i, 1);
-            closeModal();
-            LMApp.applyEdit('页面已删除');
-          });
+          const pg2 = c.pages[i];
+          if (!pg2) return;
+          if (pg2.id === 'home') { LMApp.toast('首页不能删除'); return; }
+          /* ★ 修复75：走 removePageDeep —— 删父页时连它的嵌套条目一起删，绝不留下点不进去的孤儿 */
+          const kids2 = descendants(pg2.id);
+          confirmModal('删除页面', '确定删除「' + LMApp.esc(LMApp.pageTitle(pg2)) + '」及其全部内容'
+            + (kids2.length ? '（它下面还有 <b>' + kids2.length + '</b> 个嵌套条目，会一起删除）' : '') + '？删除后可按 Ctrl+Z 撤销。',
+            '确认删除', function () {
+              removePageDeep(pg2.id);
+              closeModal();
+              LMApp.applyEdit('页面已删除');
+            });
         });
+      });
+    });
+  }
+
+  /* ---------- ★ 修复75：🗂 条目树（第 1 → 3 层嵌套的控制台） ----------
+     形式取舍：老师那种「蜘蛛网」在手机小屏上连线会糊成一团，节点也难点准；
+     这里用「缩进文件夹树 + 层级徽章」——同一棵树的信息，读起来更清楚，
+     每个节点都有固定的操作位（加分支 / 改名 / 调序 / 插入条目块 / 删除）。
+     ↑↓ 改的是 pages 数组里同级之间的相对顺序 —— 页面里的条目块按同一顺序出卡片。 */
+  /* 纯函数：把 pages 摊平成带层级的行（深度优先，同级保持数组顺序）。抽出来便于单测 */
+  function treeRows(pages) {
+    const out = [];
+    const kidsOf = function (pid) {
+      return (pages || []).filter(function (p) {
+        return p && p.id !== 'home' && (p.parent || '') === (pid || '');
+      });
+    };
+    const walk = function (pid, depth) {
+      kidsOf(pid).forEach(function (p) {
+        const kids = kidsOf(p.id);
+        out.push({ id: p.id, parent: pid || '', depth: depth, page: p, kids: kids.length });
+        if (kids.length) walk(p.id, depth + 1);
+      });
+    };
+    walk('', 0);
+    return out;
+  }
+  /* 新页面 id：英文 / 数字优先；纯中文名（slug 为空）→ node-xxxx，永不撞车 */
+  function slugId(label, c) {
+    let id = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!id) id = 'node-' + Date.now().toString(36).slice(-5);
+    while (c.pages.some(function (p) { return p.id === id; })) id += '-2';
+    return id;
+  }
+  function siblingsOf(id) {
+    const c = LMApp.state.content;
+    const p = LMApp.pageById(id);
+    if (!p) return [];
+    return c.pages.filter(function (x) { return x && x.id !== 'home' && (x.parent || '') === (p.parent || ''); });
+  }
+  /* 上移 / 下移：只交换这两个同级在 pages 数组里的位置，其他页一动不动 */
+  function movePage(id, dir) {
+    const c = LMApp.state.content;
+    const list = siblingsOf(id);
+    const k = list.map(function (x) { return x.id; }).indexOf(id);
+    if (k < 0) return;
+    const j = dir === 'up' ? k - 1 : k + 1;
+    if (j < 0 || j >= list.length) { LMApp.toast('已经在' + (dir === 'up' ? '最前' : '最后') + '了'); return; }
+    const ia = c.pages.indexOf(list[k]), ib = c.pages.indexOf(list[j]);
+    const tmp = c.pages[ia]; c.pages[ia] = c.pages[ib]; c.pages[ib] = tmp;
+    LMApp.applyEdit('已调整条目顺序');
+    treeModal();
+  }
+  /* 给某页补一个「条目块」（页面上才有下级入口；访客看不到没入口的分支） */
+  function addEntriesBlock(pageId) {
+    const p = LMApp.pageById(pageId);
+    if (!p) return;
+    p.blocks = p.blocks || [];
+    if (p.blocks.some(function (b) { return b && b.type === 'entries'; })) { LMApp.toast('这一页已经有条目块了'); return; }
+    p.blocks.push({ type: 'entries', title: '下级条目', mode: 'card', cols: 3, note: '' });
+    LMApp.applyEdit('已给「' + LMApp.pageTitle(p) + '」插入条目块');
+    treeModal();
+  }
+  /* 某页的全部后代（删除时一并清掉，避免留下打不开的孤儿页） */
+  function descendants(id) {
+    const c = LMApp.state.content, out = [];
+    const walk = function (pid) {
+      c.pages.filter(function (p) { return p && p.parent === pid; }).forEach(function (p) {
+        out.push(p.id); walk(p.id);
+      });
+    };
+    walk(id);
+    return out;
+  }
+  /* 真正执行删除：本页 + 全部后代 + 指向它们的跳转死链；正停在被删页 → 回它的上级。
+     条目树的 🗑 与「页面管理」的删除共用这一份，避免任一路径留下孤儿子页（导航/首页都不显示 = 再也点不进去） */
+  function removePageDeep(id) {
+    const c = LMApp.state.content;
+    const p = LMApp.pageById(id);
+    if (!p) return;
+    const kids = descendants(id);
+    const kill = [id].concat(kids);
+    c.pages = c.pages.filter(function (x) { return kill.indexOf(x.id) < 0; });
+    /* 顺手清掉指向这些页面的跳转映射，避免留下点不开的死链 */
+    if (Array.isArray(c.jumps)) {
+      c.jumps = c.jumps.filter(function (j) {
+        return j && kill.indexOf(j.from && j.from.page) < 0 && kill.indexOf(j.to && j.to.page) < 0;
+      });
+    }
+    if (kill.indexOf(LMApp.state.pageId) >= 0) location.hash = '#/p/' + (p.parent || 'home');
+    return kill;
+  }
+  function delPageTree(id) {
+    const p = LMApp.pageById(id);
+    if (!p) return;
+    if (id === 'home') { LMApp.toast('首页不能删除'); return; }
+    const kids = descendants(id);
+    confirmModal('删除条目', '确定删除「' + LMApp.esc(LMApp.pageTitle(p)) + '」'
+      + (kids.length ? '及其 <b>' + kids.length + '</b> 个下级条目' : '') + '？删除后可按 Ctrl+Z 撤销。',
+      '确认删除', function () {
+        removePageDeep(id);
+        LMApp.applyEdit('已删除条目');
+        setTimeout(treeModal, 60);
+      });
+  }
+  /* 新建 / 编辑一个条目（= 一个页面）：图标 / 导航名 / 大标题 / 说明 / 对齐 */
+  function openPageForm(pageId, parentId, fromTree) {
+    const c = LMApp.state.content;
+    const p = pageId ? LMApp.pageById(pageId) : null;
+    const isNew = !p;
+    const base = p || { icon: '📄', label: '', title: '', description: '', heroAlign: '' };
+    const parId = parentId || (p && p.parent) || '';
+    const par = parId ? LMApp.pageById(parId) : null;
+    modal('<form id="pageForm"><h3>' + (isNew ? (par ? '新建子条目' : '新建顶层页面') : '设置条目') + '</h3>'
+      + (par ? '<p class="modal-note">上级：<b>' + LMApp.esc(LMApp.pageTitle(par)) + '</b>（保存后会自动出现在它的条目块里）</p>' : '')
+      + field('图标', F.text('icon', base.icon, '任意 emoji，例如 🧠'))
+      + field('导航名 / 条目名', F.text('label', base.label, '条目卡片与导航上显示的名字'))
+      + field('页面大标题（可留空，留空则用上面的名字）', F.text('title', base.title, ''))
+      + field('页面说明（可留空）', F.area('description', base.description, '一句话说明这一条讲什么（会显示在条目卡片上）', 2))
+      + field('大标题对齐', F.select('heroAlign', [['', '居中'], ['left', '居左'], ['right', '居右']], base.heroAlign || ''))
+      + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
+      + '<button class="btn btn-primary" type="submit">保存</button></div></form>', function (root) {
+      root.querySelector('#pageForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const g = function (k) {
+          const el = e.target.querySelector('[name="' + k + '"]');
+          return el ? String(el.value || '').trim() : '';
+        };
+        if (isNew) {
+          const label = g('label') || '新条目';
+          const np = {
+            id: slugId(label, c), kind: 'page', icon: g('icon') || '📄',
+            label: label, title: g('title'), description: g('description'),
+            heroAlign: g('heroAlign'), blocks: []
+          };
+          if (parId) np.parent = parId;
+          c.pages.push(np);
+          /* 上级页若还没有条目块 → 顺手插一个，否则访客在页面上看不到这个新分支 */
+          if (par && !(par.blocks || []).some(function (b) { return b && b.type === 'entries'; })) {
+            par.blocks = par.blocks || [];
+            par.blocks.push({ type: 'entries', title: '下级条目', mode: 'card', cols: 3, note: '' });
+          }
+          closeModal();
+          LMApp.applyEdit('已新建条目「' + label + '」');
+        } else {
+          p.icon = g('icon'); p.label = g('label'); p.title = g('title');
+          p.description = g('description'); p.heroAlign = g('heroAlign');
+          closeModal();
+          LMApp.applyEdit('条目设置已保存');
+        }
+        /* 从条目树里新建的 → 回树上立刻看到新分支；从页面「＋ 新建条目」进来的 → 留在页面上看新卡片 */
+        if (fromTree) treeModal();
+      });
+    });
+  }
+  function treeModal() {
+    const c = LMApp.state.content;
+    const rows = treeRows(c.pages);
+    const body = rows.map(function (r) {
+      const p = r.page;
+      const blocks = p.blocks || [];
+      const hasEntries = blocks.some(function (b) { return b && b.type === 'entries'; });
+      const warn = (r.kids && !hasEntries)
+        ? '<span class="tree-warn" title="这一页有子条目，但页面里还没有「条目块」——访客看不到入口">缺条目块</span>'
+        : '';
+      return '<div class="tree-row" data-d="' + r.depth + '" data-tid="' + LMApp.esc(p.id) + '">'
+        + '<button type="button" class="tree-name" data-treego="' + LMApp.esc(p.id) + '" title="打开这一页（点进去就是原来的编辑器，表格 / 文本框 / 拖动排序都在）">'
+        + '<span class="tree-ico">' + LMApp.esc(p.icon || '📄') + '</span>'
+        + '<span class="tree-t">' + LMApp.esc(LMApp.pageTitle(p)) + '</span></button>'
+        + '<span class="tree-badge">' + blocks.length + ' 块</span>'
+        + (r.kids ? '<span class="tree-badge kids">' + r.kids + ' 子</span>' : '')
+        + warn
+        + '<span class="tree-acts">'
+        + '<button type="button" data-treeadd="' + LMApp.esc(p.id) + '" title="在它下面加一个分支（新建一个子条目；页面里的条目块会自动多一张卡片）">＋</button>'
+        + '<button type="button" data-treeedit="' + LMApp.esc(p.id) + '" title="设置这一条：图标 / 导航名 / 大标题 / 说明 / 对齐">✎</button>'
+        + '<button type="button" data-treemv="up" data-tid="' + LMApp.esc(p.id) + '" title="在同级里上移">↑</button>'
+        + '<button type="button" data-treemv="down" data-tid="' + LMApp.esc(p.id) + '" title="在同级里下移">↓</button>'
+        + (hasEntries ? '' : '<button type="button" data-treeblock="' + LMApp.esc(p.id) + '" title="给这一页插入「条目块」（访客才能看到下级入口）">▤</button>')
+        + '<button type="button" class="danger" data-treedel="' + LMApp.esc(p.id) + '" title="删除这一条（连同它下面的所有子条目）">🗑</button>'
+        + '</span></div>';
+    }).join('');
+    const topN = c.pages.filter(function (p) { return p && p.id !== 'home' && !p.parent; }).length;
+    modal('<h3>🗂 条目树</h3>'
+      + '<p class="modal-note">第 1 层＝首页，第 2 层＝导航页（领域 / 生态 / 认知…），<b>第 3 层＝嵌套条目</b>。'
+      + '点名字进页面；<b>＋</b> 加一个分支（自动出卡片）；<b>✎</b> 改图标 / 名字 / 说明；<b>↑↓</b> 调顺序；'
+      + '<b>▤</b> 给该页插入条目块；<b>🗑</b> 删除（含子条目）。页面里的「▤ 条目块」跟着这里自动变，不用手动维护。</p>'
+      + '<div class="tree-root"><span class="tree-ico">🏠</span><b>首页</b>'
+      + '<span class="tree-badge">第 1 层</span><span class="tree-badge kids">' + topN + ' 个导航页</span></div>'
+      + '<div class="tree-wrap">' + (body || '<p class="muted">还没有任何页面</p>') + '</div>'
+      + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>关闭</button>'
+      + '<button type="button" class="btn btn-primary" id="treeTop">＋ 新建顶层页面</button></div>', function (root) {
+      root.addEventListener('click', function (e) {
+        const hit = function (sel) { return e.target.closest ? e.target.closest(sel) : null; };
+        const go = hit('[data-treego]');
+        if (go) { closeModal(); location.hash = '#/p/' + go.getAttribute('data-treego'); return; }
+        const add = hit('[data-treeadd]');
+        if (add) { openPageForm(null, add.getAttribute('data-treeadd'), true); return; }
+        const ed = hit('[data-treeedit]');
+        if (ed) { openPageForm(ed.getAttribute('data-treeedit'), null, true); return; }
+        const mv = hit('[data-treemv]');
+        if (mv) { movePage(mv.getAttribute('data-tid'), mv.getAttribute('data-treemv')); return; }
+        const blk = hit('[data-treeblock]');
+        if (blk) { addEntriesBlock(blk.getAttribute('data-treeblock')); return; }
+        const del = hit('[data-treedel]');
+        if (del) { delPageTree(del.getAttribute('data-treedel')); return; }
+        if (hit('#treeTop')) openPageForm(null, '', true);
       });
     });
   }
@@ -1498,6 +1732,8 @@ window.LMEditor = (function () {
       + '<button class="tb-btn" data-tb="imgins" tabindex="-1" title="插入图片（本地 / 链接）">🖼 图片</button>'
       + '<button class="tb-btn" data-tb="mdins" tabindex="-1" title="插入 Markdown 块">📝 Markdown</button>'
       + '<button class="tb-btn" data-tb="boxins" tabindex="-1" title="插入文本框（可拖动缩放）">▢ 文本框</button>'
+      /* ★ 修复75：第 3 层嵌套条目的入口 —— 插入一个「条目块」，卡片内容自动跟本页子条目走 */
+      + '<button class="tb-btn" data-tb="entriesins" tabindex="-1" title="插入嵌套条目块：自动列出本页的子条目（在「🛠️ → 🗂 条目树」里增删分支）">▤ 条目</button>'
       + '<button class="tb-btn" data-tb="chartins" tabindex="-1" title="插入图表">📊 图表</button>'
       + '<button class="tb-btn" data-tb="filesins" tabindex="-1" title="插入附件列表">📎 附件</button>'
       + '<button class="tb-btn" data-tb="srcins" tabindex="-1" title="插入来源列表块（页尾参考文献区域）">📑 引用列表</button>'
@@ -4393,6 +4629,13 @@ window.LMEditor = (function () {
       case 'imgins': if (popEl && popEl._for === 'imgins') closePop(); else imgInsertPop(btn); break;
       case 'mdins': closePop(); insertAt(defaultsFor('md'), false, '已插入 Markdown 块：写完点「✓ 转换保存」'); break;
       case 'boxins': closePop(); insertAt(freeBoxDefault(), true, '已插入文本框：拖 ⠿ 移动，拖边角缩放'); break;
+      case 'entriesins': {
+        /* ★ 修复75：插入条目块 → 直接打开它的设置（栏目标题 / 版式 / 列数） */
+        closePop();
+        const atE = LMApp.insertBlock(defaultsFor('entries'), insertAnchor());
+        if (atE >= 0) { LMApp.toast('已插入条目块：去「🗂 条目树」给本页加分支，卡片会自动出现'); openBlockForm(LMApp.state.pageId, atE); }
+        break;
+      }
       case 'chartins': case 'filesins': case 'srcins': {
         closePop();
         const t2 = k === 'chartins' ? 'chart' : (k === 'filesins' ? 'files' : 'sources');

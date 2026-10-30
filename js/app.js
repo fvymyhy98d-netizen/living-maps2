@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '74';
+var LM_ASSET_VER = '75';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -132,11 +132,35 @@ window.LMApp = (function () {
     return 'home';
   }
 
+  /* ---------- ★ 修复75：第 3 层「嵌套条目」= 带 parent 的子页面 ----------
+     数据模型零迁移：子页面就是普通 page 对象多一个 parent:<父页 id>，于是
+     表格 / 文本框 / 让位引擎 / 撤销 / 协同 在子页面里**原样可用**，渲染逻辑一行都不用改；
+     只是它不进顶部导航、不进首页卡片（renderNav / renderHome 都加了 !p.parent 过滤）。
+     同级顺序 = pages 数组里的相对顺序（条目树里的 ↑↓ 就是交换数组位置）。 */
+  function pageById(id) {
+    const arr = (state.content && state.content.pages) || [];
+    for (let i = 0; i < arr.length; i++) { if (arr[i] && arr[i].id === id) return arr[i]; }
+    return null;
+  }
+  function childPages(parentId) {
+    const arr = (state.content && state.content.pages) || [];
+    return arr.filter(function (p) { return p && p.parent === parentId; });
+  }
+  /* 祖先链（首页 → … → 本页），面包屑用；20 层护栏防脏数据成环 */
+  function pagePath(id) {
+    const out = [];
+    let cur = pageById(id), guard = 0;
+    while (cur && guard++ < 20) { out.unshift(cur); cur = cur.parent ? pageById(cur.parent) : null; }
+    return out;
+  }
+  function pageTitle(p) { return (p && (p.label || p.title)) || (p && p.id) || ""; }
+
   /* ---------- 导航与页脚 ---------- */
   function renderNav() {
     /* 导航名清空 → 导航里就不显示这个页面（不留空白项）；页面本身仍可从首页卡片进入 */
     const links = state.content.pages.filter(function (p) {
       if (p.id === 'home') return false;
+      if (p.parent) return false; /* ★ 修复75：嵌套条目（子页面）不进顶部导航 */
       return !!(p.label || p.title || p.icon);
     });
     document.getElementById('navLinks').innerHTML = links.map(function (p) {
@@ -320,6 +344,53 @@ window.LMApp = (function () {
           + '<div class="md-body' + (s2.grad ? ' grad grad-' + esc(s2.grad) : '') + '"' + textExtra(b) + '>' + body2 + '</div>';
         break;
       }
+      case 'entries': {
+        /* ★ 修复75：嵌套条目块（第 3 层）—— 内容不写死，直接读这一页的子页面：
+           在「🗂 条目树」里加一个分支，这里立刻多一张卡片；改名 / 换图标 / 改说明也同步。
+           方块本身是普通文档流块（⠿ 拖排序、↑↓ 上下移、拖角调宽、可自由摆放），
+           让位引擎（YIELD-V4 锁定段）照常把它当流块处理，不需要任何特判 */
+        const kids = childPages(pageId).slice();
+        const only = Array.isArray(b.only) ? b.only : [];
+        if (only.length) {
+          /* 只显示部分条目并按 only 的顺序（条目树不用它，留给「精选条目」这类玩法） */
+          kids.sort(function (a1, c1) {
+            const ia = only.indexOf(a1.id), ic = only.indexOf(c1.id);
+            return (ia < 0 ? 999 : ia) - (ic < 0 ? 999 : ic);
+          });
+        }
+        const cols = Math.min(Math.max(+b.cols || 3, 1), 4);
+        const isList = b.mode === 'list';
+        let cards = kids.map(function (k) {
+          const tt = pageTitle(k);
+          if (isList) {
+            return '<a class="entry-row" href="#/p/' + esc(k.id) + '">'
+              + '<span class="entry-ico">' + esc(k.icon || '📄') + '</span>'
+              + '<span class="entry-t">' + md(tt) + '</span>'
+              + (k.description ? '<span class="entry-d">' + esc(k.description) + '</span>' : '')
+              + '<span class="entry-go">→</span></a>';
+          }
+          return '<a class="entry-card" href="#/p/' + esc(k.id) + '">'
+            + '<span class="entry-ico">' + esc(k.icon || '📄') + '</span>'
+            + '<span class="entry-t">' + md(tt) + '</span>'
+            + (k.description ? '<span class="entry-d">' + esc(k.description) + '</span>' : '')
+            + '<span class="entry-go">进入 →</span></a>';
+        }).join('');
+        if (!kids.length && state.admin) {
+          cards = '<div class="entry-empty">这一页还没有嵌套条目 —— 点右上角 ⚙ 设置，或在「🗂 条目树」里给本页加一个分支</div>';
+        }
+        const addTile = state.admin
+          ? '<button type="button" class="entry-card entry-add" data-entryadd="' + esc(pageId) + '" title="给本页新建一个嵌套条目（等于在条目树里加一个分支）：建好后点进卡片就能用原来的编辑器排版">＋ 新建条目</button>'
+          : '';
+        inner = ((b.title || state.admin)
+            ? '<h3 class="block-title"' + edB(i, 'title', 1) + (b.title ? '' : ' data-ph="栏目标题（可留空）"') + '>' + esc(b.title || '') + '</h3>'
+            : '')
+          + (b.note ? '<p class="entry-note">' + md(b.note) + '</p>' : '')
+          + (isList
+            ? '<div class="entry-list">'
+            : '<div class="entry-grid" style="grid-template-columns:repeat(' + cols + ',minmax(0,1fr))">')
+          + cards + addTile + '</div>';
+        break;
+      }
       case 'hr':
         inner = '<hr class="b-hr">';
         break;
@@ -381,6 +452,18 @@ window.LMApp = (function () {
     const db = heroBits(p.descStyle);
     const off = p.hero === false;
     const pgId = esc(p.id);
+    /* ★ 修复75：嵌套条目（子页面）顶部显示面包屑 —— 一眼看出自己在地图第几层，点任一祖先直接回上级 */
+    const trail = pagePath(p.id);
+    let crumb = '';
+    if (p.parent) {
+      const kidN = childPages(p.id).length;
+      crumb = '<nav class="crumb reveal">' + trail.map(function (a1, ai) {
+        const last = ai === trail.length - 1;
+        const nm = esc((a1.icon ? a1.icon + ' ' : '') + (pageTitle(a1) || ''));
+        return last ? '<span class="crumb-cur">' + nm + '</span>'
+          : '<a href="#/p/' + esc(a1.id) + '">' + nm + '</a><span class="crumb-sep">›</span>';
+      }).join('') + (kidN ? '<span class="crumb-kids">共 ' + kidN + ' 个下级条目</span>' : '') + '</nav>';
+    }
     /* 标题区工具条：与内容块统一（管理模式悬停显示；隐藏后常显"找回"按钮） */
     const heroTools = state.admin
       ? '<div class="block-tools hero-tools">'
@@ -402,7 +485,7 @@ window.LMApp = (function () {
     let padB = 0;
     p.blocks.forEach(function (b) { if (b.free) padB = Math.max(padB, (+b.free.y || 0) + (+b.free.h || 200) + 50); });
     padB = Math.min(padB, 4000); /* ★ 修复㉞：钳制占位上限——损坏/漂移的 free 坐标不再把页面撑出天文数字空白 */
-    return heroHtml
+    return crumb + heroHtml
       + '<div class="blocks"' + (padB ? ' style="padding-bottom:' + padB + 'px"' : '') + '>'
       + p.blocks.map(function (b, i) {
           /* 单块隔离：任何一个坏块渲染出错都只显示占位，绝不拖垮整页（防崩溃） */
@@ -419,7 +502,8 @@ window.LMApp = (function () {
   function renderHome() {
     const c = state.content, s = c.site;
     /* 首页入口卡片 = 全部页面（除首页与更新记录）：页面管理加几个模块，这里就同步出几张卡片 */
-    const maps = c.pages.filter(function (p) { return p.id !== 'home' && p.id !== 'updates'; });
+    /* ★ 修复75：首页卡片只列「第 2 层」导航页 —— 嵌套条目（p.parent）由所属页面里的条目块列出 */
+    const maps = c.pages.filter(function (p) { return p.id !== 'home' && p.id !== 'updates' && !p.parent; });
     const first = maps.length ? maps[0].id : 'home';
     const upd = c.pages.find(function (p) { return p.id === 'updates'; });
     /* 各行独立样式：大标题 heroStyle / 顶部小字 subStyle / 点题 topicStyle / 简介 descStyle */
@@ -1987,6 +2071,7 @@ window.LMApp = (function () {
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,
     adjustImages: adjustImages,
     setViewMode: setViewMode, applyView: applyView, isMobileDevice: isMobileDevice,
+    pageById: pageById, pageChildren: childPages, pagePath: pagePath, pageTitle: pageTitle, /* ★ 修复75：第 3 层嵌套条目 */
     undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo
   };
 })();

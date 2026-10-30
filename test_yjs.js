@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '74';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '75';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -770,5 +770,97 @@ T('editor.js：收起钮在「插入」之后（DOM 顺序）+ 点击只收工�
     && edt2.indexOf("e.target.closest('[data-tbcollapse]')") > 0
     && edt2.indexOf("bar0.classList.remove('open')") > 0);
 
+/* ---------- 9.40) 修复75：第 3 层「嵌套条目」（子页面 + 条目块 + 条目树控制台） ---------- */
+console.log('【9.40】修复75：子页面(parent)不进导航/首页 · 条目块自动列子条目 · 🗂 条目树增删改调序');
+T('app.js：子页面数据模型（pageById / childPages / pagePath / pageTitle）+ 导航与首页排除 p.parent',
+  appSrc.indexOf('function pageById(id) {') > 0
+    && appSrc.indexOf('function childPages(parentId) {') > 0
+    && appSrc.indexOf('function pagePath(id) {') > 0
+    && appSrc.indexOf('function pageTitle(p) {') > 0
+    && appSrc.indexOf("if (p.parent) return false; /* ★ 修复75：嵌套条目（子页面）不进顶部导航 */") > 0
+    && appSrc.indexOf("p.id !== 'updates' && !p.parent; })") > 0);
+T('app.js：entries 块渲染子页面卡片（卡片 / 列表两版式）+ 子页面面包屑 + 导出层级助手',
+  appSrc.indexOf("case 'entries': {") > 0
+    && appSrc.indexOf('const kids = childPages(pageId).slice();') > 0
+    && appSrc.indexOf("'<a class=\"entry-card\" href=\"#/p/'") > 0
+    && appSrc.indexOf("'<a class=\"entry-row\" href=\"#/p/'") > 0
+    && appSrc.indexOf('data-entryadd="') > 0
+    && appSrc.indexOf('<nav class="crumb reveal">') > 0
+    && appSrc.indexOf('return crumb + heroHtml') > 0
+    && appSrc.indexOf('pageById: pageById, pageChildren: childPages, pagePath: pagePath, pageTitle: pageTitle,') > 0);
+T('editor.js：TYPES/defaultsFor/formHTML/readForm 认 entries + 插入组「▤ 条目」+ 管理条「🗂 条目树」',
+  edt2.indexOf("entries: { name: '嵌套条目', icon: '▤' }") > 0
+    && edt2.indexOf("case 'entries': return { type: type, title: '相关条目', mode: 'card', cols: 3, note: '' };") > 0
+    && edt2.indexOf('data-tb="entriesins"') > 0
+    && edt2.indexOf("case 'entriesins': {") > 0
+    && edt2.indexOf('data-panel="tree"') > 0
+    && edt2.indexOf("else if (k === 'tree') treeModal();") > 0
+    && edt2.indexOf("const entryAdd = e.target.closest ? e.target.closest('[data-entryadd]') : null;") > 0);
+T('editor.js：条目树全操作（加分支/改名/调序/补条目块/级联删除 + 删页清跳转死链）',
+  edt2.indexOf('function treeModal() {') > 0
+    && edt2.indexOf('function openPageForm(pageId, parentId, fromTree) {') > 0
+    && edt2.indexOf('function movePage(id, dir) {') > 0
+    && edt2.indexOf('function addEntriesBlock(pageId) {') > 0
+    && edt2.indexOf('function descendants(id) {') > 0
+    && edt2.indexOf('const kill = [id].concat(kids);') > 0
+    && edt2.indexOf('function removePageDeep(id) {') > 0
+    && edt2.indexOf('removePageDeep(pg2.id);') > 0
+    && edt2.indexOf("return j && kill.indexOf(j.from && j.from.page) < 0 && kill.indexOf(j.to && j.to.page) < 0;") > 0
+    && edt2.indexOf('data-treeadd="') > 0 && edt2.indexOf('data-treedel="') > 0
+    && edt2.indexOf('data-treemv="up"') > 0 && edt2.indexOf('data-treeblock="') > 0);
+T('CSS：条目卡片/列表/磁贴 + 面包屑 + 条目树缩进（手机端单列）',
+  cssSrc.indexOf('.entry-grid{display:grid;gap:14px;grid-template-columns:repeat(3,minmax(0,1fr))}') > 0
+    && cssSrc.indexOf(".entry-add{align-items:center;justify-content:center;border-style:dashed;") > 0
+    && cssSrc.indexOf('body.mobile-view .entry-grid{grid-template-columns:1fr !important}') > 0
+    && cssSrc.indexOf('.crumb-cur{color:var(--text);font-weight:600;') > 0
+    && cssSrc.indexOf('.tree-row[data-d="2"]{padding-left:46px}') > 0
+    && cssSrc.indexOf('.tree-acts button.danger:hover{background:rgba(215,0,21,.14);color:#d70015}') > 0);
+/* 真实执行 treeRows：深度优先摊平 + 层级深度 + 子条目计数（首页不作为行出现） */
+(function () {
+  const a2 = edt2.indexOf('function treeRows(pages) {');
+  const z2 = edt2.indexOf('\n  }', a2); /* 源码 CRLF：只匹配到 '\n  }'（不带行尾换行） */
+  const code = (a2 >= 0 && z2 > a2) ? edt2.slice(a2, z2 + 4) : '';
+  let ok = false;
+  try {
+    const run = new Function('return ' + code.replace('function treeRows', 'function') + ';')();
+    const rows = run([
+      { id: 'home' }, { id: 'domain', label: '领域地图' }, { id: 'ecology', label: '生态地图' },
+      { id: 'cognition', label: '认知地图' },
+      { id: 'neuron', label: '神经网络', parent: 'cognition' },
+      { id: 'attention', label: '注意力', parent: 'cognition' },
+      { id: 'deep', label: '深层网络', parent: 'neuron' }
+    ]);
+    ok = rows.length === 6
+      && rows.map(function (r) { return r.id; }).join(',') === 'domain,ecology,cognition,neuron,deep,attention'
+      && rows[0].depth === 0 && rows[3].depth === 1 && rows[4].depth === 2 && rows[5].depth === 1
+      && rows[2].kids === 2 && rows[3].kids === 1 && rows[3].parent === 'cognition';
+  } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
+  T('treeRows：同级保持数组顺序、子条目紧跟父节点、深度正确（第 1 层首页不算行）', ok);
+})();
+/* 真实执行 pageById / childPages / pagePath：面包屑祖先链与子条目名单 */
+(function () {
+  const a3 = appSrc.indexOf('function pageById(id) {');
+  const p3 = appSrc.indexOf('function pageTitle(p)');
+  const z3 = appSrc.indexOf('\n', p3);
+  const code3 = (a3 >= 0 && z3 > p3) ? appSrc.slice(a3, z3) : '';
+  const pages3 = [
+    { id: 'cognition', label: '认知地图' },
+    { id: 'neuron', label: '神经网络', parent: 'cognition' },
+    { id: 'attention', label: '注意力', parent: 'cognition', title: '注意力机制' },
+    { id: 'deep', label: '', title: '深层网络', parent: 'neuron' }
+  ];
+  let ok = false;
+  try {
+    const api = new Function('state', code3 + '\nreturn { pageById: pageById, childPages: childPages, pagePath: pagePath, pageTitle: pageTitle };')({ content: { pages: pages3 } });
+    ok = api.pageById('neuron').label === '神经网络'
+      && api.pageById('nope') === null
+      && api.childPages('cognition').map(function (p) { return p.id; }).join(',') === 'neuron,attention'
+      && api.childPages('nobody').length === 0
+      && api.pagePath('deep').map(function (p) { return p.id; }).join(',') === 'cognition,neuron,deep'
+      && api.pagePath('cognition').map(function (p) { return p.id; }).join(',') === 'cognition'
+      && api.pageTitle(pages3[3]) === '深层网络' && api.pageTitle(pages3[0]) === '认知地图';
+  } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
+  T('pagePath 面包屑链（cognition › neuron › deep）、childPages 同级名单、pageTitle 回落标题', ok);
+})();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
