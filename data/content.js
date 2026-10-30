@@ -48,14 +48,14 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793292044300,
+      "syncTs": 1793327364424,
       "roster": {},
       "tokenVault": {
         "v": 1,
         "iters": 60000,
-        "salt": "inpaOjIR584i92l2bw7n9A==",
-        "iv": "fWqbrORLyYqLt05K",
-        "ct": "51d6AxXeZwH+murGnZG5mDGpnlJwVrFRcI5JuGcICIcpGRiayzyntckzq/NozA5eIZwWSh6b+XUxhdXUvo4TjQSdpgv2G6turYUBHiIeCTdWpzVK6cEOCRXj1c9Vq4cZDdzpHactdYbzB6MJrlD+zz6MYVO8ls9VarLES637hQRFvQGJwlJNlhoJyD6tcY2EwzA1dNgEvxB/N6Wbw0pVDpcLxLIrSJlr7DCLW/IC0TK7SEw+N/iGvnDi/7/nPSk97zfp+UeROTeTU8Oc5Z9noEcIJ7S2"
+        "salt": "r5MhhpPOWGJKRXMuiE2qXA==",
+        "iv": "96PBPSWq6APlOhky",
+        "ct": "UITPXjFzz2jc5PiAc/kgJMLVj3cTGDUcRAPbdRj9tHdM5XadZHl6wqNjTXPntQ1WqNFv9dQ9nj02zgCgre7MC6IlbufF5ube1dcXY1IDuHmv+AeNJC+hSJYooTEOcFvFggh3XsBafofzh9Cb/qiQ5nvPT2k9v42+Luqnjiji/sGzBJXii4aPww4J6ty+jqBtWZi7PGGG32jcVxvG3MIBE3TjfZ3AkzkcGYSdYNog0VE6kTh2UmhprrAsQPbh5mhx3pBrIzsFDBuTj4XBkJOCbJpFLEUD"
       }
     }
   },
@@ -93,52 +93,6 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "语言模型试图解决的核心问题是：**让机器根据上下文预测和生成自然语言。**\n一个典型任务是\"问答\"：用户提问 → 模型理解问题 → 生成回答 → 评估回答质量。"
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "核心概念",
-          "free": {
-            "x": 0.9,
-            "y": 426,
-            "w": 96.3
-          }
-        },
-        {
-          "type": "table",
-          "title": "核心概念速览（示例）",
-          "headers": [
-            "概念",
-            "一句话解释",
-            "相关工具 / 模型"
-          ],
-          "rows": [
-            [
-              "Token / 分词",
-              "把文字切成模型能处理的最小单位",
-              "tiktoken、SentencePiece"
-            ],
-            [
-              "Transformer",
-              "目前主流的模型结构，核心是注意力机制",
-              "GPT 系列、LLaMA 系列"
-            ],
-            [
-              "预训练",
-              "先在海量文本上学习\"下一个词\"的规律",
-              "各类基座模型"
-            ],
-            [
-              "微调 / RAG",
-              "用少量数据或外部知识让模型适配具体任务",
-              "LoRA、向量数据库"
-            ]
-          ],
-          "free": {
-            "x": 2.8,
-            "y": 543,
-            "w": 94.4
-          }
         },
         {
           "type": "heading",
@@ -200,6 +154,52 @@ window.SITE_CONTENT = {
             }
           ],
           "seq": 2
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "核心概念",
+          "free": {
+            "x": 2.8,
+            "y": 426,
+            "w": 94.4
+          }
+        },
+        {
+          "type": "table",
+          "title": "核心概念速览（示例）",
+          "headers": [
+            "概念",
+            "一句话解释",
+            "相关工具 / 模型"
+          ],
+          "rows": [
+            [
+              "Token / 分词",
+              "把文字切成模型能处理的最小单位",
+              "tiktoken、SentencePiece"
+            ],
+            [
+              "Transformer",
+              "目前主流的模型结构，核心是注意力机制",
+              "GPT 系列、LLaMA 系列"
+            ],
+            [
+              "预训练",
+              "先在海量文本上学习\"下一个词\"的规律",
+              "各类基座模型"
+            ],
+            [
+              "微调 / RAG",
+              "用少量数据或外部知识让模型适配具体任务",
+              "LoRA、向量数据库"
+            ]
+          ],
+          "free": {
+            "x": 2.8,
+            "y": 543,
+            "w": 94.4
+          }
         }
       ],
       "heroAlign": ""
