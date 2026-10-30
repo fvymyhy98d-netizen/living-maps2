@@ -378,5 +378,13 @@ T('root 防锁死：仅自动限时条目放行 root 登录（manual 标志区�
   col.indexOf('manual: manual') > 0 && appSrc.indexOf('bs.auto && !bs.manual') > 0
     && col.indexOf('function clearAutoBan(') > 0 && appSrc.indexOf('clearAutoBan()') > 0);
 
+/* ---------- 9.11) 修复㊴：手机端协作徽章缩小避让管理工具栏 ---------- */
+console.log('【9.11】修复㊴：协作徽章手机端缩小 + 管理工具栏上移避让');
+T('手机端协作徽章缩小（42vw/11px/紧凑）避让底栏，管理工具栏与设备面板上移 22px 让出底边',
+  cssSrc.indexOf('body.mobile-view #collabChip{left:8px;bottom:8px;font-size:11px;padding:4px 9px;max-width:42vw;background:rgba(29,29,31,.72)}') > 0
+    && cssSrc.indexOf('body.mobile-view #adminBar{bottom:44px}') > 0
+    && cssSrc.indexOf('body.mobile-view #collabPanel{bottom:44px}') > 0);
+
+
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
