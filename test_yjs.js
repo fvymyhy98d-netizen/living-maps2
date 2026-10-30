@@ -434,12 +434,13 @@ T('free 操作栏语义分组（.sep 分隔线）+ ⤓底对齐（freeBottomAlig
     && edt2.indexOf('下方没有其他模块，已贴到文档流底部') > 0
     && edt2.indexOf('⌂</button>') > 0
     && cssSrc.indexOf('.block-tools .sep{width:1px;align-self:stretch;margin:5px 1px;background:rgba(0,0,0,.14);border-radius:1px;flex:none}') > 0);
-/* ---------- 9.18) 修复51：所有文档流块统一水平对齐钮（全宽块点居中/贴右先变标准宽度 68%） ---------- */
-console.log('【9.18】修复51：对齐钮扩到全部非 free 块 · 全宽块自动 68% 标准宽 · hAlign 裁决 margin');
-T('非 free 块统一 ⇤⇆⇥（sep 分组）+ halign 处理器自动标准宽 + 渲染层 hAlign 优先（center 支持）',
+/* ---------- 9.18) 修复51：所有文档流块统一水平对齐钮（9.28 更新：对齐不再改宽度） ---------- */
+console.log('【9.18】修复51：对齐钮扩到全部非 free 块 · sep 分组 · hAlign 裁决 margin（63 起不改宽度）');
+T('非 free 块统一 ⇤⇆⇥（sep 分组）+ halign 处理器（63 起全宽块提示不压缩）+ 渲染层 hAlign 优先（center 支持）',
   edt2.indexOf("} else if (!isFree) {") > 0
-    && edt2.indexOf('居中：全宽块会先变到标准宽度 68% 再水平居中') > 0
-    && edt2.indexOf("if (v && v !== 'left' && !b2.free && b2.type !== 'image' && b2.width == null) b2.width = 68;") > 0
+    && edt2.indexOf('全宽块对齐看不到变化——先用四角手柄拖窄一点，再点对齐') > 0
+    && edt2.indexOf("if (v && v !== 'left' && !b2.free && b2.type !== 'image' && b2.width == null) {") > 0
+    && edt2.indexOf("b2.width = 68;") < 0
     && appSrc.indexOf("const al = b.hAlign || b.wAlign;") > 0
     && appSrc.indexOf("al === 'center' ? 'margin-left:auto;margin-right:auto;'") > 0);
 /* ---------- 9.19/9.21) 修复52+54：↑↓ 与自由框真互换（自动放回流）+ 拖动克隆块顶贴鼠标 ---------- */
@@ -462,7 +463,7 @@ T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '62';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '63';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -528,6 +529,14 @@ T('GitHub 上传成功回调 LMApp.takeAdminSnap() 重拍基准 + app 导出 tak
     && appSrc.indexOf('takeAdminSnap: takeAdminSnap, /* ★ 修复62：推送云端成功后由 collab 回调重拍快照') > 0
     && edt2.indexOf('把内容恢复到最近一次「同步到 GitHub」上传的版本（从未同步过则回到进入管理模式时的版本）') > 0);
 
+
+/* ---------- 9.28) 修复63：调宽/调高挂让位会话（不再抖动）+ 对齐不改宽度 ---------- */
+console.log('【9.28】修复63：startFreeResize 开启 beginFreeDrag 会话 · 对齐一律不改宽度（全宽块提示）');
+T('startFreeResize 开头调 beginFreeDrag（会话内引擎不每帧重算）+ halign 全宽块提示不压缩 + 68% 强制已移除',
+  edt2.indexOf('if (window.LMApp && LMApp.beginFreeDrag) LMApp.beginFreeDrag();') > 0
+    && edt2.indexOf("LMApp.toast('全宽块对齐看不到变化——先用四角手柄拖窄一点，再点对齐');") > 0
+    && edt2.indexOf('贴左：左缘贴齐，右缘不动（宽度不变）') > 0
+    && edt2.indexOf('b2.width = 68;') < 0);
 
 
 

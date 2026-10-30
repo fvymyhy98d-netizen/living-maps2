@@ -309,9 +309,9 @@ window.LMEditor = (function () {
          文本/图表/文件等块默认全宽，点「居中/贴右」时自动先变到标准宽度 68%（与图片默认一致，
          Word 式）再对齐，所见即所得；宽度可用四角拖角继续调。间距仍是文档流标准间距，不是自由摆放 */
       alignBtns = '<span class="sep" title=""></span>'
-        + '<button type="button" data-act="halign" data-val="left"' + pg + ' title="贴左：内容块靠左（全宽块看不出变化，可先拖角调窄）">⇤</button>'
-        + '<button type="button" data-act="halign" data-val="center"' + pg + ' title="居中：全宽块会先变到标准宽度 68% 再水平居中（拖角可再调宽窄）">⇆</button>'
-        + '<button type="button" data-act="halign" data-val="right"' + pg + ' title="贴右：全宽块会先变到标准宽度 68% 再靠右（拖角可再调宽窄）">⇥</button>'
+        + '<button type="button" data-act="halign" data-val="left"' + pg + ' title="贴左：左缘贴齐，右缘不动（宽度不变）">⇤</button>'
+        + '<button type="button" data-act="halign" data-val="center"' + pg + ' title="居中：块在列内水平居中（宽度不变）">⇆</button>'
+        + '<button type="button" data-act="halign" data-val="right"' + pg + ' title="贴右：右缘贴齐，左缘不动（宽度不变）">⇥</button>'
         + '<span class="sep" title=""></span>';
     }
     return '<div class="block-tools">'
@@ -382,7 +382,12 @@ window.LMEditor = (function () {
       const v = btn.getAttribute('data-val') || '';
       /* ★ 修复51：全宽的文档流块点「居中/贴右」时先变到标准宽度 68%（与图片默认一致）再对齐——
          否则全宽块对齐毫无视觉变化，用户以为按钮坏了；图片用自身 widthPct 体系不走此分支 */
-      if (v && v !== 'left' && !b2.free && b2.type !== 'image' && b2.width == null) b2.width = 68;
+      /* ★ 修复63（覆盖上行 51 的设计）：对齐一律不改宽度 —— 左对齐=左缘贴齐、右缘不动；
+         右对齐=右缘贴齐、左缘不动（用户明确要求）。全宽块（width==null）的 margin 无从生效，
+         提示先拖窄，绝不自动压缩到 68%（旧版会把整框压窄，用户以为坏了） */
+      if (v && v !== 'left' && !b2.free && b2.type !== 'image' && b2.width == null) {
+        LMApp.toast('全宽块对齐看不到变化——先用四角手柄拖窄一点，再点对齐');
+      }
       if (v) b2.hAlign = v; else delete b2.hAlign;
       LMApp.applyEdit(v === 'left' ? '已贴左（上下不变）' : (v === 'right' ? '已贴右（块宽 68%，可拖角再调）' : '已居中（块宽 68%，可拖角再调）'));
       return;
@@ -3466,6 +3471,11 @@ window.LMEditor = (function () {
     const b = blockOf(wrap);
     if (!b || !b.free) return;
     e.preventDefault();
+    /* ★ 修复63：调宽/调高与拖动同权——开启让位会话（beginFreeDrag 挂 _freeSession 暂停引擎），
+       apply 里的每帧 adjustFreeLayout 改走会话缓存路径，不再每帧重算让位；
+       旧版只有 up() 里调了 endFreeDrag 却没人 begin——调高「核心概念」时底下内容疯狂抖动
+       （每帧 freeDecide+fixFreeOverlap 交替把块推来推去），点其他块时也会被残留让位撞飞 */
+    if (window.LMApp && LMApp.beginFreeDrag) LMApp.beginFreeDrag();
     /* 同 startFreeMove：用专属 .free-drag，绝不复用带 position:fixed 的 .dragging */
     wrap.classList.add('free-drag');
     const dir = h.getAttribute('data-h');
