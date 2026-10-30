@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793357606835,
+      "syncTs": 1793357765763,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -83,7 +83,11 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "研究边界",
-          "text": "我们聚焦语言模[[j:Jmvthsiw05ei,型的基本原理与使用，暂不展]]开分布式训练与多模态。后续根据课程进度补充。"
+          "text": "我们聚焦语言模[[j:Jmvthsiw05ei,型的基本原理与使用，暂不展]]开分布式训练与多模态。后续根据课程进度补充。",
+          "style": {
+            "hl": "#ffc9de"
+          },
+          "_ts": 1793357765762
         },
         {
           "type": "heading",
