@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793342844723,
+      "syncTs": 1793342860432,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -278,18 +278,6 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "- **依赖：**多数微调实践 **依赖** Hugging Face 提供的模型权重与工具库；\n- **采用：**企业产品 **采用** 开源基座模型再自行训练；\n- **资助：**云厂商 **资助 / 提供算力** 给高校实验室；\n- **竞争：**闭源 API 服务与开源模型在成本和隐私上互相竞争。"
-        },
-        {
-          "type": "paragraph",
-          "size": "normal",
-          "text": "高级！！！",
-          "style": {},
-          "free": {
-            "x": 3.3,
-            "y": 138,
-            "w": 54.7
-          },
-          "_ts": 1793342833783
         },
         {
           "type": "callout",
