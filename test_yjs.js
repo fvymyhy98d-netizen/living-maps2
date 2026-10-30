@@ -464,7 +464,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '70';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '71';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -638,6 +638,34 @@ T('排序代码按「块对象 → 包裹」身份回写全部 data-idx（含 .f
       && wC.idx() === 0 && wA.idx() === 1 && wB.idx() === 2 && wF.idx() === 3;
   } catch (e) { ok = false; }
   T('排序后每个包裹的 data-idx 仍指向自己的块（自由框 F 正确落在尾部，不再指向别的块）', ok);
+})();
+
+/* ---------- 9.36) 修复71：徽章台数与设备面板统一口径（两台在线不再显示 1 台） ---------- */
+console.log('【9.36】修复71：在线台数统一 —— 徽章/面板共用 deviceList()（含本机、并集去重、presence 先于花名册）');
+T('collab.js：deviceList/liveCount 抽出 + 徽章改用它 + 旧 max(1+peers, yPeerCount()) 公式已消失',
+  col.indexOf('function deviceList() {') > 0
+    && col.indexOf('function liveCount() {') > 0
+    && col.indexOf('const n = liveCount();') > 0
+    && col.indexOf('const list = deviceList();') > 0
+    && col.indexOf('Math.max(1 + Object.keys(peers).length, yPeerCount())') < 0);
+/* 真实执行 deviceList/liveCount：本机 + 一台 Yjs presence 设备（同时也在花名册 10 秒内）
+   → 必须算 2 台在线（旧徽章公式 max(1, getStates-1=1) 只得 1 台） */
+(function () {
+  const a = col.indexOf('function deviceList() {');
+  const z = col.indexOf('/* ★ 修复71：徽章每 6 秒对齐一次', a);
+  const code = (a >= 0 && z > a) ? col.slice(a, z) + '\nreturn { deviceList: deviceList, liveCount: liveCount };' : '';
+  let ok = false;
+  try {
+    const api = new Function('onlineList', 'roster', 'window', code)(
+      function () { return [{ id: 'SELF', name: '设备189c', page: 'updates', self: true }]; },
+      function () { return { HBYC: { name: '设备hbyc', page: 'home', lastSeen: Date.now() - 10000 } }; },
+      { LMYCollab: { presence: function () { return [{ id: 'SELF', name: '设备189c', self: true }, { id: 'HBYC', name: '设备hbyc', page: 'home' }]; } } }
+    );
+    const list = api.deviceList();
+    const hbyc = list.filter(function (p) { return p.id === 'HBYC'; })[0];
+    ok = api.liveCount() === 2 && !!hbyc && !hbyc.recent && list.length === 2;
+  } catch (e) { ok = false; }
+  T('两台在线（本机 + presence 里的 189c/hbyc）= 2 台；同时进花名册的在线设备不会被降级成"最近活跃"', ok);
 })();
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');

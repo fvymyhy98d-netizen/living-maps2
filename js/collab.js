@@ -391,7 +391,49 @@ window.LMCollab = (function () {
     Object.keys(peers).forEach(function (k) { out.push(Object.assign({ id: k, self: false }, peers[k])); });
     return out;
   }
+  /* ★ 修复71（"在线设备 2 台，协作中却写 1 台设备"）：两个数字此前是**两套口径** ——
+       面板：本机 + 旧通道 peers + 花名册 3 分钟内 + Yjs Awareness，按设备号去重；
+       徽章：max(1 + peers, yPeerCount())，而 yPeerCount() 返回的是
+             「Awareness 状态数 − 1」= **其他设备数（不含本机）**，却当成总台数用，
+             花名册里的设备也完全不计 → 两台在线时徽章只显示 1 台。
+     现在并集逻辑统一抽到 deviceList()，徽章与面板都数「去重后的实时在线设备数（含本机）」，
+     两处必然一致 */
+  function deviceList() {
+    const list = onlineList().slice();
+    const seen = {};
+    list.forEach(function (p) { seen[p.id] = 1; });
+    /* ★ 修复71：Yjs Awareness（**实时在线**）必须先于花名册处理 —— 否则同一台设备会先被
+       花名册以"最近活跃"入列（recent:true），presence 因去重跳过它 → 它永远算不进在线台数，
+       面板会显示"在线设备 1 台（另 1 台最近活跃）" */
+    try {
+      const yj = window.LMYCollab;
+      if (yj && yj.presence) yj.presence().forEach(function (p3) {
+        if (!p3 || seen[p3.id]) return;
+        seen[p3.id] = 1;
+        list.push({ id: p3.id, name: p3.name, fp: '', page: p3.page || '', self: !!p3.self, editing: (p3.editing == null ? null : p3.editing) });
+      });
+    } catch (eY2) { /* noop */ }
+    const now = Date.now();
+    try {
+      const r = roster();
+      Object.keys(r).forEach(function (k) {
+        if (seen[k]) return;
+        const o = r[k];
+        if (now - (+o.lastSeen || 0) < 180000) list.push({ id: k, name: o.name, fp: o.fp, page: o.page || '', self: false, recent: true });
+      });
+    } catch (e) { /* noop */ }
+    return list;
+  }
+  /* 实时在线台数（含本机；"最近活跃"的花名册设备不计入）—— 徽章与面板用的是同一个数 */
+  function liveCount() {
+    try { return Math.max(1, deviceList().filter(function (p) { return !p.recent; }).length); } catch (e) { return 1; }
+  }
+  /* ★ 修复71：徽章每 6 秒对齐一次 —— 设备上下线/花名册过期不一定都有事件触发重绘，
+     否则会出现"面板 2 台、徽章还是 1 台"的过期显示（paintChip 幂等，无 transports 时自动收掉徽章） */
+  setInterval(function () { try { paintChip(); } catch (e) { /* noop */ } }, 6000);
   /* ---------- Yjs 层取数（ycollab.js 未启用时安全返回空值，不影响旧通道） ---------- */
+  /* 保留：Yjs「其他设备数」（不含本机）。徽章/面板已统一走 deviceList()/liveCount()，
+     这个只留作诊断与外部脚本调用 —— 注意它数的是**其他设备**，别当总台数用 */
   function yPeerCount() {
     try { return (window.LMYCollab && window.LMYCollab.peerCount) ? (+window.LMYCollab.peerCount() || 0) : 0; } catch (e) { return 0; }
   }
@@ -415,7 +457,8 @@ window.LMCollab = (function () {
         renderPanel();
       });
     }
-    const n = Math.max(1 + Object.keys(peers).length, yPeerCount());
+    /* ★ 修复71：与设备面板「在线设备 N 台」**同一个数**（本机 + peers + 花名册 + Yjs Awareness 去重） */
+    const n = liveCount();
     chip.innerHTML = '<span class="dot"></span>协作中 · ' + n + ' 台设备（' + modeLabel + yChannelLabel() + '）';
     chip.title = '我：' + me.name + '（#' + shortId(me.id) + '）— 点开看在线设备';
   }
@@ -427,28 +470,9 @@ window.LMCollab = (function () {
       pan.addEventListener('click', function (e) { if (e.target === pan) pan.classList.remove('show'); });
     }
     const admin = !!(window.LMApp && LMApp.state.admin);
-    /* 实时在线 + 花名册里 3 分钟内活跃的设备（跨网络/跨通道也能互相看到） */
-    const list = onlineList().slice();
-    const seen = {};
-    list.forEach(function (p) { seen[p.id] = 1; });
-    const now = Date.now();
-    try {
-      const r = roster();
-      Object.keys(r).forEach(function (k) {
-        if (seen[k]) return;
-        const o = r[k];
-        if (now - (+o.lastSeen || 0) < 180000) list.push({ id: k, name: o.name, fp: o.fp, page: o.page || '', self: false, recent: true });
-      });
-    } catch (e) { /* noop */ }
-    /* Yjs Awareness 在线名单并进来（网状直连的设备，可能与旧通道名单互补） */
-    try {
-      const yj = window.LMYCollab;
-      if (yj && yj.presence) yj.presence().forEach(function (p3) {
-        if (!p3 || seen[p3.id]) return;
-        seen[p3.id] = 1;
-        list.push({ id: p3.id, name: p3.name, fp: '', page: p3.page || '', self: !!p3.self, editing: (p3.editing == null ? null : p3.editing) });
-      });
-    } catch (eY2) { /* noop */ }
+    /* 实时在线 + 花名册 3 分钟内活跃 + Yjs Awareness（并集按设备号去重）
+       ★ 修复71：并集逻辑已抽到 deviceList()，徽章与本面板共用同一口径 */
+    const list = deviceList();
     const live = list.filter(function (p) { return !p.recent; }).length;
     let html = '<div class="cp-t">在线设备 ' + live + ' 台' + (live < list.length ? '（另 ' + (list.length - live) + ' 台最近活跃）' : '') + '</div>';
     html += list.map(function (p) {
