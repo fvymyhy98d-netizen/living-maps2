@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793374742209,
+      "syncTs": 1793374786264,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -354,18 +354,6 @@ window.SITE_CONTENT = {
           ]
         },
         {
-          "type": "paragraph",
-          "size": "normal",
-          "text": "",
-          "style": {},
-          "free": {
-            "x": 13.9,
-            "y": 345,
-            "w": 44,
-            "ride": 0
-          }
-        },
-        {
           "type": "heading",
           "level": 2,
           "text": "一次真实的认识修正（示例）"
@@ -384,6 +372,18 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "- 先问问题再选工具；区分**事实**与**推断**；\n- 从任务困难反查知识缺口，连接到领域地图的课程路径；\n- 做小规模尝试并保留输入输出；每周检查一次地图并留下记录。"
+        },
+        {
+          "type": "paragraph",
+          "size": "normal",
+          "text": "",
+          "style": {},
+          "free": {
+            "x": 14.8,
+            "y": 273,
+            "w": 44,
+            "ride": 0
+          }
         }
       ],
       "heroAlign": ""
