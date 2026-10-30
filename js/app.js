@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '65';
+var LM_ASSET_VER = '66';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -606,9 +606,18 @@ window.LMApp = (function () {
   function adjustFreeLayout() {
     const col = app.querySelector('.blocks');
     if (!col) return;
-    const S = col._freeSession || freeScan(col);
-    if (!S) return;
-    applyFreeScan(S);
+    let S = col._freeSession;
+    /* ★ 修复66：丢手的会话自动作废 —— 拖到窗口外松开 / Alt+Tab / pointercancel 会吞掉 mouseup，
+       让位会话就永久挂着：之后所有重算都吃「拖动开始时」的过期快照（内容改过不重新测量、
+       块的基线高度是旧的）→ 让位量算错 → 块间大空隙/叠住，点别的块还会被残留让位撞飞。
+       判定：有会话、但页面上没有任何 .free-drag（没人在拖）、且超过 2.5 秒没被刷新 → 泄漏，弃用 */
+    if (S && !col.querySelector('.free-drag') && Date.now() - (S.ts || 0) > 2500) {
+      col._freeSession = null; S = null;
+    }
+    const SS = S || freeScan(col);
+    if (!SS) return;
+    SS.ts = Date.now();
+    applyFreeScan(SS);
   }
   /* ★ 修复㉜（手机端并排重叠）：freeDecide 的 24px 滞回是防抖设计（test_yield B 场景锁死，🔒 锁定段一字未动），
      但「深压→浅压」回弹时块顶端会钻进框底最多 24px，手机上很明显（「下面东西飞上去和并排框重叠」）。
@@ -736,6 +745,7 @@ window.LMApp = (function () {
     const col = app.querySelector('.blocks');
     if (!col || col._freeSession) return;
     col._freeSession = freeScan(col);
+    if (col._freeSession) col._freeSession.ts = Date.now();
   }
   function endFreeDrag() {
     const col = app.querySelector('.blocks');
@@ -744,6 +754,8 @@ window.LMApp = (function () {
     col._freeSession = null;
     if (S) applyFreeScan(S);
     else adjustFreeLayout();
+    /* ★ 修复66：兜底收尾也走显示层复查（丢手路径没有编辑器里的 adjustFreeLayout 调用） */
+    fixFreeOverlapVisual();
   }
   /* 🔒 YIELD-V4 锁定段到此结束 —— 以下代码可正常维护 */
   let frResizeT = null;
@@ -751,6 +763,20 @@ window.LMApp = (function () {
     clearTimeout(frResizeT);
     frResizeT = setTimeout(function () { adjustImages(); adjustFreeLayoutSafe(); }, 180);
   });
+  /* ★ 修复66：会话兜底收尾 —— 拖拽时把鼠标甩出窗口松开、Alt+Tab、触屏手势被系统接管，
+     都会吞掉 mouseup（编辑器里的 up() 永远不跑）→ 会话一直挂着。这里在「一定会发生」的
+     时机主动收尾：清掉残留 .free-drag、结束会话、按当前真实框位全量重算一次。
+     endFreeDrag 幂等（没有会话时只做一次全量重算），重复触发无副作用 */
+  function freeSessionFallback() {
+    const col = app.querySelector('.blocks');
+    if (!col || !col._freeSession) return;
+    col.querySelectorAll(':scope > .block-wrap.free-drag').forEach(function (w) { w.classList.remove('free-drag'); });
+    col._freeSession = null; /* 丢弃过期快照，直接按当前真实布局重新测量（不先套旧值，避免闪一帧） */
+    adjustFreeLayoutSafe();
+  }
+  document.addEventListener('pointercancel', freeSessionFallback);
+  window.addEventListener('blur', freeSessionFallback);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) freeSessionFallback(); });
 
   /* skipAnim=true：无动画重绘（编辑操作静默更新，像 Word 一样不闪屏） */
   function render(skipAnim) {

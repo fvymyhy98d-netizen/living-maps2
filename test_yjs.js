@@ -463,7 +463,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '65';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '66';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -553,12 +553,14 @@ T('startFreeResize 测内容高时 height 置 auto 再恢复（scrollHeight 不�
     && edt2.indexOf('const contentH = wrap.scrollHeight || 0;') > 0
     && edt2.indexOf('wrap.style.height = _prevH;') > 0
     && edt2.indexOf('const minH = Math.max(50, contentH + 2);') > 0);
-
-
-
-
-
-
-
-console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
+/* ---------- 9.31) 修复66：丢手的让位会话自动作废 + 三重兜底收尾 ---------- */
+console.log('【9.31】修复66：会话泄漏自愈（2.5s 无拖动判泄漏 / pointercancel·blur·切后台 兜底）');
+T('adjustFreeLayout 过期会话弃用 + beginFreeDrag 打时间戳 + freeSessionFallback 三处监听',
+  appSrc.indexOf('if (S && !col.querySelector(\'.free-drag\') && Date.now() - (S.ts || 0) > 2500) {') > 0
+    && appSrc.indexOf('if (col._freeSession) col._freeSession.ts = Date.now();') > 0
+    && appSrc.indexOf('function freeSessionFallback() {') > 0
+    && appSrc.indexOf("document.addEventListener('pointercancel', freeSessionFallback);") > 0
+    && appSrc.indexOf("window.addEventListener('blur', freeSessionFallback);") > 0
+    && appSrc.indexOf("document.addEventListener('visibilitychange', function () { if (document.hidden) freeSessionFallback(); });") > 0
+    && appSrc.indexOf('col._freeSession = null; /* 丢弃过期快照') > 0);
 process.exit(fail ? 1 : 0);
