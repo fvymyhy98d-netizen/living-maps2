@@ -677,6 +677,7 @@ window.LMEditor = (function () {
       + '<button class="btn btn-mini" data-panel="pages" type="button">📄 页面管理</button>'
       + '<button class="btn btn-mini" data-panel="hist" type="button">🕘 历史版本</button>'
       + '<button class="btn btn-mini" data-panel="backup" type="button">💾 备份 / 恢复</button>'
+      + '<button class="btn btn-mini" data-panel="discard" type="button">↩ 放弃修改</button>'
       + '<button class="btn btn-mini" data-panel="password" type="button">🔑 修改密码</button>';
     if (!bar.dataset.init) {
       bar.dataset.init = '1';
@@ -695,6 +696,7 @@ window.LMEditor = (function () {
     else if (k === 'hist') histModal();
     else if (k === 'pages') pagesModal();
     else if (k === 'backup') backupModal();
+    else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到你进入管理模式时的版本？此后的一切改动（包括协同期间其他设备同步来的修改）都会被撤销，恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
     else if (k === 'password') passwordModal();
   });
 
@@ -3303,7 +3305,7 @@ window.LMEditor = (function () {
       wrap.classList.remove('free-drag');
       resolveFreeOverlaps(wrap, b);
       if (window.LMApp && LMApp.endFreeDrag) LMApp.endFreeDrag();
-      else if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout();
+      if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout(); /* ★ 修复㉜：会话已清，safe 版带显示层复查（修并排框下方块飞上去重叠） */
       LMApp.commit({ silent: true, rerender: false });
       markSaved();
     };
@@ -3363,7 +3365,7 @@ window.LMEditor = (function () {
          内容块再由让位引擎自动推开 */
       resolveFreeOverlaps(wrap, b, false, true);
       if (window.LMApp && LMApp.endFreeDrag) LMApp.endFreeDrag();
-      else if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout();
+      if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout(); /* ★ 修复㉜：会话已清，safe 版带显示层复查（修并排框下方块飞上去重叠） */
       LMApp.commit({ silent: true, rerender: false });
       markSaved();
       LMApp.toast('文本框已调整（字号固定，用工具栏「字号」下拉修改）');
@@ -3474,6 +3476,7 @@ window.LMEditor = (function () {
       + '<span class="ih" data-h="sw"></span><span class="ih" data-h="se"></span>'
       + '<span class="ih-rot" title="拖动旋转"></span>';
     box.appendChild(hd);
+    armToolsAutohide(); /* ★ 修复㉜：图片选中态同样 6 秒无操作淡出 */
   }
   function refreshSel() {
     if (tb.imgSel == null) { removeHandles(); return; }
@@ -3481,6 +3484,18 @@ window.LMEditor = (function () {
     if (box) addHandles(box);
     else { tb.imgSel = null; removeHandles(); }
   }
+  /* ★ 修复㉜（手机端操作栏）：点按块浮现操作栏，6 秒无任何操作自动淡出（CSS opacity 过渡）。
+     桌面端 hover 常态一字不动；手机端有操作（pointerdown）就重新计时 */
+  var toolsHideT = 0;
+  function armToolsAutohide() {
+    if (!document.body || !document.body.classList.contains('mobile-view')) return;
+    if (toolsHideT) clearTimeout(toolsHideT);
+    toolsHideT = setTimeout(function () {
+      toolsHideT = 0;
+      document.querySelectorAll('.block-wrap.selected,.free-box.selected').forEach(function (w) { w.classList.remove('selected'); });
+    }, 6000);
+  }
+  document.addEventListener('pointerdown', function () { if (toolsHideT) armToolsAutohide(); }, true);
   /* ---------- Word 式块选中：点击任意内容块 → 蓝框 + 四角手柄（拖动调宽） ---------- */
   function selectBlock(idx) {
     tb.active = idx;
@@ -3497,9 +3512,17 @@ window.LMEditor = (function () {
   ];
   function refreshHandles() {
     document.querySelectorAll('.block-wrap.selected').forEach(function (w) { w.classList.remove('selected'); });
+    document.querySelectorAll('.free-box.selected').forEach(function (w) { w.classList.remove('selected'); });
     document.querySelectorAll('.blk-handles,.blk-typebar').forEach(function (h) { h.remove(); });
     const b = activeBlock();
-    if (!b || b.free || b.type === 'image') { refreshSel(); return; }
+    if (!b || b.free || b.type === 'image') {
+      /* ★ 修复㉜：自由框也给选中反馈（selected）——手机端借此显示拖动手柄并参与 6 秒自动淡出；
+         CSS 的 body.admin .free-box.selected 本就设计过（清除双框叠影），桌面行为不变 */
+      const fw = (b && b.free) ? document.querySelector('.free-box[data-idx="' + tb.active + '"]') : null;
+      if (fw) fw.classList.add('selected');
+      refreshSel(); if (fw) armToolsAutohide();
+      return;
+    }
     const wrap = document.querySelector('.block-wrap[data-idx="' + tb.active + '"]');
     if (!wrap) { refreshSel(); return; }
     wrap.classList.add('selected');
@@ -3517,6 +3540,7 @@ window.LMEditor = (function () {
       + '<span class="bh" data-h="sw"></span><span class="bh" data-h="se"></span>';
     wrap.appendChild(hd);
     refreshSel();
+    armToolsAutohide(); /* ★ 修复㉜：手机端选中块后启动 6 秒自动淡出计时 */
   }
   function startBlockResize(e, h) {
     const wrap = h.closest('.block-wrap'); if (!wrap) return;
@@ -4025,6 +4049,33 @@ window.LMEditor = (function () {
   }
   document.addEventListener('touchend', touchDragEnd);
   document.addEventListener('touchcancel', touchDragEnd);
+  /* ★ 修复㉜（手机端「单击浮现操作栏、双击进输入」）：触屏轻点文字（contenteditable）时，
+     第一击只选中块浮现操作栏（阻止原生聚焦），400ms 内第二击才放行原生聚焦进入编辑；
+     已在编辑中的元素单击 = 移动光标照常放行。桌面端与滚动/拖拽（位移>12px）完全不经过此路径 */
+  var lastEditTap = { t: 0, el: null }, editTapStart = null;
+  document.addEventListener('touchstart', function (e) {
+    editTapStart = (e.touches && e.touches[0]) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  }, true);
+  document.addEventListener('touchend', function (e) {
+    if (!window.LMApp || !LMApp.state.admin) return;
+    if (!document.body || !document.body.classList.contains('mobile-view')) return;
+    if (!editTapStart || !e.changedTouches || !e.changedTouches[0]) return;
+    const dx = e.changedTouches[0].clientX - editTapStart.x, dy = e.changedTouches[0].clientY - editTapStart.y;
+    editTapStart = null;
+    if (dx * dx + dy * dy > 144) return; /* 位移 >12px：是滚动/拖拽不是轻点 */
+    const t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('#editBar,#brushPop,#navGear,#gearPop,.popover,#adminBar,.modal-mask,.cfm-mask,.block-tools,.blk-typebar,.blk-handles,.crop-bar,#collabPanel,button,input,textarea,a,.fb-grip,.fb-hd,.ih')) return;
+    const el = t.closest('[data-edit]');
+    if (!el) return;
+    if (document.activeElement === el) return; /* 编辑中：单击移动光标，放行 */
+    const now = Date.now();
+    if (lastEditTap.el === el && now - lastEditTap.t < 400) { lastEditTap = { t: 0, el: null }; return; } /* 双击：放行原生聚焦进编辑 */
+    lastEditTap = { t: now, el: el };
+    e.preventDefault(); /* 第一击：阻止 contenteditable 原生聚焦与合成 click */
+    const wrap = el.closest('.block-wrap[data-idx],.free-box[data-idx]');
+    if (wrap && !isNaN(+wrap.getAttribute('data-idx'))) selectBlock(+wrap.getAttribute('data-idx')); /* 单击：浮现操作栏 */
+  }, true);
   document.addEventListener('focusin', function (e) {
     if (!window.LMApp || !LMApp.state.admin) return;
     /* ★ .lmsel-list（悬浮下拉挂在 body 下）也必须排除：否则点下拉选项的瞬间触发工具栏重建，

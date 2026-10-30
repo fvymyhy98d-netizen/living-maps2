@@ -275,6 +275,44 @@ T('光标跟随滚动：selectionchange 节流 + scrollIntoView（工具栏+键�
 T('手机端工具栏限高可滚（max-height 42vh，展开不吞屏）',
   cssSrc.indexOf('max-height:42vh') > 0 && cssSrc.indexOf('-webkit-overflow-scrolling:touch') > 0);
 
+/* ---------- 9.8) 修复㉜：放弃修改 / 密码云端重验 / 手机操作栏浮现淡出+双击编辑 / 并排重叠兜底 ---------- */
+console.log('【9.8】修复㉜：放弃修改 · 密码云端重验 · 手机操作栏 · 并排重叠');
+T('放弃修改：登录成功与刷新恢复两处拍快照，discardChanges 整包恢复走 commit（本机+历史+协同广播）',
+  appSrc.indexOf('function takeAdminSnap()') > 0 && appSrc.indexOf('function discardChanges()') > 0
+    && appSrc.indexOf('takeAdminSnap(); /* ★ 修复㉜：进入管理模式的瞬间拍内容快照') > 0
+    && appSrc.indexOf('if (state.admin) takeAdminSnap();') > 0
+    && appSrc.indexOf('adminSnap = null; /* ★ 修复㉜：退出管理模式即弃快照 */') > 0
+    && appSrc.indexOf('discardChanges: discardChanges') > 0);
+T('管理条新增「↩ 放弃修改」按钮（确认弹窗写明协同回退影响）',
+  edt2.indexOf('data-panel="discard"') > 0 && edt2.indexOf("k === 'discard'") > 0
+    && edt2.indexOf('LMApp.discardChanges();') > 0);
+T('密码云端重验：本地失败自动拉云端 content.js 用最新密码数据重验，命中才合入本机 admin 配置',
+  appSrc.indexOf('function fetchRemoteContent()') > 0
+    && appSrc.indexOf("fetch('data/content.js?lmnc='") > 0
+    && appSrc.indexOf('function verifyPasswordSmart(v)') > 0
+    && appSrc.indexOf('verifyPasswordSmart(v).then(function (r) {') > 0
+    && appSrc.indexOf('state.content.config.admin = rc.config.admin') > 0
+    && appSrc.indexOf("cache: 'no-store'") > 0);
+T('手机操作栏：点按浮现 6 秒无操作淡出（armToolsAutohide + opacity 过渡），有操作自动重置计时',
+  edt2.indexOf('function armToolsAutohide()') > 0 && edt2.indexOf("classList.contains('mobile-view')") > 0
+    && edt2.indexOf("addEventListener('pointerdown', function () { if (toolsHideT) armToolsAutohide(); }, true);") > 0
+    && cssSrc.indexOf('body.admin.mobile-view .block-wrap .block-tools,body.admin.mobile-view .free-box .block-tools{display:flex;opacity:0;pointer-events:none;transition:opacity .5s ease}') > 0);
+T('手机双击进编辑：第一击 preventDefault 只选中块，400ms 内第二击放行原生聚焦（滚动/拖拽位移>12px 放行）',
+  edt2.indexOf('var lastEditTap = { t: 0, el: null }, editTapStart = null;') > 0
+    && edt2.indexOf("dx * dx + dy * dy > 144") > 0
+    && edt2.indexOf("lastEditTap.el === el && now - lastEditTap.t < 400") > 0);
+T('手机端自由框手柄不再常显（selected/free-drag/focus-within 才出现）',
+  cssSrc.indexOf('body.admin.mobile-view .fb-grip,body.admin.mobile-view .fb-hd{display:none}') > 0
+    && cssSrc.indexOf('body.admin.mobile-view .free-box.selected .fb-grip') > 0);
+T('并排重叠兜底：fixFreeOverlapVisual 只抬不降（锁定段外显示层复查，freeDecide/YIELD-V4 零改动）',
+  appSrc.indexOf('function fixFreeOverlapVisual()') > 0
+    && appSrc.indexOf("if (!col || col._freeSession) return;") > 0
+    && appSrc.indexOf("if (want > cur + 1) f.w.style.marginTop = want + 'px';") > 0
+    && appSrc.indexOf('adjustFreeLayout: adjustFreeLayoutSafe') > 0
+    && appSrc.indexOf('function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
+T('手机端并排框入场只淡入不位移（滚动合成减负，访客同样受益；桌面观感不变）',
+  cssSrc.indexOf('body.mobile-view .free-box.reveal{transform:none}') > 0);
+
 /* ---------- 8) 自动限时限制（banSelf）修复：三拦截全部打通 + 防锁死 ---------- */
 console.log('【8】密码试错自动限时限制（走通 + 防锁死）');
 T('banSelf 专用通道：绕过「不能屏蔽本机」守卫 + 轮询等签名密钥（waitBanKey 最多 3 秒）',

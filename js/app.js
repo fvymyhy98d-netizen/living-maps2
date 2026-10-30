@@ -582,6 +582,48 @@ window.LMApp = (function () {
     if (!S) return;
     applyFreeScan(S);
   }
+  /* ★ 修复㉜（手机端并排重叠）：freeDecide 的 24px 滞回是防抖设计（test_yield B 场景锁死，🔒 锁定段一字未动），
+     但「深压→浅压」回弹时块顶端会钻进框底最多 24px，手机上很明显（「下面东西飞上去和并排框重叠」）。
+     这里在锁定段外做显示层兜底：布局计算后用实测矩形复查，凡「框压块（水平重叠>16px）」就把块顶端
+     抬到框下端 —— 只抬不降（无滞回也不会抖），freeDecide 与 YIELD-V4 让位引擎零改动 */
+  function fixFreeOverlapVisual() {
+    try {
+      const col = app.querySelector('.blocks');
+      if (!col || col._freeSession) return; /* 拖拽会话中不跑（每帧路径），松手后 endFreeDrag 会再调 */
+      const page = state.content.pages.find(function (x) { return x.id === state.pageId; });
+      if (!page || !page.blocks) return;
+      const flows = [], frees = [];
+      col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
+        const b = page.blocks[+w.getAttribute('data-idx')];
+        if (!b) return;
+        (b.free ? frees : flows).push({ b: b, w: w });
+      });
+      if (!frees.length) return;
+      const sy = window.scrollY || window.pageYOffset || 0;
+      const colTop = col.getBoundingClientRect().top + sy;
+      frees.forEach(function (fd) {
+        const r = fd.w.getBoundingClientRect();
+        fd.top = colTop + (+fd.b.free.y || 0);
+        fd.h = r.height;
+        fd.bot = fd.top + fd.h;
+        fd.left = r.left; fd.right = r.right;
+      });
+      flows.forEach(function (f) {
+        const r = f.w.getBoundingClientRect();
+        const cur = parseFloat(f.w.style.marginTop) || 0;
+        const natTop = r.top + sy - cur; /* 当前顶端 − 已有 margin = 自然基线 */
+        let need = 0;
+        frees.forEach(function (fd) {
+          const ox = Math.min(fd.right, r.right) - Math.max(fd.left, r.left);
+          if (ox > 16 && fd.top < natTop + r.height && fd.bot > natTop) need = Math.max(need, fd.bot - natTop);
+        });
+        const want = Math.round(Math.max(0, need));
+        if (want > cur + 1) f.w.style.marginTop = want + 'px'; /* 只抬不降：杜绝回弹「飞上去」 */
+      });
+    } catch (e) { /* 显示层兜底，任何异常静默 */ }
+  }
+  /* 包装版：所有走 LMApp.adjustFreeLayout 的调用自动带上显示层复查（锁定段内部互调不受影响） */
+  function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }
   /* 拖拽会话：开始拍快照；期间全部重算走快照；结束时再算一次（与最后一帧同值）后销毁 */
   function beginFreeDrag() {
     const col = app.querySelector('.blocks');
@@ -600,7 +642,7 @@ window.LMApp = (function () {
   let frResizeT = null;
   window.addEventListener('resize', function () {
     clearTimeout(frResizeT);
-    frResizeT = setTimeout(function () { adjustImages(); adjustFreeLayout(); }, 180);
+    frResizeT = setTimeout(function () { adjustImages(); adjustFreeLayoutSafe(); }, 180);
   });
 
   /* skipAnim=true：无动画重绘（编辑操作静默更新，像 Word 一样不闪屏） */
@@ -627,7 +669,7 @@ window.LMApp = (function () {
       });
     }
     adjustImages();
-    adjustFreeLayout();
+    adjustFreeLayoutSafe();
     /* 全量防重叠（纯数据模型计算）：把历史上被过渡动画期算坏、已持久化的框位置修好 */
     if (window.LMEditor && LMEditor.fixFreeOverlaps) { try { LMEditor.fixFreeOverlaps(); } catch (e0) { /* noop */ } }
     assignRefNums();
@@ -662,6 +704,18 @@ window.LMApp = (function () {
     if (!opts.silent) toast(opts.msg || '已保存（本浏览器）');
   }
   function applyEdit(msg) { commit({ msg: msg }); }
+  /* ★ 修复㉜「不保存修改」：进入管理模式的瞬间拍下内容快照，之后随时可以一键回到这一版
+     （相当于 Word 关闭时选「不保存」）。恢复走统一 commit：写本机 + 记历史 + 协同广播全网收敛。
+     注意：恢复的是「进入管理模式那一刻」的整包 —— 协同期间其他设备同步来的修改也会一并回退，
+     确认弹窗里已写明。退出管理模式即弃快照 */
+  let adminSnap = null;
+  function takeAdminSnap() { try { adminSnap = JSON.parse(JSON.stringify(state.content)); } catch (e) { adminSnap = null; } }
+  function discardChanges() {
+    if (!state.admin) return;
+    if (!adminSnap) { toast('没有可恢复的基准（请退出管理模式重新登录后再试）'); return; }
+    state.content = JSON.parse(JSON.stringify(adminSnap));
+    commit({ msg: '已放弃本次修改：内容恢复到进入管理模式时的版本' });
+  }
   /* 在某个内容块后插入新块（afterIdx 为空则加到末尾），返回新位置 */
   function insertBlock(nb, afterIdx) {
     const p = state.content.pages.find(function (x) { return x.id === state.pageId; });
@@ -787,6 +841,43 @@ window.LMApp = (function () {
       });
     });
   }
+  /* ★ 修复㉜：手机端「正确的密码也登不进」——修改管理密码只在改的那台设备生效（存本机 localStorage），
+     忘了点「同步到 GitHub」时，其他设备本地的密码数据是旧的，怎么输都「密码不正确」。
+     现在本地验证失败后自动拉云端最新 content.js 的密码数据再验一次：对得上就把云端的管理员配置
+     合入本机并放行（不碰页面内容），登录成功时提示「已自动获取云端最新密码数据」 */
+  function fetchRemoteContent() {
+    return fetch('data/content.js?lmnc=' + Date.now(), { cache: 'no-store' }).then(function (r2) {
+      if (!r2.ok) throw new Error('HTTP ' + r2.status);
+      return r2.text();
+    }).then(function (txt) {
+      const a = txt.indexOf('/*CONTENT-START*/'), b2 = txt.indexOf('/*CONTENT-END*/');
+      if (a < 0 || b2 < 0) throw new Error('格式不符');
+      const seg = txt.slice(a + 17, b2).replace(/^\s*window\.SITE_CONTENT\s*=\s*/, '').replace(/;\s*$/, '');
+      const c = JSON.parse(seg);
+      if (!c || !Array.isArray(c.pages)) throw new Error('内容无效');
+      return c;
+    });
+  }
+  function _verifyAgainst(c, v) {
+    try {
+      const adm2 = (c.config && c.config.admin) || {};
+      const rec2 = adm2.auth;
+      if (rec2 && rec2.salt && rec2.hash) return LMStore.pbkdf2Hex(v, rec2.salt, rec2.iters).then(function (h2) { return h2 === rec2.hash; });
+      if (adm2.passwordHash) return LMStore.sha256Hex(v).then(function (hx) { return hx === adm2.passwordHash; });
+    } catch (e) { /* noop */ }
+    return Promise.resolve(false);
+  }
+  function verifyPasswordSmart(v) {
+    return verifyPassword(v).then(function (r) {
+      if (r && r.ok) return r;
+      let rc = null;
+      return fetchRemoteContent().then(function (c) { rc = c; return _verifyAgainst(c, v); }).then(function (ok2) {
+        if (!ok2) return r; /* 云端也验不过 → 维持本地结论（「密码不正确」） */
+        try { state.content.config.admin = rc.config.admin; LMStore.saveLocal(state.content); } catch (eS) { /* noop */ }
+        return { ok: true, root: false, chash: (rc.config.admin.auth || {}).hash || null, refreshed: true };
+      }).catch(function () { return r; /* 离线/拉取失败：维持本地结论 */ });
+    }).catch(function () { return { ok: false, root: false, chash: null }; });
+  }
   /* 老单轮哈希 → v2 拉伸记录（独立随机盐），并删除旧哈希 */
   function upgradeAdminPassword(pw) {
     const salt = LMStore.randomSaltHex(16);
@@ -806,6 +897,7 @@ window.LMApp = (function () {
     LMEditor.modal('<form id="pwForm">'
       + '<h3>管理员登录</h3>'
       + '<p class="modal-note">' + esc((state.content.config.admin && state.content.config.admin.hint) || '') + '</p>'
+      + '<p class="modal-note">💡 在其他设备改过密码？请先在那台设备点「☁️ 同步到 GitHub」——本机验证失败时会自动尝试云端最新的密码数据。</p>'
       + '<label class="field"><span class="field-label">管理密码</span>'
       + '<input class="input" type="password" name="pw" placeholder="请输入管理密码" autocomplete="current-password" required></label>'
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
@@ -820,7 +912,7 @@ window.LMApp = (function () {
         const v = root.querySelector('[name=pw]').value;
         const btn = root.querySelector('[type=submit]');
         btn.disabled = true; btn.textContent = '正在验证…';
-        verifyPassword(v).then(function (r) {
+        verifyPasswordSmart(v).then(function (r) {
           btn.disabled = false; btn.textContent = '进入管理模式';
           const ok = !!(r && r.ok);
           if (ok) {
@@ -851,9 +943,11 @@ window.LMApp = (function () {
             sessionStorage.setItem('lm_admin', '1');
             try { if (r.root) sessionStorage.setItem('lm_root', '1'); else sessionStorage.removeItem('lm_root'); } catch (eS) { /* noop */ }
             state.admin = true; state.root = !!r.root;
+            takeAdminSnap(); /* ★ 修复㉜：进入管理模式的瞬间拍内容快照（「↩ 放弃修改」回到这一版） */
             LMEditor.closeModal();
             render();
-            toast('管理模式已开启：直接点击文字就能修改（像 Word 一样），改动自动保存');
+            toast('管理模式已开启：直接点击文字就能修改（像 Word 一样），改动自动保存'
+              + (r.refreshed ? '（已自动获取云端最新密码数据）' : ''));
             /* 密码试错自动限时限制：本机 1 小时内 ≥5 次密码错误 → 登录成功这一刻自动限制
                本设备管理员入口 30 分钟（banSelf 专用通道：等签名密钥就绪、允许作用于本机、
                条目带 until 自动过期）；根管理员登录成功会自动清除本机限时条目（防锁死），
@@ -946,7 +1040,7 @@ window.LMApp = (function () {
     document.body.classList.toggle('mobile-view', mobile);
     document.body.classList.toggle('desktop-view', !mobile);
     /* 类变化后才重绘一次（图表按新宽度测量）；初始化阶段只挂类，交给 init() 的首次渲染 */
-    if (changed && state.ready) { render(true); adjustImages(); adjustFreeLayout(); }
+    if (changed && state.ready) { render(true); adjustImages(); adjustFreeLayoutSafe(); }
   }
   function setViewMode(v) {
     state.view = (v === 'mobile' || v === 'desktop') ? v : 'auto';
@@ -1016,6 +1110,7 @@ window.LMApp = (function () {
       closeGearPop();
       if (state.admin) {
         state.admin = false; state.root = false;
+        adminSnap = null; /* ★ 修复㉜：退出管理模式即弃快照 */
         try { sessionStorage.removeItem('lm_admin'); sessionStorage.removeItem('lm_root'); } catch (e5) { /* noop */ }
         render(); toast('已退出管理模式');
       } else loginModal();
@@ -1501,6 +1596,7 @@ window.LMApp = (function () {
     hist.ptr = 0;
     state.admin = sessionStorage.getItem('lm_admin') === '1';
     state.root = state.admin && sessionStorage.getItem('lm_root') === '1';
+    if (state.admin) takeAdminSnap(); /* ★ 修复㉜：刷新后恢复的管理模式同样以此刻内容为「放弃修改」基准 */
     /* 讨论区 v4：把本机历史发言并入内容 JSON（state.content.discuss），
        之后随协作三通道（本机互连 / 课堂服务器 / GitHub 云端）跨设备同步 */
     try {
@@ -1535,7 +1631,8 @@ window.LMApp = (function () {
     refreshDiscuss: mountFeedback,
     historyList: historyList, restoreVersion: restoreVersion,
     esc: esc, md: md, currentId: currentId, ensureConfig: ensureConfig,
-    commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayout,
+    commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayoutSafe,
+    fixFreeOverlapVisual: fixFreeOverlapVisual, discardChanges: discardChanges,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,
     adjustImages: adjustImages,
     setViewMode: setViewMode, applyView: applyView, isMobileDevice: isMobileDevice,

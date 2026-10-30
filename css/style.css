@@ -761,7 +761,22 @@ body.admin.mobile-view .block-wrap .block-tools{display:flex}
 body.admin.mobile-view .page-hero .block-tools{display:flex}
 /* 并排框/文本框的蓝色拖动抓手（fb-grip）与调宽调高手柄（fb-hd）也一直显示——
    @media(hover:none) 已有触屏常显，这里对 mobile-view 再保底（个别安卓 WebView 误报 hover 能力） */
-body.admin.mobile-view .fb-grip,body.admin.mobile-view .fb-hd{display:block}
+body.admin.mobile-view .fb-grip,body.admin.mobile-view .fb-hd{display:none}
+/* ★ 修复㉜：手机端自由框手柄不再常显（「每个板块操作栏一直显示」的另一半）——
+   点选（selected）/拖动（free-drag）/编辑中（focus-within）才出现，6 秒无操作随选中态一起淡出 */
+body.admin.mobile-view .free-box.selected .fb-grip,body.admin.mobile-view .free-box.selected .fb-hd,
+body.admin.mobile-view .free-box.free-drag .fb-grip,body.admin.mobile-view .free-box.free-drag .fb-hd,
+body.admin.mobile-view .free-box:focus-within .fb-grip,body.admin.mobile-view .free-box:focus-within .fb-hd{display:block}
+/* ★ 修复㉜：手机端块操作栏「点按浮现、无操作 6 秒淡出」——用 opacity 过渡替代 display 切换才有渐隐动画；
+   body.admin.mobile-view 前缀（4 类）必须与上面 134 行的 hover/selected 规则同权重且靠后才能接管 display；
+   桌面端 hover/selected 的 display:flex 常态一字不动 */
+body.admin.mobile-view .block-wrap .block-tools,body.admin.mobile-view .free-box .block-tools{display:flex;opacity:0;pointer-events:none;transition:opacity .5s ease}
+body.admin.mobile-view .block-wrap.selected .block-tools,body.admin.mobile-view .free-box.selected .block-tools{opacity:1;pointer-events:auto}
+body.admin.mobile-view .blk-typebar,body.admin.mobile-view .blk-handles{transition:opacity .5s ease}
+body.admin.mobile-view .block-wrap:not(.selected) .blk-typebar,body.admin.mobile-view .block-wrap:not(.selected) .blk-handles{opacity:0;pointer-events:none}
+/* ★ 修复㉜：手机端并排框/文本框入场只做淡入不做 30px 位移——.9s 的 transform 过渡在滚动经过时启动，
+   absolute+阴影+半透明层的合成开销大，低端机表现为滚动到并排区「卡一下」（访客同样受益）；桌面端观感不变 */
+body.mobile-view .free-box.reveal{transform:none}
 body.mobile-view .free-box .block-tools{max-width:calc(100vw - 20px)}
 body.mobile-view .free-box{padding:10px 12px}
 /* —— 手机端管理模式：顶部 Word 工具条 —— */
