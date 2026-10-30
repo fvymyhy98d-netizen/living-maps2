@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '66';
+var LM_ASSET_VER = '67';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -579,6 +579,15 @@ window.LMApp = (function () {
      全程不读流块布局 → 流块过渡动画从不被打断（治抖关键）。 */
   function applyFreeScan(S) {
     const flows = S.flows, frees = S.frees;
+    /* ★ 修复67：自由框「随上文一起下移」的记账数据（供松手时的 commitFreeRide 烘焙，逐帧不动框位置）。
+       框的位置是绝对像素，被让位的流块推开后框本身不动，流块就会从框身下钻过去排到框下面
+       （「前置基础」钻到「核心概念速览」下面、上下顺序被翻掉）。位移 = 框上方「原本整块都在框顶之上」
+       的流块让位量之和 —— 只累计这类块：否则框自己压出来的让位会推着自己跑（死循环） */
+    S.order = new Map();
+    Array.prototype.slice.call(S.col.querySelectorAll(':scope > .block-wrap')).forEach(function (w, i) { S.order.set(w, i); });
+    S.flowGeo = flows.map(function (f) {
+      return { w: f.w, b: f.b, oi: S.order.get(f.w) || 0, natTop: f.natTop, h: f.h, m: 0 };
+    });
     frees.forEach(function (fd) {
       fd.top = S.colTop + (+fd.b.free.y || 0);
       fd.h = fd.w.offsetHeight || 60;
@@ -598,6 +607,7 @@ window.LMApp = (function () {
     flows.forEach(function (f, i) {
       const m = res.margins[i];
       if (m !== (parseFloat(f.w.style.marginTop) || 0)) f.w.style.marginTop = m + 'px';
+      S.flowGeo[i].m = m; /* ★ 修复67：记下本轮实际让位量，供 commitFreeRide / 记账比对 */
     });
     frees.forEach(function (fd, k) {
       fd.w._freeHost = res.host[k] >= 0 ? flows[res.host[k]].w : null;
@@ -618,6 +628,7 @@ window.LMApp = (function () {
     if (!SS) return;
     SS.ts = Date.now();
     applyFreeScan(SS);
+    col._lastScan = SS; /* ★ 修复67：松手后 commitFreeRide 用这份扫描（含本轮让位量）烘焙框的随动位移 */
   }
   /* ★ 修复㉜（手机端并排重叠）：freeDecide 的 24px 滞回是防抖设计（test_yield B 场景锁死，🔒 锁定段一字未动），
      但「深压→浅压」回弹时块顶端会钻进框底最多 24px，手机上很明显（「下面东西飞上去和并排框重叠」）。
@@ -738,8 +749,49 @@ window.LMApp = (function () {
       }
     } catch (e) { /* 显示层兜底，任何异常静默 */ }
   }
+  /* ★ 修复67：把「随上文下移」的显示位移烘焙进数据（free.y），并把已烘焙量记到 free.ride。
+     幂等：位移 = 当前上文让位量之和 − free.ride，烘焙后二者相等 → 下一轮位移为 0，不会叠加漂移；
+     上书让位收回时位移为负 → 框原样退回原位（可逆）。拖拽/会话中一律不跑（避免每帧写数据） */
+  /* ★ 修复67：把「随上文下移」的位移烘焙进数据（free.y），已烘焙量记到 free.ride。
+     幂等：位移 = 本轮让位量之和 − free.ride；烘焙后二者相等 → 下轮位移为 0，不会叠加漂移。
+     可逆：让位收回（框缩回去）时位移为负 → 框原样退回原位。
+     只累计「自然底部整块都在框顶之上」的流块让位 —— 避免框自己压出的让位推着自己跑（死循环）。
+     拖拽/会话中不跑（避免每帧写数据）；手机端并排组由显示层竖排接管，也不动 */
+  function commitFreeRide() {
+    const col = app.querySelector('.blocks');
+    if (!col || col._freeSession || col.querySelector('.free-drag')) return false;
+    const S = col._lastScan;
+    if (!S || !S.flowGeo || !S.frees) return false;
+    const mobile = document.body && document.body.classList.contains('mobile-view');
+    let moved = false;
+    S.frees.forEach(function (fd) {
+      const b = fd.b;
+      if (!b || !b.free) return;
+      if (mobile && b.free.g != null) return;
+      const natTop = S.colTop + (+b.free.y || 0);
+      const oi = S.order.get(fd.w) || 0;
+      let acc = 0;
+      S.flowGeo.forEach(function (fg) {
+        if (fg.oi < oi && fg.natTop + fg.h <= natTop + 2) acc += fg.m;
+      });
+      const d = Math.round(acc - (+b.free.ride || 0));
+      if (d !== 0) {
+        b.free.y = Math.max(0, Math.round((+b.free.y || 0) + d));
+        fd.w.style.top = b.free.y + 'px';
+        moved = true;
+      }
+      b.free.ride = acc;
+    });
+    if (moved) { try { LMStore.saveLocal(state.content); } catch (eR) { /* noop */ } }
+    return moved;
+  }
   /* 包装版：所有走 LMApp.adjustFreeLayout 的调用自动带上显示层复查（锁定段内部互调不受影响） */
-  function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }
+  function adjustFreeLayoutSafe() {
+    adjustFreeLayout();
+    fixFreeOverlapVisual();
+    /* ★ 修复67：框随上文落定后，框的新位置可能改变让位量 → 再对齐一轮（不递归，只再跑一次） */
+    if (commitFreeRide()) { adjustFreeLayout(); fixFreeOverlapVisual(); }
+  }
   /* 拖拽会话：开始拍快照；期间全部重算走快照；结束时再算一次（与最后一帧同值）后销毁 */
   function beginFreeDrag() {
     const col = app.querySelector('.blocks');
@@ -902,6 +954,38 @@ window.LMApp = (function () {
     adjustFreeLayoutSafe();
     setTimeout(function () { col.classList.remove('no-measure-anim'); }, 90);
     toast('🩺 已重新整理本页布局（模块间距已按自由框位置重算）');
+  }
+  /* ★ 修复67：布局体检（管理模式下控制台执行 `LMApp.dumpLayout()`）—— 打印每块的摆放方式、
+     位置与让位量，用来定位「框压块 / 上下顺序被翻 / 块间大空隙」这类现场问题。不改任何数据，
+     结果同时复制到剪贴板，方便把现场直接发给维护者 */
+  function dumpLayout() {
+    const col = app.querySelector('.blocks');
+    const page = state.content.pages.find(function (x) { return x.id === state.pageId; });
+    if (!col || !page || !page.blocks) { console.log('当前没有可体检的页面'); return []; }
+    const sy = window.scrollY || window.pageYOffset || 0;
+    const rows = [];
+    col.querySelectorAll(':scope > .block-wrap').forEach(function (w, i) {
+      const b = page.blocks[+w.getAttribute('data-idx')] || {};
+      const r = w.getBoundingClientRect();
+      rows.push({
+        顺序: i,
+        类型: b.type || '?',
+        摆放: b.free ? '自由框' : '文档流',
+        freeY: b.free ? (+b.free.y || 0) : '',
+        ride: b.free ? (+b.free.ride || 0) : '',
+        top: Math.round(r.top + sy),
+        bottom: Math.round(r.bottom + sy),
+        marginTop: Math.round(parseFloat(w.style.marginTop) || 0),
+        高: Math.round(r.height),
+        摘要: String(b.title || b.text || '').replace(/\s+/g, ' ').slice(0, 20)
+      });
+    });
+    if (console.table) console.table(rows); else console.log(rows);
+    try {
+      navigator.clipboard.writeText(JSON.stringify(rows));
+      toast('已打印布局体检结果到控制台，并复制到剪贴板');
+    } catch (eD) { toast('已打印布局体检结果到控制台'); }
+    return rows;
   }
   function discardChanges() {
     if (!state.admin) return;
@@ -1855,6 +1939,7 @@ window.LMApp = (function () {
     commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayoutSafe,
     fixFreeOverlapVisual: fixFreeOverlapVisual, discardChanges: discardChanges,
     fixLayout: fixLayout, /* ★ 修复64：一键整理布局（清残留让位边距 + 全量重算，用户自救重叠/大空隙） */
+    dumpLayout: dumpLayout, /* ★ 修复67：控制台布局体检（打印每块摆放方式/位置/让位量并复制到剪贴板） */
     takeAdminSnap: takeAdminSnap, /* ★ 修复62：推送云端成功后由 collab 回调重拍快照（放弃更改=回到最近上传版） */
     unfreeBlock: unfreeBlock,
     applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,

@@ -317,7 +317,8 @@ T('并排重叠兜底：fixFreeOverlapVisual 推框写数据（框压块→框�
     && appSrc.indexOf('if (moved) {') > 0
     && appSrc.indexOf('adjustFreeLayout(); /* 框位已持久更新：让位引擎按新位置立即对齐（原版，不再产生兜底抬升） */') > 0
     && appSrc.indexOf('adjustFreeLayout: adjustFreeLayoutSafe') > 0
-    && appSrc.indexOf('function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
+    && appSrc.indexOf('function adjustFreeLayoutSafe() {') > 0
+    && appSrc.indexOf('if (commitFreeRide()) { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
 T('手机端入场动画统一只淡入不位移（访客同样受益；桌面保持 30px 上滑不变）',
   cssSrc.indexOf('body.mobile-view .reveal{transform:none}') > 0
     && cssSrc.indexOf('body.mobile-view .free-box.reveal{transform:none}') < 0);
@@ -391,7 +392,7 @@ console.log('【9.12】修复㊵：推框深压跳过（>24px 交让位引擎）
 T('fixFreeOverlapVisual 深压跳过 + 浅压推框共存（同一把 24px 尺子，互不越界）',
   appSrc.indexOf('if ((natTop + r.height) - fd.top > 24) continue;') > 0
     && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0
-    && appSrc.indexOf('function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
+    && appSrc.indexOf('if (commitFreeRide()) { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
 /* ---------- 9.13) 修复㊶：手机键入「✕ 退出键入」红钮 + 工具栏单行滚动 / ⌨️ 常驻右上 ---------- */
 console.log('【9.13】修复㊶：退出键入红钮 · 工具栏单行横滑 · ⌨️ 常驻右上角');
 T('键入态显示「✕ 退出键入」红钮（body.typing），pointerdown 失焦收键盘；键入时管理条上移避让',
@@ -463,7 +464,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '66';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '67';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -563,4 +564,20 @@ T('adjustFreeLayout 过期会话弃用 + beginFreeDrag 打时间戳 + freeSessio
     && appSrc.indexOf("window.addEventListener('blur', freeSessionFallback);") > 0
     && appSrc.indexOf("document.addEventListener('visibilitychange', function () { if (document.hidden) freeSessionFallback(); });") > 0
     && appSrc.indexOf('col._freeSession = null; /* 丢弃过期快照') > 0);
+/* ---------- 9.32) 修复67：自由框随上文一起下移（框不再被流块「钻到下面」） ---------- */
+console.log('【9.32】修复67：free.ride 记账 + commitFreeRide 烘焙（框跟着上文走，缩回可逆）');
+T('applyFreeScan 建 flowGeo 记账 + commitFreeRide 用 _lastScan 烘焙 free.ride + 布局体检导出',
+  appSrc.indexOf('S.flowGeo = flows.map(function (f) {') > 0
+    && appSrc.indexOf('S.flowGeo[i].m = m;') > 0
+    && appSrc.indexOf('col._lastScan = SS;') > 0
+    && appSrc.indexOf('function commitFreeRide() {') > 0
+    && appSrc.indexOf('const S = col._lastScan;') > 0
+    && appSrc.indexOf('if (fg.oi < oi && fg.natTop + fg.h <= natTop + 2) acc += fg.m;') > 0
+    && appSrc.indexOf('b.free.y = Math.max(0, Math.round((+b.free.y || 0) + d));') > 0
+    && appSrc.indexOf('b.free.ride = acc;') > 0
+    && appSrc.indexOf('if (commitFreeRide()) { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0
+    && appSrc.indexOf('function dumpLayout() {') > 0
+    && appSrc.indexOf('dumpLayout: dumpLayout,') > 0);
+
+console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
