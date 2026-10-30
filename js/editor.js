@@ -291,12 +291,19 @@ window.LMEditor = (function () {
        图片 / 表格 → 贴左 / 居中 / 贴右（图片等比缩放，不会被拉变形） */
     let alignBtns = '';
     if (isFree) {
-      alignBtns = '<button type="button" data-act="fsnap" data-side="left"' + pg + ' title="向左拉伸：右边缘不动，左边伸到文档最左（被挡住则停在旁边块右侧，留小缝）">⇤</button>'
+      /* ★ 修复㊿：语义分组（细竖线分隔）—— 拉伸(⇤⇥) / 水平对齐(左中右) / 垂直对齐(⤒顶 ⤓底) /
+         微移(↑↓) / 归位(⌂，原 ⤓ 图标让给底对齐) 各组一眼可辨，不再是五个箭头混一排 */
+      alignBtns = '<span class="sep" title=""></span>'
+        + '<button type="button" data-act="fsnap" data-side="left"' + pg + ' title="向左拉伸：右边缘不动，左边伸到文档最左（被挡住则停在旁边块右侧，留小缝）">⇤</button>'
+        + '<button type="button" data-act="fsnap" data-side="right"' + pg + ' title="向右拉伸：左边缘不动，右边伸到文档最右（被挡住则停在旁边块左侧，留小缝）">⇥</button>'
+        + '<span class="sep" title=""></span>'
         + '<button type="button" data-act="fmove" data-val="left"' + pg + ' title="贴左：整框平移到文档最左，宽度不变（不拉伸）">左</button>'
         + '<button type="button" data-act="fmove" data-val="center"' + pg + ' title="水平居中：整框平移到文档中央，宽度不变（不拉伸）">中</button>'
         + '<button type="button" data-act="fmove" data-val="right"' + pg + ' title="贴右：整框平移到文档最右，宽度不变（不拉伸）">右</button>'
-        + '<button type="button" data-act="fsnap" data-side="right"' + pg + ' title="向右拉伸：左边缘不动，右边伸到文档最右（被挡住则停在旁边块左侧，留小缝）">⇥</button>'
-        + '<button type="button" data-act="ftop"' + pg + ' title="顶到上一模块底部：框的上缘与上一个内容块的下缘对齐（只位移）">⤒</button>';
+        + '<span class="sep" title=""></span>'
+        + '<button type="button" data-act="ftop"' + pg + ' title="顶对齐：框的上缘与上一个内容块的下缘对齐（只位移，零缝隙）">⤒</button>'
+        + '<button type="button" data-act="fbottom"' + pg + ' title="底对齐：框的下缘与下一个内容块的顶部对齐（只位移，零缝隙）">⤓</button>'
+        + '<span class="sep" title=""></span>';
     } else if (isImg || isTbl) {
       alignBtns = '<button type="button" data-act="halign" data-val="left"' + pg + ' title="贴左">⇤</button>'
         + '<button type="button" data-act="halign" data-val="center"' + pg + ' title="居中">⇆</button>'
@@ -307,7 +314,7 @@ window.LMEditor = (function () {
       + alignBtns
       + '<button type="button" data-act="up" data-page="' + pageId + '" data-idx="' + i + '" title="' + (isFree ? '框上移 40 像素（只位移）' : '上移（调整文档顺序）') + '">↑</button>'
       + '<button type="button" data-act="down" data-page="' + pageId + '" data-idx="' + i + '" title="' + (isFree ? '框下移 40 像素（只位移）' : '下移（调整文档顺序）') + '">↓</button>'
-      + (isFree ? '<button type="button" data-act="unfree" data-page="' + pageId + '" data-idx="' + i + '" title="归位：解除自由摆放，回到文档流（★ 自由框位置是固定像素，页面内容变化后容易错位；归位后随内容自动排版）">⤓</button>' : '')
+      + (isFree ? '<button type="button" data-act="unfree" data-page="' + pageId + '" data-idx="' + i + '" title="归位：解除自由摆放，回到文档流（★ 自由框位置是固定像素，页面内容变化后容易错位；归位后随内容自动排版）">⌂</button>' : '')
       + '<button type="button" data-act="edit" data-page="' + pageId + '" data-idx="' + i + '" title="更多设置：颜色 / 图片 / 图表数据 / 表格结构 / 链接">⚙</button>'
       + '<button type="button" data-act="del" data-page="' + pageId + '" data-idx="' + i + '" title="删除此内容块">🗑</button>'
       + '</div>';
@@ -364,6 +371,7 @@ window.LMEditor = (function () {
     if (act === 'fsnap') { snapFree(page, i, btn.getAttribute('data-side')); return; }
     if (act === 'fmove') { freeMoveX(page, i, btn.getAttribute('data-val')); return; }
     if (act === 'ftop') { freeTopAlign(page, i); return; }
+    if (act === 'fbottom') { freeBottomAlign(page, i); return; }
     if (act === 'halign') {
       const b2 = page.blocks[i]; if (!b2) return;
       const v = btn.getAttribute('data-val') || '';
@@ -521,6 +529,54 @@ window.LMEditor = (function () {
     LMApp.adjustFreeLayout();
     markSaved();
     LMApp.toast(dir === 'up' ? '已移到上一模块的上面（原模块被推到框下方）' : '已移到下一模块的下面');
+  }
+  /* ★ 修复㊿：⤓ 底对齐 —— 框的下缘贴平到「下一个内容块」的上缘（⤒ 的镜像操作）。
+     与 ⤒ 同款容差规则：框底只要落在某模块顶缘附近（容差 = max(24, 模块高 20%)，上限 96px），
+     就算“贴着它”，哪怕需要挪几十像素也贴平过去（结果零缝隙）；下方没有任何模块 → 贴到文档流底部 */
+  function freeBottomAlign(page, i) {
+    const b = page.blocks[i]; if (!b || !b.free) return;
+    const col = document.querySelector('.blocks'); if (!col) return;
+    const me = col.querySelector('.block-wrap[data-idx="' + i + '"]');
+    if (!me) return;
+    const rb = me.getBoundingClientRect();
+    let best = null, bestTop = Infinity;
+    col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
+      if (w === me) return;
+      if (!page.blocks[+w.getAttribute('data-idx')]) return;
+      const r = w.getBoundingClientRect();
+      if (r.height < 4) return; /* 空块跳过 */
+      const tol = Math.min(Math.max(24, Math.round(r.height * 0.2)), 96);
+      if (r.top >= rb.bottom - tol && r.top < bestTop) { best = w; bestTop = r.top; }
+    });
+    const sy = window.scrollY || window.pageYOffset || 0;
+    let msg;
+    if (best) {
+      const dy = Math.round(bestTop - rb.bottom);
+      const yNew = Math.max(0, Math.round((+b.free.y || 0) + dy));
+      b.free.y = yNew;
+      me.style.top = yNew + 'px';
+      msg = '框的下缘已贴平到下一模块顶部（' + (dy >= 0 ? '下移 ' : '上移 ') + Math.abs(dy) + ' 像素）';
+    } else {
+      /* 下方没有模块：贴到文档流最底（最后一个块的下缘） */
+      let flowBottom = col.getBoundingClientRect().bottom;
+      col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
+        const bb = page.blocks[+w.getAttribute('data-idx')];
+        if (!bb || bb.free) return;
+        const r = w.getBoundingClientRect();
+        if (r.height >= 4 && r.bottom > flowBottom) flowBottom = r.bottom;
+      });
+      const dy = Math.round(flowBottom - rb.bottom);
+      const yNew = Math.max(0, Math.round((+b.free.y || 0) + dy));
+      b.free.y = yNew;
+      me.style.top = yNew + 'px';
+      msg = '下方没有其他模块，已贴到文档流底部（' + (dy >= 0 ? '下移 ' : '上移 ') + Math.abs(dy) + ' 像素）';
+    }
+    /* 不重渲染、只改 style.top：框平滑滑过去（CSS 过渡），让位块同步渐变，且不会触发旧“飞升” */
+    LMApp.commit({ silent: true, rerender: false });
+    resolveFreeOverlaps(null, null); /* ⤓ 贴平后全量防重叠 */
+    LMApp.adjustFreeLayout();
+    markSaved();
+    LMApp.toast(msg);
   }
   /* 自由框顶到上一模块底部（⤒）：把框的上缘「贴平」到视觉上最近的上一模块的底缘。
      ★ 全程用当前视觉位置测量，所见即所得：

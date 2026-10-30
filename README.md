@@ -319,6 +319,8 @@ living-maps/
 - **回归（修复㊹）**：`node --check` 通过；`test_yjs.js` **122/122**（新增 9.16 节 1 条）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 - **修复㊾（回滚修复㊹的孤儿让位回收：拖动与鼠标差一个身位、块重叠乱飞复发）**：实测证实孤儿回收**有害**——`margin-top` 带 0.3s 过渡，过渡进行中用 `getBoundingClientRect` 还原 `natTop` 会偏移，导致**误判「无框压」→ 误清正在让位的 margin（块与框重叠出现）→ 又触发一次全量重算（margin 动画整体重放 = 页面乱飞）→ 布局在抓框前后持续抖动（⠿ 拖动时框与鼠标差一个身位）**。孤儿回收整段移除，`let healed` 漂移自愈段保持原样；孤儿 margin 的根因路径（协同局部刷新 `applyRemoteContent` 等）本就会在末尾走 `adjustFreeLayoutSafe` 全量重算，让位量由 `freeDecide` 唯一权威计算，不再重复兜底。
 - **回归（修复㊾）**：`node --check` 通过；`test_yjs.js` **122/122**（9.16 改为回滚验证断言）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
+- **修复㊿（模块类型看不懂 / 操作栏没有下对齐 / 五种箭头混一排）**：**① 操作栏语义分组**——自由框操作栏原来把拉伸(⇤⇥)、平移(左中右)、顶对齐(⤒)、微移(↑↓) 五种箭头混排一气，分不清哪个是哪个；现在用**细竖线分隔线**分成四组「拉伸 | 水平对齐 | 垂直对齐 | 微移·归位」，每组一眼可辨（`.block-tools .sep`）。**② 补齐"底对齐"**——原来只有 ⤒（框顶贴上一模块底）没有下对齐；新增 **⤓ 底对齐**（`freeBottomAlign`，⤒ 的镜像）：框的下缘贴平到下一个内容块的顶部（同款容差规则 max(24, 模块高 20%)、上限 96px，零缝隙），下方没有模块时贴到文档流底部。**③ 归位图标改 ⌂**——原归位按钮占用 ⤓ 图标与底对齐撞脸，改为 ⌂（回家=回归文档流），⤓ 让给底对齐。**④ "前置基础"答疑**：它就是普通文本段落（paragraph 块），不是特殊模块；⚙ 更多设置弹窗标题里一直显示着块类型名（如"编辑「表格」内容块"）。松手后框轻微滑动属于既有"自动贴平"设计（骑压消解，防遮挡文字），非 bug。
+- **回归（修复㊿）**：`node --check` 通过；`test_yjs.js` **123/123**（新增 9.17 节 1 条）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 
 ## 三·补11、Yjs 网状实时协同（Mesh P2P · Cloudflare 信令版，2026-10-28 第六轮修订）
 

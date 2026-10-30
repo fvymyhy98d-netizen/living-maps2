@@ -135,6 +135,8 @@ body.admin .block-wrap:hover .block-tools,body.admin .block-wrap.selected .block
 .block-tools button{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.95);box-shadow:0 2px 10px rgba(0,0,0,.16);font-size:13px;display:flex;align-items:center;justify-content:center;transition:transform .12s ease}
 .block-tools button:hover{transform:scale(1.1)}
 .block-tools button:active{transform:scale(.9)}
+/* ★ 修复㊿：操作栏语义分组分隔线 —— 拉伸 | 水平对齐 | 垂直对齐 | 微移/归位 各组一眼可辨 */
+.block-tools .sep{width:1px;align-self:stretch;margin:5px 1px;background:rgba(0,0,0,.14);border-radius:1px;flex:none}
 
 .add-block{display:none;margin:0 auto;padding:13px 28px;border:1.5px dashed var(--line);border-radius:980px;color:var(--text2);font-size:14px;transition:all .2s ease}
 body.admin .add-block{display:inline-flex}

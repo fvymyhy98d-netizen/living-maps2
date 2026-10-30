@@ -422,6 +422,16 @@ T('孤儿回收代码已移除（回到 freeDecide 全量重算唯一权威）�
     && appSrc.indexOf('if (orphan) adjustFreeLayout();') < 0
     && appSrc.indexOf('let healed = false;') > 0
     && appSrc.indexOf('fd.top > flowBottom + 800') > 0);
+/* ---------- 9.17) 修复㊿：自由框操作栏语义分组 + ⤓底对齐 + 归位改⌂ ---------- */
+console.log('【9.17】修复㊿：操作栏分组分隔线 · 新增底对齐 · 归位图标改 ⌂');
+T('free 操作栏语义分组（.sep 分隔线）+ ⤓底对齐（freeBottomAlign 镜像 ⤒）+ 归位图标改 ⌂',
+  edt2.indexOf('function freeBottomAlign(page, i)') > 0
+    && edt2.indexOf("if (act === 'fbottom') { freeBottomAlign(page, i); return; }") > 0
+    && edt2.indexOf('data-act="fbottom"') > 0
+    && edt2.indexOf('框的下缘已贴平到下一模块顶部') > 0
+    && edt2.indexOf('下方没有其他模块，已贴到文档流底部') > 0
+    && edt2.indexOf('⌂</button>') > 0
+    && cssSrc.indexOf('.block-tools .sep{width:1px;align-self:stretch;margin:5px 1px;background:rgba(0,0,0,.14);border-radius:1px;flex:none}') > 0);
 
 
 T('⌨️ 把手 pointerdown+pointerup 双确认（触屏隐式捕获下「按下后滑开」不再误触发开合）',
