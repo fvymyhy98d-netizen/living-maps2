@@ -700,8 +700,9 @@ window.LMEditor = (function () {
     else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到你进入管理模式时的版本？此后的一切改动（包括协同期间其他设备同步来的修改）都会被撤销，恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
     else if (k === 'password') passwordModal();
   });
-  /* ★ 修复㉝：手机端格式工具条把手（⌨️）点击开合 —— 事件委托挂在 document，renderToolbar 重建 DOM 也不丢 */
-  document.addEventListener('click', function (e) {
+  /* ★ 修复㉝：手机端格式工具条把手（⌨️）点击开合 —— 事件委托挂在 document，renderToolbar 重建 DOM 也不丢。
+     ★ 修复㉟：改用 pointerup —— 触屏上 click 合成事件偶发丢失（尤其快速轻点），pointerup 全平台必达且只触发一次 */
+  document.addEventListener('pointerup', function (e) {
     const tg = e.target.closest ? e.target.closest('#editBar .eb-toggle') : null;
     if (tg) { tg.closest('#editBar').classList.toggle('open'); }
   });
@@ -3530,15 +3531,16 @@ window.LMEditor = (function () {
   ];
   function refreshHandles() {
     document.querySelectorAll('.block-wrap.selected').forEach(function (w) { w.classList.remove('selected'); });
-    document.querySelectorAll('.free-box.selected').forEach(function (w) { w.classList.remove('selected'); });
     document.querySelectorAll('.blk-handles,.blk-typebar').forEach(function (h) { h.remove(); });
     const b = activeBlock();
     if (!b || b.free || b.type === 'image') {
-      /* ★ 修复㉜：自由框也给选中反馈（selected）——手机端借此显示拖动手柄并参与 6 秒自动淡出；
-         CSS 的 body.admin .free-box.selected 本就设计过（清除双框叠影），桌面行为不变 */
-      const fw = (b && b.free) ? document.querySelector('.free-box[data-idx="' + tb.active + '"]') : null;
-      if (fw) fw.classList.add('selected');
-      refreshSel(); if (fw) armToolsAutohide();
+      /* ★ 修复㉟：free 块与图片块也点亮 block-wrap 选中态 —— 操作栏（block-tools）的显示规则
+         依赖 .block-wrap.selected，此前这两类块没加，手机上点它们操作栏永远不弹；
+         free 块的 wrap 本身就是 .free-box（双类），一个 add 同时满足两套显示规则 */
+      const wrapAny = document.querySelector('.block-wrap[data-idx="' + tb.active + '"]');
+      if (wrapAny) wrapAny.classList.add('selected');
+      refreshSel();
+      if (wrapAny) armToolsAutohide();
       return;
     }
     const wrap = document.querySelector('.block-wrap[data-idx="' + tb.active + '"]');
@@ -4096,7 +4098,10 @@ window.LMEditor = (function () {
     lastEditTap = { t: now, el: key };
     e.preventDefault(); /* 第一击：阻止原生聚焦与合成 click，只做「选中块浮现操作栏」 */
     const wrap = blk || (el ? el.closest('.block-wrap[data-idx],.free-box[data-idx]') : null);
-    if (wrap && !isNaN(+wrap.getAttribute('data-idx'))) selectBlock(+wrap.getAttribute('data-idx')); /* 单击：浮现操作栏 */
+    if (wrap && !isNaN(+wrap.getAttribute('data-idx'))) {
+      selectBlock(+wrap.getAttribute('data-idx')); /* 单击：选中并浮现操作栏 */
+      wrap.classList.add('selected'); /* ★ 修复㉟：双保险 —— 选中态直接点亮，不依赖内部链路的任何一环 */
+    }
   }, true);
   document.addEventListener('focusin', function (e) {
     if (!window.LMApp || !LMApp.state.admin) return;

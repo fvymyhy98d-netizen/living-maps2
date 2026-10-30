@@ -288,6 +288,10 @@ living-maps/
   **根因**——修复㉜加的「显示层兜底抬块」与让位引擎 freeDecide 的 24px 滞回重算**互相打架**：freeDecide 每轮清掉 margin 按滞回算出**不足值** → 兜底再抬 → 下一轮又被清 → margin 在两个值之间**振荡**——拖动/↑↓ 移动一个框时，图片、图表、文本框跟着一起乱飞，某一帧恰好叠死（截图：图表柱状图画在表格上面）；
   **修复**——框压流块的消解改为「**推框**」而非「抬块」：深压（>24px）仍由让位引擎抬块（🔒 锁定段一字未动）；浅压残留由兜底把**框整体下移**到块底之下——只动框不动块，且**写回数据 free.y 持久生效**（落盘），下轮 freeDecide 按新框位**一次算准**——两套逻辑不再争夺同一个 margin，振荡消除。推框后立即让对位引擎按新位置对齐一次。
 - **回归（修复㉟）**：`node --check` 通过；`test_yjs.js` **113/113**（9.8 节兜底断言更新为推框写数据）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G，锁定段零改动）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
+- **修复㊱（手机点模块操作栏不弹）**：
+  **根因**——操作栏的浮现规则依赖 `.block-wrap.selected`，但**自由框和图片块**在选中时只给 `.free-box` / 图片手柄加 selected，**一直没点亮到 block-wrap 上**——而课程页的标题、表格几乎全被转成了自由框 → 手机上点到哪都不弹；双击进编辑走的是另一条链路（第二击放行原生聚焦），所以双击好使、单击没反应；
+  **修复**——① `refreshHandles` 的自由框/图片分支统一点亮 `block-wrap.selected`（自由框本身就是双类，一次 add 同时满足两套显示规则）；② 触屏单击处理里 `selectBlock` 后直接补加 selected（双保险，不依赖内部链路）；③ 显示规则加 `!important` 兜底；④ ⌨️ 把手开合从 click 改为 **pointerup**——触屏上 click 合成事件偶发丢失（快速轻点尤其明显），pointerup 全平台必达且只触发一次。
+- **回归（修复㊱）**：`node --check` 通过；`test_yjs.js` **113/113**、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 
 ## 三·补11、Yjs 网状实时协同（Mesh P2P · Cloudflare 信令版，2026-10-28 第六轮修订）
 

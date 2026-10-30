@@ -771,7 +771,7 @@ body.admin.mobile-view .free-box:focus-within .fb-grip,body.admin.mobile-view .f
    body.admin.mobile-view 前缀（4 类）必须与上面 134 行的 hover/selected 规则同权重且靠后才能接管 display；
    桌面端 hover/selected 的 display:flex 常态一字不动 */
 body.admin.mobile-view .block-wrap .block-tools,body.admin.mobile-view .free-box .block-tools{display:flex;opacity:0;pointer-events:none;transition:opacity .5s ease}
-body.admin.mobile-view .block-wrap.selected .block-tools,body.admin.mobile-view .free-box.selected .block-tools{opacity:1;pointer-events:auto}
+body.admin.mobile-view .block-wrap.selected .block-tools,body.admin.mobile-view .free-box.selected .block-tools{display:flex !important;opacity:1 !important;pointer-events:auto !important}
 body.admin.mobile-view .blk-typebar,body.admin.mobile-view .blk-handles{transition:opacity .5s ease}
 body.admin.mobile-view .block-wrap:not(.selected) .blk-typebar,body.admin.mobile-view .block-wrap:not(.selected) .blk-handles{opacity:0;pointer-events:none}
 /* ★ 修复㉜：手机端并排框/文本框入场只做淡入不做 30px 位移——.9s 的 transform 过渡在滚动经过时启动，
