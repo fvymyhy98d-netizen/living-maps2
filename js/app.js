@@ -374,6 +374,7 @@ window.LMApp = (function () {
     /* 有自由文本框时，给内容区留出足够高度，避免遮挡 */
     let padB = 0;
     p.blocks.forEach(function (b) { if (b.free) padB = Math.max(padB, (+b.free.y || 0) + (+b.free.h || 200) + 50); });
+    padB = Math.min(padB, 4000); /* ★ 修复㉞：钳制占位上限——损坏/漂移的 free 坐标不再把页面撑出天文数字空白 */
     return heroHtml
       + '<div class="blocks"' + (padB ? ' style="padding-bottom:' + padB + 'px"' : '') + '>'
       + p.blocks.map(function (b, i) {
@@ -601,13 +602,57 @@ window.LMApp = (function () {
       if (!frees.length) return;
       const sy = window.scrollY || window.pageYOffset || 0;
       const colTop = col.getBoundingClientRect().top + sy;
+      const mobile = document.body && document.body.classList.contains('mobile-view');
+      /* ★ 修复㉞：手机端并排组竖排 —— 两个 50% 框在窄屏上互相挤压、表格类内容折行爆高，
+         是「手机并排排版乱」的直接来源。只在显示层把同组框按并排时的左右顺序（free.gi）
+         改为上下全宽堆叠，数据模型一字不改 —— 桌面端照旧并排 */
+      if (mobile) {
+        const groups = {};
+        frees.forEach(function (fd) { const g = fd.b.free.g; if (g != null) (groups[g] = groups[g] || []).push(fd); });
+        Object.keys(groups).forEach(function (g) {
+          const arr = groups[g].sort(function (a, c) { return (+a.b.free.gi || 0) - (+c.b.free.gi || 0); });
+          let gy = Math.min.apply(null, arr.map(function (fd) { return +fd.b.free.y || 0; }));
+          arr.forEach(function (fd) {
+            fd.w.style.left = '1%'; fd.w.style.width = '98%'; fd.w.style.top = gy + 'px';
+            gy += (fd.w.offsetHeight || 60) + 12;
+          });
+        });
+      }
       frees.forEach(function (fd) {
         const r = fd.w.getBoundingClientRect();
-        fd.top = colTop + (+fd.b.free.y || 0);
+        fd.top = r.top + sy; /* ★ 修复㉞：改用实测矩形（竖排重排后数据 y 已过时） */
         fd.h = r.height;
         fd.bot = fd.top + fd.h;
         fd.left = r.left; fd.right = r.right;
       });
+      /* ★ 修复㉞：漂移自愈 —— 自由框的 y 是并排/拖动当时的绝对 px，页面内容一变（手机窄屏折行、
+         上方内容增删）框就可能远远漂出文档流：表现为页面上出现巨大空白、怎么滚都找不到那个框。
+         top 超过流内容底部 800px 的框判定为漂移，整组摘掉 free 回归文档流（数据自愈 + 落盘 +
+         撤销基准），并提示一次。这治的是「并排一下就显示不了 / 空白一大截」的根 */
+      let healed = false;
+      const flowBottom = flows.length
+        ? Math.max.apply(null, flows.map(function (f) { return f.w.getBoundingClientRect().bottom + sy; }))
+        : colTop;
+      frees.forEach(function (fd) {
+        if (!fd.b.free) return;
+        if (fd.top > flowBottom + 800) {
+          const g = fd.b.free.g;
+          frees.forEach(function (fd2) {
+            if (!fd2.b.free) return;
+            if (fd2.b === fd.b || (g != null && fd2.b.free.g === g)) {
+              delete fd2.b.free;
+              renderBlockAt(page.id, page.blocks.indexOf(fd2.b));
+            }
+          });
+          healed = true;
+        }
+      });
+      if (healed) {
+        try { LMStore.saveLocal(state.content); hPush(); } catch (eH) { /* noop */ }
+        toast('⚠️ 有模块漂出了页面范围，已自动归位到文档流（原并排/自由摆放已解除）');
+        setTimeout(function () { adjustFreeLayoutSafe(); }, 60); /* 归位后按新布局重算让位 */
+        return; /* 本帧让位几何已失效 */
+      }
       flows.forEach(function (f) {
         const r = f.w.getBoundingClientRect();
         const cur = parseFloat(f.w.style.marginTop) || 0;
@@ -759,6 +804,15 @@ window.LMApp = (function () {
     if (!adminSnap) { toast('没有可恢复的基准（请退出管理模式重新登录后再试）'); return; }
     state.content = JSON.parse(JSON.stringify(adminSnap));
     commit({ msg: '已放弃本次修改：内容恢复到进入管理模式时的版本' });
+  }
+  /* ★ 修复㉞「⤓ 归位」：自由框的位置是固定像素（并排/拖动当时的快照），页面内容一变就容易
+     错位/漂移 —— 之前界面上没有任何「解除自由摆放」的操作。现在选中自由框 → 操作栏 ⤓
+     一键摘掉 free 回归文档流（随内容自动排版），这是修「并排一下就乱」的用户侧出口 */
+  function unfreeBlock(i) {
+    const p = state.content.pages.find(function (x) { return x.id === state.pageId; });
+    if (!p || !p.blocks[i] || !p.blocks[i].free) { toast('此模块不是自由摆放'); return; }
+    delete p.blocks[i].free;
+    commit({ msg: '已归位：模块回到文档流（随内容自动排版）' });
   }
   /* 在某个内容块后插入新块（afterIdx 为空则加到末尾），返回新位置 */
   function insertBlock(nb, afterIdx) {
@@ -1677,6 +1731,7 @@ window.LMApp = (function () {
     esc: esc, md: md, currentId: currentId, ensureConfig: ensureConfig,
     commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayoutSafe,
     fixFreeOverlapVisual: fixFreeOverlapVisual, discardChanges: discardChanges,
+    unfreeBlock: unfreeBlock,
     applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,
     adjustImages: adjustImages,

@@ -338,6 +338,27 @@ T('手机排版兜底：free-box 不溢出屏 + 长词/链接自动断行',
   cssSrc.indexOf('body.mobile-view .free-box{max-width:calc(100vw - 16px)}') > 0
     && cssSrc.indexOf('body.mobile-view .free-box .b-p,body.mobile-view .free-box p{overflow-wrap:anywhere;word-break:break-word}') > 0);
 
+/* ---------- 9.10) 修复㉞：手机并排组竖排 / 自由框漂移自愈 / ⤓ 归位 / padB 钳制 ---------- */
+console.log('【9.10】修复㉞：并排竖排 · 漂移自愈 · ⤓ 归位 · padB 钳制');
+T('手机端并排组竖排：fixFreeOverlapVisual 显示层按 free.gi 顺序全宽堆叠（数据零改动，桌面照旧并排）',
+  appSrc.indexOf('手机端并排组竖排') > 0
+    && appSrc.indexOf("fd.w.style.left = '1%'; fd.w.style.width = '98%'; fd.w.style.top = gy + 'px';") > 0
+    && appSrc.indexOf('(+a.b.free.gi || 0) - (+c.b.free.gi || 0)') > 0);
+T('自由框矩形改实测（竖排重排后数据 y 已过时）',
+  appSrc.indexOf('fd.top = r.top + sy;') > 0);
+T('漂移自愈：top 超流底部 800px 判漂移，整组摘 free 回文档流 + renderBlockAt + saveLocal + 提示一次',
+  appSrc.indexOf('fd.top > flowBottom + 800') > 0
+    && appSrc.indexOf('⚠️ 有模块漂出了页面范围，已自动归位到文档流（原并排/自由摆放已解除）') > 0
+    && appSrc.indexOf('setTimeout(function () { adjustFreeLayoutSafe(); }, 60);') > 0);
+T('⤓ 归位：自由框操作栏新增按钮（isFree 才显示），unfreeBlock 摘 free 走 commit 全链路',
+  edt2.indexOf('data-act="unfree"') > 0
+    && edt2.indexOf("e.target.closest('[data-act=\"unfree\"]')") > 0
+    && appSrc.indexOf('function unfreeBlock(i)') > 0
+    && appSrc.indexOf("commit({ msg: '已归位：模块回到文档流（随内容自动排版）' })") > 0
+    && appSrc.indexOf('unfreeBlock: unfreeBlock') > 0);
+T('padB 钳制：自由框占位上限 4000px（防损坏数据撑出天文空白）',
+  appSrc.indexOf('padB = Math.min(padB, 4000);') > 0);
+
 /* ---------- 8) 自动限时限制（banSelf）修复：三拦截全部打通 + 防锁死 ---------- */
 console.log('【8】密码试错自动限时限制（走通 + 防锁死）');
 T('banSelf 专用通道：绕过「不能屏蔽本机」守卫 + 轮询等签名密钥（waitBanKey 最多 3 秒）',

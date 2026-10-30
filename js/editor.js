@@ -307,6 +307,7 @@ window.LMEditor = (function () {
       + alignBtns
       + '<button type="button" data-act="up" data-page="' + pageId + '" data-idx="' + i + '" title="' + (isFree ? '框上移 40 像素（只位移）' : '上移（调整文档顺序）') + '">↑</button>'
       + '<button type="button" data-act="down" data-page="' + pageId + '" data-idx="' + i + '" title="' + (isFree ? '框下移 40 像素（只位移）' : '下移（调整文档顺序）') + '">↓</button>'
+      + (isFree ? '<button type="button" data-act="unfree" data-page="' + pageId + '" data-idx="' + i + '" title="归位：解除自由摆放，回到文档流（★ 自由框位置是固定像素，页面内容变化后容易错位；归位后随内容自动排版）">⤓</button>' : '')
       + '<button type="button" data-act="edit" data-page="' + pageId + '" data-idx="' + i + '" title="更多设置：颜色 / 图片 / 图表数据 / 表格结构 / 链接">⚙</button>'
       + '<button type="button" data-act="del" data-page="' + pageId + '" data-idx="' + i + '" title="删除此内容块">🗑</button>'
       + '</div>';
@@ -703,6 +704,13 @@ window.LMEditor = (function () {
   document.addEventListener('click', function (e) {
     const tg = e.target.closest ? e.target.closest('#editBar .eb-toggle') : null;
     if (tg) { tg.closest('#editBar').classList.toggle('open'); }
+  });
+  /* ★ 修复㉞：自由框「⤓ 归位」—— 摘掉 free 回归文档流（数据出口见 app.js unfreeBlock） */
+  document.addEventListener('click', function (e) {
+    const uf = e.target.closest ? e.target.closest('[data-act="unfree"]') : null;
+    if (!uf || !window.LMApp || !LMApp.state.admin) return;
+    const wrap = uf.closest('.block-wrap[data-idx],.free-box[data-idx]');
+    if (wrap && !isNaN(+wrap.getAttribute('data-idx'))) LMApp.unfreeBlock(+wrap.getAttribute('data-idx'));
   });
 
   /* ---------- GitHub 同步设置（双视图）----------
