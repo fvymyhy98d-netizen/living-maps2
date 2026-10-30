@@ -706,6 +706,27 @@ window.LMEditor = (function () {
     const tg = e.target.closest ? e.target.closest('#editBar .eb-toggle') : null;
     if (tg) { tg.closest('#editBar').classList.toggle('open'); }
   });
+  /* ★ 修复㊶：手机键入时的「✕ 退出键入」红钮 —— 键盘弹出后想收键盘，点空白处极易误触其他块；
+     红钮常驻「协作中」胶囊上方（body.typing 时显示），点一下当前编辑元素直接失焦、键盘收起。
+     pointerdown 就 blur（比 click 快一步），preventDefault 防止红钮自己抢焦点 */
+  var editExit = document.createElement('button');
+  editExit.className = 'edit-exit'; editExit.type = 'button'; editExit.innerHTML = '✕ 退出键入';
+  document.body.appendChild(editExit);
+  editExit.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    const ae = document.activeElement;
+    if (ae && (ae.isContentEditable || /^(INPUT|TEXTAREA)$/.test(ae.tagName))) ae.blur();
+  });
+  document.addEventListener('focusin', function (e) {
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA)$/.test(t.tagName))) document.body.classList.add('typing');
+  }, true);
+  document.addEventListener('focusout', function () {
+    setTimeout(function () {
+      const ae = document.activeElement;
+      if (!ae || !(ae.isContentEditable || /^(INPUT|TEXTAREA)$/.test(ae.tagName))) document.body.classList.remove('typing');
+    }, 80);
+  }, true);
   /* ★ 修复㉞：自由框「⤓ 归位」—— 摘掉 free 回归文档流（数据出口见 app.js unfreeBlock） */
   document.addEventListener('click', function (e) {
     const uf = e.target.closest ? e.target.closest('[data-act="unfree"]') : null;

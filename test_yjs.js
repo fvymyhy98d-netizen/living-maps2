@@ -390,6 +390,21 @@ T('fixFreeOverlapVisual 深压跳过 + 浅压推框共存（同一把 24px 尺�
   appSrc.indexOf('if ((natTop + r.height) - fd.top > 24) continue;') > 0
     && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0
     && appSrc.indexOf('function adjustFreeLayoutSafe() { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
+/* ---------- 9.13) 修复㊶：手机键入「✕ 退出键入」红钮 + 工具栏单行滚动 / ⌨️ 常驻右上 ---------- */
+console.log('【9.13】修复㊶：退出键入红钮 · 工具栏单行横滑 · ⌨️ 常驻右上角');
+T('键入态显示「✕ 退出键入」红钮（body.typing），pointerdown 失焦收键盘；键入时管理条上移避让',
+  edt2.indexOf("editExit.className = 'edit-exit'") > 0
+    && edt2.indexOf("document.body.classList.add('typing')") > 0
+    && edt2.indexOf("document.body.classList.remove('typing')") > 0
+    && edt2.indexOf('ae.blur()') > 0
+    && cssSrc.indexOf('body.typing .edit-exit{display:block}') > 0
+    && cssSrc.indexOf('body.typing #adminBar{bottom:88px}') > 0);
+T('手机 editBar：tab 吸左 + 工具单行横向滚动；⌨️ 收起/展开都钉在右上角且更小',
+  cssSrc.indexOf('body.mobile-view .tb-tab{position:sticky;left:0;z-index:2;background:rgba(246,247,249,.96);flex:none}') > 0
+    && cssSrc.indexOf('body.mobile-view .tb-grp{flex-wrap:nowrap;justify-content:flex-start;flex:0 0 auto;min-width:0}') > 0
+    && cssSrc.indexOf('body.admin.mobile-view #editBar.open .eb-toggle{position:fixed;top:60px;right:8px;width:28px;height:28px;font-size:13px;margin-left:0}') > 0);
+
+
 
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');

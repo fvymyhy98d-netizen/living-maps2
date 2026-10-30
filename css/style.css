@@ -792,19 +792,21 @@ body.mobile-view .free-box .b-p,body.mobile-view .free-box p{overflow-wrap:anywh
 body.admin .eb-toggle{display:none}
 body.admin.mobile-view #editBar:not(.open){left:auto;right:0;top:0;width:0;height:0;min-height:0;overflow:visible;background:transparent;box-shadow:none;border:none;padding:0;margin:0;max-height:none;transform:none;animation:none}
 body.admin.mobile-view #editBar:not(.open) > *:not(.eb-toggle){display:none}
-body.admin.mobile-view #editBar .eb-toggle{display:flex;position:fixed;top:60px;right:8px;z-index:121;width:38px;height:38px;border-radius:50%;
-  background:var(--blue);color:#fff;font-size:17px;align-items:center;justify-content:center;border:none;flex:none;
+body.admin.mobile-view #editBar .eb-toggle{display:flex;position:fixed;top:60px;right:8px;z-index:121;width:32px;height:32px;border-radius:50%;
+  background:var(--blue);color:#fff;font-size:15px;align-items:center;justify-content:center;border:none;flex:none;
   box-shadow:0 4px 14px rgba(0,113,227,.35);cursor:pointer;padding:0}
-body.admin.mobile-view #editBar.open .eb-toggle{position:static;width:30px;height:30px;font-size:14px;margin-left:2px}
+body.admin.mobile-view #editBar.open .eb-toggle{position:fixed;top:60px;right:8px;width:28px;height:28px;font-size:13px;margin-left:0}
 /* —— 手机端管理模式：顶部 Word 工具条 —— */
+/* ★ 修复㊶：手机端工具条改单行横向滑动 —— tab（开始/插入）sticky 吸左不再随滚动跑，
+   按钮组一行排开左右滑看全（旧版整条换行叠三四行、遮住大半页面）；padding-right 给常驻右上角的 ⌨️ 让位 */
 body.mobile-view #editBar{left:6px;right:6px;transform:none;width:auto;max-width:none;top:52px;
-  flex-wrap:wrap;justify-content:center;gap:2px;padding:5px 6px}
+  flex-wrap:nowrap;justify-content:flex-start;gap:2px;padding:5px 42px 5px 6px;
+  overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-height:none}
+body.mobile-view #editBar::-webkit-scrollbar{display:none}
+body.mobile-view .tb-tab{position:sticky;left:0;z-index:2;background:rgba(246,247,249,.96);flex:none}
 body.mobile-view .tb-btn{height:28px;min-width:28px;padding:0 7px;font-size:12.5px}
 body.mobile-view .tb-lab{font-size:10px}
-/* ★ 手机端按钮组自身也要允许换行：旧版 .tb-grp{flex:none} 内部不换行，整组远超屏宽后被
-   justify-content:center 居中裁切 —— 两端按钮（撤销/格式刷/加粗…与颜色/高亮/跳转…）
-   全部落到可视区外，用户只看到中间一截（X₂ 左边「格式刷全都看不到」的根因） */
-body.mobile-view .tb-grp{flex-wrap:wrap;justify-content:center;flex:1 1 100%;min-width:0}
+body.mobile-view .tb-grp{flex-wrap:nowrap;justify-content:flex-start;flex:0 0 auto;min-width:0}
 /* 格式刷气泡：改挂到底部（避开换行后更高的工具条），贴在管理条上方 */
 body.mobile-view #brushPop{left:8px;right:8px;transform:none;top:auto;bottom:96px;max-width:none;flex-wrap:wrap}
 body.mobile-view #brushPop::before{display:none}
@@ -864,6 +866,13 @@ body.mobile-view .blk-typebar button{padding:5px 9px;font-size:12px}
 body.mobile-view #collabChip{left:8px;bottom:8px;font-size:11px;padding:4px 9px;max-width:42vw;background:rgba(29,29,31,.72)}
 body.mobile-view #adminBar{bottom:44px}
 body.mobile-view #collabPanel{bottom:44px}
+/* ★ 修复㊶：手机键入时的「✕ 退出键入」红钮（body.typing 时显示）—— 悬在「协作中」胶囊上方；
+   键入时管理工具条临时再抬高，三层互不叠：胶囊 → 红钮 → 工具条。点红钮 = 当前编辑元素失焦收键盘 */
+.edit-exit{display:none;position:fixed;left:8px;bottom:46px;z-index:282;background:#d70015;color:#fff;
+  border:none;border-radius:980px;padding:8px 15px;font-size:12.5px;font-weight:600;letter-spacing:.5px;
+  box-shadow:0 4px 14px rgba(215,0,21,.4);cursor:pointer;-webkit-tap-highlight-color:transparent}
+body.typing .edit-exit{display:block}
+body.typing #adminBar{bottom:88px}
 /* ⚙ 设置面板里的设备列表与屏蔽管理 */
 .gp-devlist,.gp-dev{display:block}
 .gp-dev{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 2px;border-bottom:1px dashed rgba(0,0,0,.08);flex-wrap:wrap}
