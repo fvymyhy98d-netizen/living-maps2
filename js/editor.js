@@ -3539,7 +3539,16 @@ window.LMEditor = (function () {
         sw.addEventListener('click', function () {
           closePop();
           const v = sw.getAttribute('data-v');
-          if ((prop === 'color' || prop === 'hl') && applyInlineSwatch(prop, v)) return;
+          /* ★ 修复61：荧光笔必须有选区 —— 此前无选区时落到 applyStyle 把「整块」涂上底色
+             （s.hl 块级样式把全部文字包进 span.hl），用户以为坏了（"高亮是整个文本框"）。
+             现在 hl 无选区时提示先拖选文字，不再动整块；color/grad 整块模式保留 */
+          if (prop === 'hl') {
+            if (applyInlineSwatch(prop, v)) return;
+            if (applyInlineSwatchBlock(prop, v)) return;
+            LMApp.toast('请先拖选要高亮的文字，再点颜色（荧光笔只作用于选中部分）');
+            return;
+          }
+          if ((prop === 'color') && applyInlineSwatch(prop, v)) return;
           if (applyInlineSwatchBlock(prop, v)) return; /* ★ 有选中文字 → 只改选中部分，不动整段 */
           applyStyle(prop, v);
         });
@@ -3549,7 +3558,12 @@ window.LMEditor = (function () {
         let ciBusy = false; /* 拖动取色中：只预览，不记撤销/不广播 —— 确认后才算一次修改步骤 */
         ci.addEventListener('input', function () {
           ciBusy = true;
-          if ((prop === 'color' || prop === 'hl') && applyInlineSwatch(prop, ci.value, true)) return;
+          if (prop === 'hl') {
+            if (applyInlineSwatch(prop, ci.value, true)) return;
+            if (applyInlineSwatchBlock(prop, ci.value, true)) return;
+            return; /* ★ 修复61：无选区不整块上色（确认路径同提示逻辑） */
+          }
+          if ((prop === 'color') && applyInlineSwatch(prop, ci.value, true)) return;
           if (applyInlineSwatchBlock(prop, ci.value, true)) return; /* ★ 同上：有选中文字只改选中部分 */
           applyStyle(prop, ci.value, true, true);
         });

@@ -462,7 +462,7 @@ T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '60';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '61';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -512,6 +512,13 @@ T('自由框 background:transparent + shadow:none + admin 淡蓝虚线 + 旧白�
   cssSrc.indexOf('.free-box{position:absolute;background:transparent;border:1px dashed transparent;border-radius:14px;') > 0
     && cssSrc.indexOf('body.admin .free-box{border-color:rgba(0,113,227,.14)}') > 0
     && cssSrc.indexOf('.free-box{position:absolute;background:rgba(255,255,255') < 0);
+
+/* ---------- 9.26) 修复61：荧光笔必须有选区（不再整块涂色） ---------- */
+console.log('【9.26】修复61：hl 无选区 → toast 提示先拖选，绝不动整块；color/grad 整块模式保留');
+T('hl 色板无选区时提示且 return（click 与自定义取色 input 双路径），不再落 applyStyle 整块上色',
+  edt2.indexOf("LMApp.toast('请先拖选要高亮的文字，再点颜色（荧光笔只作用于选中部分）');") > 0
+    && edt2.indexOf("if ((prop === 'color') && applyInlineSwatch(prop, v)) return;") > 0
+    && edt2.indexOf("return; /* ★ 修复61：无选区不整块上色（确认路径同提示逻辑） */") > 0);
 
 
 
