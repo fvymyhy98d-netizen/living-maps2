@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '57';
+var LM_ASSET_VER = '58';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1065,9 +1065,22 @@ window.LMApp = (function () {
       + '<p class="modal-note">💡 在其他设备改过密码？请先在那台设备点「☁️ 同步到 GitHub」——本机验证失败时会自动尝试云端最新的密码数据。</p>'
       + preNote
       + '<label class="field"><span class="field-label">管理密码</span>'
-      + '<input class="input" type="password" name="pw" placeholder="请输入管理密码" autocomplete="current-password" enterkeyhint="done" required></label>'
+      + '<div style="position:relative">'
+      + '<input class="input" type="password" name="pw" placeholder="请输入管理密码" autocomplete="current-password" enterkeyhint="done" required style="padding-right:44px">'
+      + '<button type="button" id="pwEye" title="显示 / 隐藏密码（长密码输入时可核对已打内容）" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;font-size:17px;padding:4px 6px;line-height:1;opacity:.65">👁</button>'
+      + '</div></label>'
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
       + '<button class="btn btn-primary" type="submit">进入管理模式</button></div></form>', function (root) {
+      /* ★ 修复58：👁 显示密码切换 —— 长密码输到一半"看不见也确认不了"是排查黑洞；点眼睛明文核对，
+         再点恢复圆点；切换后焦点回到输入框，接着打不用重新点 */
+      root.querySelector('#pwEye').addEventListener('click', function () {
+        const inp = root.querySelector('[name=pw]');
+        const show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        this.textContent = show ? '🙈' : '👁';
+        this.style.opacity = show ? '1' : '.65';
+        try { inp.focus({ preventScroll: true }); } catch (eF) { inp.focus(); }
+      });
       root.querySelector('#pwForm').addEventListener('submit', function (e) {
         e.preventDefault();
         const lockUntil = +(sessionStorage.getItem('lm_lock_until') || 0);

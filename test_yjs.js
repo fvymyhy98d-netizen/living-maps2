@@ -462,7 +462,7 @@ T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '57';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '58';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -497,6 +497,14 @@ T('键入态红钮与管理条抬升只作用于手机端（桌面键入无红�
     && cssSrc.indexOf('body.mobile-view.typing #adminBar{bottom:88px}') > 0
     && cssSrc.indexOf('body.typing .edit-exit{display:block}') < 0
     && cssSrc.indexOf('body.typing #adminBar{bottom:88px}') < 0);
+
+/* ---------- 9.24) 修复58：登录框 👁 显示密码切换（长密码输入可核对） ---------- */
+console.log('【9.24】修复58：👁/🙈 切明文核对 · 切后焦点回输入框');
+T('登录弹窗 pwEye 切换 type=password/text 并 focus 回输入框',
+  appSrc.indexOf("root.querySelector('#pwEye').addEventListener('click', function () {") > 0
+    && appSrc.indexOf("inp.type = show ? 'text' : 'password';") > 0
+    && appSrc.indexOf("this.textContent = show ? '🙈' : '👁';") > 0
+    && appSrc.indexOf('id="pwEye"') > 0);
 
 
 
