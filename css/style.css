@@ -835,6 +835,10 @@ body.mobile-view #adminBar.open{flex-direction:column;align-items:stretch;max-wi
 /* —— 弹窗 / 气泡 / 输入 —— */
 body.mobile-view .popover{max-width:92vw}
 body.mobile-view .modal-card{padding:18px;max-height:88vh}
+/* ★ 修复57：手机端弹窗顶部对齐 —— 软键盘弹出占掉下半屏后，居中的弹窗（密码/设置表单）
+   会被顶出屏幕、输入框打字不可见（「密码输到一半就输不进去了」）；改为顶部对齐 + 小上边距，
+   弹窗始终完整落在键盘上方的可视区里 */
+body.mobile-view .modal-mask{align-items:flex-start;padding-top:14px}
 body.mobile-view .input{font-size:16px} /* 防 iOS 聚焦时自动放大页面 */
 /* —— 拖拽把手放大（触屏可抓） —— */
 body.mobile-view .fb-grip{width:34px;height:26px;top:-20px;line-height:26px;font-size:13px}

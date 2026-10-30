@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '56';
+var LM_ASSET_VER = '57';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1054,12 +1054,18 @@ window.LMApp = (function () {
   }
   /* 登录弹窗（连续失败 5 次锁定 30 秒，防脚本穷举） */
   function loginModal() {
+    /* ★ 修复57：打开弹窗就先检查锁定状态——避免输完长密码点提交才被告知"系统繁忙"白输一场 */
+    const preLock = +(sessionStorage.getItem('lm_lock_until') || 0);
+    const preNote = (Date.now() < preLock)
+      ? '<p class="modal-note">⏳ 系统繁忙，请等 ' + Math.ceil((preLock - Date.now()) / 1000) + ' 秒后再试（错误码 0x2F）——现在输入不会被接受。</p>'
+      : '';
     LMEditor.modal('<form id="pwForm">'
       + '<h3>管理员登录</h3>'
       + '<p class="modal-note">' + esc((state.content.config.admin && state.content.config.admin.hint) || '') + '</p>'
       + '<p class="modal-note">💡 在其他设备改过密码？请先在那台设备点「☁️ 同步到 GitHub」——本机验证失败时会自动尝试云端最新的密码数据。</p>'
+      + preNote
       + '<label class="field"><span class="field-label">管理密码</span>'
-      + '<input class="input" type="password" name="pw" placeholder="请输入管理密码" autocomplete="current-password" required></label>'
+      + '<input class="input" type="password" name="pw" placeholder="请输入管理密码" autocomplete="current-password" enterkeyhint="done" required></label>'
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
       + '<button class="btn btn-primary" type="submit">进入管理模式</button></div></form>', function (root) {
       root.querySelector('#pwForm').addEventListener('submit', function (e) {
