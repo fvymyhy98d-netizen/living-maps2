@@ -3760,11 +3760,11 @@ window.LMEditor = (function () {
     wrap.style.top = r0.top + 'px';
     document.body.classList.add('block-dragging');
 
-    /* ★ 修复52/54：拖动克隆的跟随偏移钳制 —— 旧版保持「抓取点相对位置」（offY = 鼠标到块顶的距离），
-       抓在高块（如三行段落）中下部时整块悬在鼠标上方一大截（「差一个身位」），矮块却察觉不到，
-       同一个手势体验不一致。钳制为「块顶贴住鼠标」：offX ≤ 48px、offY ≤ 12px（54 收紧：更贴手），
-       无论抓哪里，块都整齐地挂在鼠标正下方一点 —— 所有块统一 */
-    const offX = Math.min(e.clientX - r0.left, 48), offY = Math.min(e.clientY - r0.top, 12);
+    /* ★ 修复52/54/59：拖动克隆的跟随偏移 —— offY 保留「块顶贴鼠标」钳制（≤12px：抓高块中下部时
+       整块不再悬在鼠标上方一大截，「差一个身位」消失）；offX 恢复「真实抓取点」（59 取消 ≤48 钳制：
+       把手在操作栏里、位于块的中偏右，钳制后克隆整体左跳几百像素，鼠标对着的地方变成克隆左上角
+       ——「我抓的地方不对」。水平必须跟手：抓哪儿，克隆上对应哪儿就还在鼠标下） */
+    const offX = e.clientX - r0.left, offY = Math.min(e.clientY - r0.top, 12);
     let scrollDir = 0, raf = null, moved = false, lastY = e.clientY;
 
     function flowList() {
