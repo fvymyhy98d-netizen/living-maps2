@@ -515,8 +515,9 @@ T('自由框 background:transparent + shadow:none + admin 淡蓝虚线 + 旧白�
 
 /* ---------- 9.26) 修复61：荧光笔必须有选区（不再整块涂色） ---------- */
 console.log('【9.26】修复61：hl 无选区 → toast 提示先拖选，绝不动整块；color/grad 整块模式保留');
-T('hl 色板无选区时提示且 return（click 与自定义取色 input 双路径），不再落 applyStyle 整块上色',
+T('hl 色板无选区时提示且 return（⊘ 清除除外），不再落 applyStyle 整块上色',
   edt2.indexOf("LMApp.toast('请先拖选要高亮的文字，再点颜色（荧光笔只作用于选中部分）');") > 0
+    && edt2.indexOf("if (prop === 'hl' && v !== '') {") > 0
     && edt2.indexOf("if ((prop === 'color') && applyInlineSwatch(prop, v)) return;") > 0
     && edt2.indexOf("return; /* ★ 修复61：无选区不整块上色（确认路径同提示逻辑） */") > 0);
 

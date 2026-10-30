@@ -3541,8 +3541,9 @@ window.LMEditor = (function () {
           const v = sw.getAttribute('data-v');
           /* ★ 修复61：荧光笔必须有选区 —— 此前无选区时落到 applyStyle 把「整块」涂上底色
              （s.hl 块级样式把全部文字包进 span.hl），用户以为坏了（"高亮是整个文本框"）。
-             现在 hl 无选区时提示先拖选文字，不再动整块；color/grad 整块模式保留 */
-          if (prop === 'hl') {
+             现在 hl 无选区时提示先拖选文字，不再动整块；color/grad 整块模式保留。
+             例外：⊘（空值=清除）随时可用 —— 已经整块高亮过的块要能取消，不能把自己锁死 */
+          if (prop === 'hl' && v !== '') {
             if (applyInlineSwatch(prop, v)) return;
             if (applyInlineSwatchBlock(prop, v)) return;
             LMApp.toast('请先拖选要高亮的文字，再点颜色（荧光笔只作用于选中部分）');
