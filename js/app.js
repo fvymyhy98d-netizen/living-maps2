@@ -629,6 +629,28 @@ window.LMApp = (function () {
          上方内容增删）框就可能远远漂出文档流：表现为页面上出现巨大空白、怎么滚都找不到那个框。
          top 超过流内容底部 800px 的框判定为漂移，整组摘掉 free 回归文档流（数据自愈 + 落盘 +
          撤销基准），并提示一次。这治的是「并排一下就显示不了 / 空白一大截」的根 */
+      /* ★ 修复㊹：孤儿让位回收 —— free 框被拖走/移走后，它曾压出的让位 margin 必须归零；
+         正常路径由 freeDecide 全量重算完成，但任何「框位置变了却没触发全量重算」的路径
+         （协同局部刷新、部分位移逻辑等）都会留下孤儿 margin（块上方空白不回补）。
+         这里用实测几何独立复核：块若不再被任何框深压（>24px，与让位引擎同阈值）、也不是
+         任何框的让位宿主（_freeHost），而 marginTop 仍 > 0，即为孤儿 —— 清零回弹。
+         只清「确定无框压」的块，绝不影响让位中的块；清完立即按让位引擎全量重算一次 */
+      let orphan = false;
+      flows.forEach(function (f) {
+        const cur = parseFloat(f.w.style.marginTop) || 0;
+        if (cur <= 0) return;
+        const r = f.w.getBoundingClientRect();
+        const natTop = r.top + sy - cur;
+        let pressed = false;
+        frees.forEach(function (fd) {
+          if (fd.w._freeHost === f.w) { pressed = true; return; }
+          const ox = Math.min(fd.right, r.right) - Math.max(fd.left, r.left);
+          if (ox <= 16) return;
+          if (fd.top < natTop + r.height - 24) pressed = true;
+        });
+        if (!pressed) { f.w.style.marginTop = ''; orphan = true; }
+      });
+      if (orphan) adjustFreeLayout();
       let healed = false;
       const flowBottom = flows.length
         ? Math.max.apply(null, flows.map(function (f) { return f.w.getBoundingClientRect().bottom + sy; }))
