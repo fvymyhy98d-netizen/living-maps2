@@ -1505,6 +1505,9 @@ window.LMEditor = (function () {
       + '</span>'
       + '<span class="tb-div"></span>'
       + '<button class="tb-btn wide primary" data-tb="sync" tabindex="-1">☁ 同步</button>'
+      /* ★ 修复74：手机端「⌨️ 收起」钮 —— 排在「插入」右边（sticky 钉在工具条右端，滚动也够得着）：
+         右上角那个 fixed 的 ⌨️ 展开时会被 #editBar 的 backdrop-filter 裁掉，收不回去 */
+      + '<button class="tb-collapse" type="button" data-tbcollapse="1" tabindex="-1" title="收起工具栏（手机端，等同右上角 ⌨️）">⌨️ 收起</button>'
       + '<button class="eb-toggle" type="button" tabindex="-1" title="收起 / 展开格式工具（手机端）">⌨️</button>';
     /* 内容没变就不重建工具栏：防止下拉刚点开就被重渲染吞掉，也省下每次保存的重建开销 */
     if (bar.__lmHtml !== tHtml) { bar.__lmHtml = tHtml; bar.innerHTML = tHtml; }
@@ -4426,6 +4429,15 @@ window.LMEditor = (function () {
     tb.tab = t.getAttribute('data-tbtab');
     closePop();
     renderToolbar();
+  });
+  /* ★ 修复74：手机端工具条「⌨️ 收起」钮 —— 点一下把工具条收回右上角的 ⌨️；
+     只 toggle open，不碰格式状态，也不会误触发 data-tb 那套格式按钮 */
+  document.addEventListener('click', function (e) {
+    const t = e.target.closest && e.target.closest('[data-tbcollapse]');
+    if (!t || !window.LMApp || !LMApp.state.admin) return;
+    const bar0 = document.getElementById('editBar');
+    if (bar0) bar0.classList.remove('open');
+    closePop();
   });
   /* 点工具栏按钮不清空已选中的文字（像 Word 一样：选中 → 点 B/I/U 直接生效） */
   document.addEventListener('mousedown', function (e) {

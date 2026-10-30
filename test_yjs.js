@@ -403,10 +403,10 @@ T('键入态显示「✕ 退出键入」红钮（body.typing），pointerdown �
     && edt2.indexOf('ae.blur()') > 0
     && cssSrc.indexOf('body.mobile-view.typing .edit-exit{display:block}') > 0
     && cssSrc.indexOf('body.mobile-view.typing #adminBar{bottom:88px}') > 0);
-T('手机 editBar：tab 吸左 + 工具单行横向滚动；⌨️ 收起/展开都钉在右上角且更小',
+T('手机 editBar：tab 吸左 + 工具单行横向滚动；「开始/插入」当前项补回蓝底白字（修复74）',
   cssSrc.indexOf('body.mobile-view .tb-tab{position:sticky;left:0;z-index:2;background:rgba(246,247,249,.96);flex:none}') > 0
     && cssSrc.indexOf('body.mobile-view .tb-grp{flex-wrap:nowrap;justify-content:flex-start;flex:0 0 auto;min-width:0}') > 0
-    && cssSrc.indexOf('body.admin.mobile-view #editBar.open .eb-toggle{position:fixed;top:60px;right:8px;width:28px;height:28px;font-size:13px;margin-left:0}') > 0);
+    && cssSrc.indexOf('body.mobile-view .tb-tab.act{background:var(--blue);color:#fff}') > 0);
 /* ---------- 9.14) 修复㊷：浅压放行「从上方放置」姿态（框顶高于块顶时不推框） ---------- */
 console.log('【9.14】修复㊷：框从上方压块的浅压放行（骑压姿态仍推），↑ 微调可穿越浅压墙');
 T('fixFreeOverlapVisual 姿态判定：fd.top<=natTop（从上方放置）浅压放行，骑压浅压仍推框',
@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '73';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '74';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -756,6 +756,19 @@ T('collab.js：GONE_TTL + presenceReduce/presenceTick/peerToast + 面板重绘�
   } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
   T('断线判定：消失 → lost（仍留在名单，带「已断线 N 秒」）→ 超过 GONE_TTL → gone（移除）；中途回来 = back', ok);
 })();
+
+/* ---------- 9.39) 修复74：手机端「开始/插入」白底白字 + 工具条展开后收不回去 ---------- */
+console.log('【9.39】修复74：手机端 tab 当前项蓝底白字 + 工具条内「⌨️ 收起」钮（展开后能收回，桌面端不受影响）');
+T('CSS：手机端 sticky 规则不许吞掉 .act 蓝底（否则白底白字看不清）；展开时隐藏够不着的 fixed ⌨️，改由工具条内收起钮负责',
+  cssSrc.indexOf('body.mobile-view .tb-tab.act{background:var(--blue);color:#fff}') > 0
+    && cssSrc.indexOf('body.admin.mobile-view #editBar.open .eb-toggle{display:none}') > 0
+    && cssSrc.indexOf('body.mobile-view #editBar .tb-collapse{display:flex;position:sticky;right:0;') > 0
+    && cssSrc.indexOf('.tb-collapse{display:none}') > 0);
+T('editor.js：收起钮在「插入」之后（DOM 顺序）+ 点击只收工具条不误触格式按钮 + 桌面端不渲染',
+  edt2.indexOf('data-tbcollapse="1"') > 0
+    && edt2.indexOf('>插入</button>') < edt2.indexOf('data-tbcollapse="1"')
+    && edt2.indexOf("e.target.closest('[data-tbcollapse]')") > 0
+    && edt2.indexOf("bar0.classList.remove('open')") > 0);
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

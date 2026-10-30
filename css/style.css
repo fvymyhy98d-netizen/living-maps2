@@ -815,7 +815,9 @@ body.admin.mobile-view #editBar:not(.open) > *:not(.eb-toggle){display:none}
 body.admin.mobile-view #editBar .eb-toggle{display:flex;position:fixed;top:60px;right:8px;z-index:121;width:32px;height:32px;border-radius:50%;
   background:var(--blue);color:#fff;font-size:15px;align-items:center;justify-content:center;border:none;flex:none;
   box-shadow:0 4px 14px rgba(0,113,227,.35);cursor:pointer;padding:0}
-body.admin.mobile-view #editBar.open .eb-toggle{position:fixed;top:60px;right:8px;width:28px;height:28px;font-size:13px;margin-left:0}
+/* ★ 修复74：展开时这个 fixed ⌨️ 会被 #editBar 的 backdrop-filter 当成"相对工具条"定位、被 overflow 裁掉
+   （点不到 = 收不回），改为隐藏；展开态的收起入口是工具条内的 .tb-collapse 钮 */
+body.admin.mobile-view #editBar.open .eb-toggle{display:none}
 /* —— 手机端管理模式：顶部 Word 工具条 —— */
 /* ★ 修复㊶：手机端工具条改单行横向滑动 —— tab（开始/插入）sticky 吸左不再随滚动跑，
    按钮组一行排开左右滑看全（旧版整条换行叠三四行、遮住大半页面）；padding-right 给常驻右上角的 ⌨️ 让位 */
@@ -824,6 +826,23 @@ body.mobile-view #editBar{left:6px;right:6px;transform:none;width:auto;max-width
   overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;max-height:none}
 body.mobile-view #editBar::-webkit-scrollbar{display:none}
 body.mobile-view .tb-tab{position:sticky;left:0;z-index:2;background:rgba(246,247,249,.96);flex:none}
+/* ★ 修复74（"「开始 / 插入」看不出颜色，点哪个哪个消失"）：上面这条 sticky 规则为了挡住滚到 tab 下的
+   按钮给了一个近白底 rgba(246,247,249,.96)，它的选择器比 `.tb-tab.act{background:var(--blue)}` 更重，
+   把蓝底覆盖掉了；但 `.act` 的 color:#fff 还留着 → 白底白字，当前选中的那个 tab 直接看不见。
+   这里把当前项的颜色补回来 */
+body.mobile-view .tb-tab.act{background:var(--blue);color:#fff}
+/* ★ 修复74（"手机端工具条展开后收不回去"）：右上角那个 ⌨️ 是 #editBar 的子元素且 position:fixed，
+   而 #editBar 带 backdrop-filter（非 none 的 backdrop-filter 会让元素成为 fixed 子元素的包含块）
+   → 它的 top:60px 变成"相对工具条"计算，正好落到工具条框外，被 overflow-y:hidden 裁掉；
+   收起状态下工具条是 width/height:0 + overflow:visible，所以又看得见 —— 于是只能展开、收不回。
+   现在：展开时隐藏那个够不着的 ⌨️，改用工具条内部右端的「⌨️ 收起」钮（sticky 钉在右端，随手可点）。
+   桌面端不渲染这个钮（.tb-collapse 默认 display:none），布局一字未动 */
+.tb-collapse{display:none}
+body.mobile-view #editBar .tb-collapse{display:flex;position:sticky;right:0;z-index:3;flex:none;
+  align-items:center;justify-content:center;gap:3px;height:28px;padding:0 10px;margin-left:6px;
+  border:none;border-radius:999px;background:var(--blue);color:#fff;font-size:12px;font-weight:600;
+  box-shadow:0 3px 10px rgba(0,113,227,.35);cursor:pointer}
+body.mobile-view #editBar .tb-collapse:active{background:#0077ed}
 body.mobile-view .tb-btn{height:28px;min-width:28px;padding:0 7px;font-size:12.5px}
 body.mobile-view .tb-lab{font-size:10px}
 body.mobile-view .tb-grp{flex-wrap:nowrap;justify-content:flex-start;flex:0 0 auto;min-width:0}
