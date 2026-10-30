@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793343235116,
+      "syncTs": 1793343243108,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -452,7 +452,7 @@ window.SITE_CONTENT = {
       "blocks": [
         {
           "type": "paragraph",
-          "text": "本网站由小组成员共同维护。作业要求：整体结构、主要关系和重要判断共同讨论；每位成员能解释自己~~参与~~的内容。"
+          "text": "本网站由小组成员共同维护。作业要求：整体结构、主要关系和重要判断共同讨论；每位成员能解释自己参与的内容。"
         },
         {
           "type": "table",
