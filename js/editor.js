@@ -579,11 +579,13 @@ window.LMEditor = (function () {
     const sy = window.scrollY || window.pageYOffset || 0;
     let msg;
     if (best) {
-      const dy = Math.round(bestTop - rb.bottom);
+      /* ★ 修复56：底对齐同样保留 16px 标准间距（框底 = 下一模块顶 - GAP，苹果式板块间隙） */
+      const GAP = 16;
+      const dy = Math.round(bestTop - GAP - rb.bottom);
       const yNew = Math.max(0, Math.round((+b.free.y || 0) + dy));
       b.free.y = yNew;
       me.style.top = yNew + 'px';
-      msg = '框的下缘已贴平到下一模块顶部（' + (dy >= 0 ? '下移 ' : '上移 ') + Math.abs(dy) + ' 像素）';
+      msg = '框的下缘已贴平到下一模块顶部（留 16px 标准间距，' + (dy >= 0 ? '下移 ' : '上移 ') + Math.abs(dy) + ' 像素）';
     } else {
       /* 下方没有模块：贴到文档流最底（最后一个块的下缘） */
       let flowBottom = col.getBoundingClientRect().bottom;
@@ -630,11 +632,14 @@ window.LMEditor = (function () {
     });
     let msg;
     if (best) {
-      const dy = Math.round(bestBottom - rb.top);
+      /* ★ 修复56：贴平不再是零缝隙 —— 保留 16px 标准间距（与流块间距一致，苹果式板块间隙）；
+         框下方的流块由让位引擎自动顺移，无需逐个手调 */
+      const GAP = 16;
+      const dy = Math.round(bestBottom + GAP - rb.top);
       const yNew = Math.max(0, Math.round((+b.free.y || 0) + dy));
       b.free.y = yNew;
       me.style.top = yNew + 'px';
-      msg = '框的上缘已贴平到上一模块底部（' + (dy >= 0 ? '下移 ' : '上移 ') + Math.abs(dy) + ' 像素）';
+      msg = '框的上缘已贴平到上一模块底部（留 16px 标准间距，' + (dy >= 0 ? '下移 ' : '上移 ') + Math.abs(dy) + ' 像素）';
     } else {
       b.free.y = 0;
       me.style.top = '0px';
@@ -3701,6 +3706,8 @@ window.LMEditor = (function () {
     if (!b || b.free || b.type === 'image') return;
     e.preventDefault(); e.stopPropagation();
     const x0 = e.clientX;
+    const y0 = e.clientY;
+    const h0 = wrap.offsetHeight;
     const dir = h.getAttribute('data-h');
     const col = document.querySelector('.blocks');
     const colW = (col ? col.getBoundingClientRect().width : window.innerWidth) || 1;
@@ -3710,11 +3717,21 @@ window.LMEditor = (function () {
       if (dir === 'nw' || dir === 'sw') d = -d;
       b.width = clamp(Math.round((w0 + d) * 10) / 10, 20, 100);
       wrap.style.width = b.width + '%';
+      /* ★ 修复56：右下角（se）垂直方向调高 —— b.h = min-height（内容不足时撑出留白，下方模块
+         由文档流自动往下移）；内容超过 min-height 时以内容为准（绝不截断）。
+         拉高后内容在框内「上下置中」（v-mid）；拖回自然高度（h≤0）即取消，回到随内容自适应 */
+      if (dir === 'se') {
+        const nh = Math.round(h0 + (ev.clientY - y0));
+        if (nh > 8) { b.h = nh; wrap.style.minHeight = nh + 'px'; }
+        else { delete b.h; wrap.style.minHeight = ''; }
+        wrap.classList.toggle('v-mid', !!b.h);
+      }
     };
     const up = function () {
       document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up);
       LMApp.commit({ silent: true, rerender: false });
-      LMApp.toast('宽度 ' + Math.round(b.width) + '%，四角可再拖');
+      LMApp.toast(b.h ? ('宽 ' + Math.round(b.width) + '% · 高 ' + b.h + 'px（内容上下置中）') : ('宽度 ' + Math.round(b.width) + '%，四角可再拖'));
+      if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout();
     };
     document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
   }

@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '55';
+var LM_ASSET_VER = '56';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -330,6 +330,9 @@ window.LMApp = (function () {
     /* 自由文本框：像 Word 一样可拖动 / 缩放（b.free = {x%, y px, w%, h px?}） */
     let wrapCls = 'block-wrap reveal', wrapSt = '', wrapX = '';
     if (b.hAlign) wrapCls += ' ha-' + b.hAlign;
+    /* ★ 修复56：流块的「拉高 + 内容上下置中」——右下角手柄拖出 b.h（min-height），
+       框体变高时内容垂直居中（苹果式留白），下方模块由文档流自动顺移；b.h ≤ 内容高时不生效 */
+    if (b.h) { wrapCls += ' v-mid'; wrapSt += 'min-height:' + Math.max(0, +b.h) + 'px;'; }
     if (b.free) {
       wrapCls += ' free-box';
       const f = b.free;

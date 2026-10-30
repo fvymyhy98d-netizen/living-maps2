@@ -462,11 +462,22 @@ T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '55';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '56';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
     && cssSrc.indexOf('body.mobile-view .free-box .block-tools{padding-left:42px}') > 0);
+/* ---------- 9.22) 修复56：流块右下角拖高（min-height + 内容上下置中）+ ⤒⤓ 贴平留 16px 标准缝 ---------- */
+console.log('【9.22】修复56：se 角拖 b.h 拉高 · v-mid 垂直居中渲染 · ⤒⤓ GAP=16 苹果式板块间隙');
+T('startBlockResize se 调 b.h（拖回取消）+ 渲染 v-mid/min-height + 贴平 GAP 16 + CSS .v-mid flex 居中',
+  edt2.indexOf('if (dir === \'se\') {') > 0
+    && edt2.indexOf('wrap.classList.toggle(\'v-mid\', !!b.h);') > 0
+    && appSrc.indexOf("if (b.h) { wrapCls += ' v-mid'; wrapSt += 'min-height:' + Math.max(0, +b.h) + 'px;'; }") > 0
+    && edt2.indexOf('const GAP = 16;') > 0
+    && edt2.indexOf('bestBottom + GAP - rb.top') > 0
+    && edt2.indexOf('bestTop - GAP - rb.bottom') > 0
+    && cssSrc.indexOf('.block-wrap.v-mid{display:flex;flex-direction:column;justify-content:center}') > 0);
+
 
 
 T('⌨️ 把手 pointerdown+pointerup 双确认（触屏隐式捕获下「按下后滑开」不再误触发开合）',

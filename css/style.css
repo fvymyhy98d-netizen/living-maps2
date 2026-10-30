@@ -651,6 +651,10 @@ body.multi-mode .blocks > .block-wrap:hover{outline:1.5px dashed rgba(52,199,89,
 .block-wrap.ha-left .table-wrap{width:fit-content;max-width:100%;margin-left:0;margin-right:auto}
 .block-wrap.ha-right .table-wrap{width:fit-content;max-width:100%;margin-left:auto;margin-right:0}
 .block-wrap.ha-center .table-wrap{width:fit-content;max-width:100%;margin-left:auto;margin-right:auto}
+/* ★ 修复56：拉高块的「内容上下置中」——min-height 撑高后内容垂直居中（苹果式留白），
+   内容超过高度时以内容为准（min-height 语义，绝不截断）；不影响 absolute 的工具条/手柄 */
+.block-wrap.v-mid{display:flex;flex-direction:column;justify-content:center}
+.block-wrap.v-mid .blk-handles,.block-wrap.v-mid .block-tools{flex:none}
 
 /* ---------- 首页特性行卡片：删除 ✕ / 虚线添加卡片 ---------- */
 .feature{position:relative}
