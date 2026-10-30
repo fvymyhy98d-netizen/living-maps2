@@ -770,6 +770,7 @@ window.LMEditor = (function () {
       + '<button class="btn btn-primary" data-panel="sync" type="button">☁️ 同步到 GitHub</button>'
       + '<button class="btn btn-mini" data-panel="site" type="button">🏠 网站信息</button>'
       + '<button class="btn btn-mini" data-panel="pages" type="button">📄 页面管理</button>'
+      + '<button class="btn btn-mini" data-panel="fixlayout" type="button">🩺 整理布局</button>'
       + '<button class="btn btn-mini" data-panel="hist" type="button">🕘 历史版本</button>'
       + '<button class="btn btn-mini" data-panel="backup" type="button">💾 备份 / 恢复</button>'
       + '<button class="btn btn-mini" data-panel="discard" type="button">↩ 放弃修改</button>'
@@ -790,6 +791,7 @@ window.LMEditor = (function () {
     else if (k === 'site') siteModal();
     else if (k === 'hist') histModal();
     else if (k === 'pages') pagesModal();
+    else if (k === 'fixlayout') LMApp.fixLayout();
     else if (k === 'backup') backupModal();
     else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到最近一次「同步到 GitHub」上传的版本（从未同步过则回到进入管理模式时的版本）？此后的一切改动会被撤销（包括协同期间其他设备同步来的修改），恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
     else if (k === 'password') passwordModal();

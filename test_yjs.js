@@ -463,7 +463,7 @@ T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '63';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '64';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -537,6 +537,15 @@ T('startFreeResize 开头调 beginFreeDrag（会话内引擎不每帧重算）+ 
     && edt2.indexOf("LMApp.toast('全宽块对齐看不到变化——先用四角手柄拖窄一点，再点对齐');") > 0
     && edt2.indexOf('贴左：左缘贴齐，右缘不动（宽度不变）') > 0
     && edt2.indexOf('b2.width = 68;') < 0);
+/* ---------- 9.29) 修复64：🩺 整理布局一键自愈（清残留让位边距+全量重算） ---------- */
+console.log('【9.29】修复64：管理条 🩺 按钮 → fixLayout 清 margin 重算 · 不改内容数据');
+T('管理条 🩺 整理布局按钮 + fixLayout 导出（清 _freeSession/margin-top + no-measure-anim 重算）',
+  edt2.indexOf('data-panel="fixlayout"') > 0
+    && edt2.indexOf("k === 'fixlayout'") > 0
+    && appSrc.indexOf('function fixLayout() {') > 0
+    && appSrc.indexOf('fixLayout: fixLayout, /* ★ 修复64：一键整理布局') > 0
+    && appSrc.indexOf("if (!w.classList.contains('free-box')) w.style.marginTop = '';") > 0);
+
 
 
 

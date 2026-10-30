@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '63';
+var LM_ASSET_VER = '64';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -861,6 +861,22 @@ window.LMApp = (function () {
      确认弹窗里已写明。退出管理模式即弃快照 */
   let adminSnap = null;
   function takeAdminSnap() { try { adminSnap = JSON.parse(JSON.stringify(state.content)); } catch (e) { adminSnap = null; } }
+  /* ★ 修复64：「🩺 整理布局」一键自愈 —— 深压让位（margin-top）在调宽/调高/换位/协同收敛的
+     复杂序列后可能残留（块间出现巨大空隙、两块叠在一起）。这里把本页所有文档流块的
+     margin-top 清零、脱离让位会话，再在无动画环境下全量重算一次 —— 引擎按当前框位
+     重新分配让位边距，布局回到「框在哪、块就让到哪」的一致状态。不改任何内容数据 */
+  function fixLayout() {
+    const col = app.querySelector('.blocks');
+    if (!col) return;
+    col._freeSession = null;
+    col.classList.add('no-measure-anim');
+    col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
+      if (!w.classList.contains('free-box')) w.style.marginTop = '';
+    });
+    adjustFreeLayoutSafe();
+    setTimeout(function () { col.classList.remove('no-measure-anim'); }, 90);
+    toast('🩺 已重新整理本页布局（模块间距已按自由框位置重算）');
+  }
   function discardChanges() {
     if (!state.admin) return;
     if (!adminSnap) { toast('没有可恢复的基准（请退出管理模式重新登录后再试）'); return; }
@@ -1812,6 +1828,7 @@ window.LMApp = (function () {
     esc: esc, md: md, currentId: currentId, ensureConfig: ensureConfig,
     commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayoutSafe,
     fixFreeOverlapVisual: fixFreeOverlapVisual, discardChanges: discardChanges,
+    fixLayout: fixLayout, /* ★ 修复64：一键整理布局（清残留让位边距 + 全量重算，用户自救重叠/大空隙） */
     takeAdminSnap: takeAdminSnap, /* ★ 修复62：推送云端成功后由 collab 回调重拍快照（放弃更改=回到最近上传版） */
     unfreeBlock: unfreeBlock,
     applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,

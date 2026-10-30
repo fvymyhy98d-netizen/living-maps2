@@ -348,6 +348,8 @@ living-maps/
 - **回归（修复62）**：`node --check` 通过；`test_yjs.js` **133/133**（新增 9.27 节 1 条：ghPush 成功回调重拍 + 导出 + 弹窗文案）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 - **修复63（调高抖动 + 对齐压缩两连修）**：**① 调宽/调高疯狂抖动 + 点块被撞飞**——`startFreeResize` 松手时调了 `endFreeDrag` 却**没人调 `beginFreeDrag`**：调宽/调高全程没有让位会话保护，`apply()` 每帧直调 `adjustFreeLayout`，freeDecide + fixFreeOverlap 每帧交替把下方块推来推去（调"核心概念"高度时底下疯狂抖），残留让位还会把附近块撞飞（点"学习资料与附件"飞上去）。修复：**resize 开头挂会话**（`beginFreeDrag` 挂 `_freeSession` 暂停引擎，apply 走会话缓存路径），松手 `endFreeDrag` 一次性重算——与拖动 ⠿ 同权。**② 对齐把整框压窄**——用户明确否定修复51 的"全宽块点中/右自动变 68% 标准宽"设计（点对齐后被压缩）：**对齐一律不改宽度**——左对齐=左缘贴齐右缘不动、右对齐=右缘贴齐左缘不动、居中=列内居中（渲染层 margin 裁决本就如此）；全宽块 margin 无从生效时 toast 提示"先用四角手柄拖窄"，绝不自动压缩。按钮 title 文案同步更新。资源版本随发版升至 `?v=63` / `LM_ASSET_VER='63'`。
 - **回归（修复63）**：`node --check` 通过；`test_yjs.js` **134/134**（9.18 断言更新为"不改宽度"版 + 新增 9.28 节 1 条）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
+- **修复64（🩺 整理布局——一键自愈）**：用户截图报"核心概念框（free）放到前置基础段落上面时，段落与速览表格叠在一起；框拿开就正常"——让位边距（margin-top）在调宽/调高/换位/协同收敛的复杂操作序列后可能**残留**（块间巨大空隙、两块叠住），这正是此前"中间留很大的空""更新日志跑到底部"的共同特征。深层状态机的边界修复需要更多复现细节，本轮先落地**一键自救**：管理条新增 **🩺 整理布局**——清空本页所有文档流块的残留 margin-top、脱离让位会话、在无动画环境下全量重算一次，布局回到"框在哪、块就让到哪"的一致状态；**不改任何内容数据**（只是显示层重算），失败可再点或撤销。资源版本随发版升至 `?v=64` / `LM_ASSET_VER='64'`。
+- **回归（修复64）**：`node --check` 通过；`test_yjs.js` **135/135**（新增 9.29 节 1 条：🩺 按钮 + fixLayout 导出与清 margin 逻辑）、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 
 ## 三·补11、Yjs 网状实时协同（Mesh P2P · Cloudflare 信令版，2026-10-28 第六轮修订）
 
