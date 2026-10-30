@@ -3864,10 +3864,28 @@ window.LMEditor = (function () {
       if (same) return; /* 拖回原位 = 数据没变：同理不重绘（防闪屏） */
       /* 只重排文档流块；自由文本框（绝对定位）对象保留、集中到数组尾部（渲染先后不影响其摆放位置） */
       const frees = page.blocks.filter(function (b3) { return b3 && b3.free; });
+      /* ★ 修复70（"移动块之后，文本框和表格重叠了"）：data-idx 是「DOM 包裹 ↔ 块数据」的唯一映射
+         （让位引擎 freeScan、工具栏、↑↓/删除/编辑 全靠它）。旧版重排后只回写了**非自由框**的
+         data-idx，自由框仍带着旧下标 —— 而数组已重排，旧下标现在指向**另一个块**：
+         于是"自由框的包裹"被当成普通块、"某个普通块的包裹"被当成自由框（甚至两个包裹同下标），
+         让位引擎从此看不到任何自由框 → 流块不再避让 → 表格直接压在文本框身上，且越操作越乱。
+         现在：重排前先记「块对象 → 包裹」，重排后按**对象身份**回写所有包裹（流块 + 自由框）的
+         data-idx；类别与数据不一致的包裹不参与回写（避免把历史错位固化），交给整页重绘自愈 */
+      const wrapByIdx = new Map();
+      Array.prototype.forEach.call(document.querySelectorAll('.blocks > .block-wrap'), function (w3) {
+        const n3 = +w3.getAttribute('data-idx');
+        const b3 = isNaN(n3) ? null : page.blocks[n3];
+        if (!b3) return;
+        if (!!b3.free !== w3.classList.contains('free-box')) return; /* 已错位：不固化 */
+        wrapByIdx.set(b3, w3);
+      });
       page.blocks = order.map(function (n) { return page.blocks[n]; }).concat(frees);
-      /* DOM 顺序已是最终结果：只把 data-idx 归位（与新下标对齐）+ 静默落盘 + 重算一次让位布局，
-         全程零整页重建 —— 整页 innerHTML 重建会重放入场动画，正是「松手整页闪」的根因 */
-      document.querySelectorAll('.blocks > .block-wrap:not(.free-box)').forEach(function (w2, i2) { w2.setAttribute('data-idx', String(i2)); });
+      /* DOM 顺序已是最终结果：把 data-idx 归位（流块 + 自由框一起，按对象身份对齐）
+         + 静默落盘 + 重算一次让位布局，全程零整页重建（重建会重放入场动画 = 「松手整页闪」） */
+      page.blocks.forEach(function (b3, i3) {
+        const w3 = wrapByIdx.get(b3);
+        if (w3) w3.setAttribute('data-idx', String(i3));
+      });
       LMApp.commit({ silent: true, rerender: false });
       markSaved();
       if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout();

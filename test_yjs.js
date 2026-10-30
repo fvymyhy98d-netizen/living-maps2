@@ -464,7 +464,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '69';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '70';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -597,6 +597,48 @@ T('free-box 基础层级 20 + free-drag 60 + selected/multi 80 三档仍在（�
     && cssSrc.indexOf('.blocks > .block-wrap:has(.multi-sel){z-index:80}') > 0
     && cssSrc.indexOf('.blocks > .block-wrap:not(.free-box){position:relative}') > 0
     && appSrc.indexOf("wrapCls += ' free-box';") > 0);
+
+/* ---------- 9.35) 修复70：⠿ 拖动排序后 data-idx 按对象身份回写（自由框不再错位） ---------- */
+console.log('【9.35】修复70：排序回写 data-idx 覆盖自由框（旧版漏写 → 让位失效、表格压住文本框）');
+T('排序代码按「块对象 → 包裹」身份回写全部 data-idx（含 .free-box），旧版只写非自由框已消失',
+  edt.indexOf('const wrapByIdx = new Map();') > 0
+    && edt.indexOf("if (!!b3.free !== w3.classList.contains('free-box')) return; /* 已错位：不固化 */") > 0
+    && edt.indexOf('page.blocks.forEach(function (b3, i3) {') > 0
+    && edt.indexOf(".block-wrap:not(.free-box)').forEach(function (w2, i2) { w2.setAttribute('data-idx'") < 0
+    && appSrc.indexOf('function wrapBlock(page, w) {') > 0
+    && appSrc.indexOf('const b = wrapBlock(page, w);') > 0);
+/* 真实执行一次「重排后回写」：page.blocks=[A,F,B,C]，把 C 拖到最前（order=[3,0,2]），
+   校验每个 DOM 包裹的 data-idx 仍指向它自己的块 —— 自由框 F 必须落到尾部而不是指向别的块 */
+(function () {
+  const a = edt.indexOf('const wrapByIdx = new Map();');
+  const z = edt.indexOf('LMApp.commit({ silent: true, rerender: false });', a);
+  const code = (a >= 0 && z > a) ? edt.slice(a, z) : '';
+  const mk = function (cls) {
+    let v = '0';
+    const o = {
+      className: cls,
+      getAttribute: function () { return v; },
+      setAttribute: function (k, x) { v = String(x); },
+      idx: function (x) { if (x == null) return +v; v = String(x); },
+      classList: { contains: function (k) { return k === 'free-box' && cls.indexOf('free-box') >= 0; } }
+    };
+    return o;
+  };
+  const A = { t: 'A' }, F = { t: 'F', free: { y: 10, x: 0, w: 40 } }, B = { t: 'B' }, C = { t: 'C' };
+  const page = { blocks: [A, F, B, C] };
+  const wA = mk('block-wrap'), wF = mk('block-wrap free-box'), wB = mk('block-wrap'), wC = mk('block-wrap');
+  wA.idx(0); wF.idx(1); wB.idx(2); wC.idx(3);
+  const order = [3, 0, 2], frees = [F];
+  const doc = { querySelectorAll: function () { return [wA, wF, wB, wC]; } };
+  let ok = false;
+  try {
+    new Function('document', 'page', 'order', 'frees', code)(doc, page, order, frees);
+    ok = page.blocks.length === 4
+      && page.blocks[0] === C && page.blocks[1] === A && page.blocks[2] === B && page.blocks[3] === F
+      && wC.idx() === 0 && wA.idx() === 1 && wB.idx() === 2 && wF.idx() === 3;
+  } catch (e) { ok = false; }
+  T('排序后每个包裹的 data-idx 仍指向自己的块（自由框 F 正确落在尾部，不再指向别的块）', ok);
+})();
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

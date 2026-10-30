@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '69';
+var LM_ASSET_VER = '70';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -495,6 +495,23 @@ window.LMApp = (function () {
          → 流块的 margin 过渡从头到尾不被打断，每帧从当前动画值平滑重定目标 = 苹果式跟随；
        · 松手用同一快照收尾，目标值与最后一帧相同 → 零跳动。 */
   var FREE_GAP = 16;
+  /* ★ 修复70 保险丝：data-idx 是「DOM 包裹 ↔ 块数据」的唯一映射，必须与 DOM 上的类别（.free-box）
+     一致。历史上排序代码回写不全时会出现「自由框包裹指向流块数据 / 流块包裹指向自由框数据」甚至
+     两个包裹同下标 —— 引擎若照单全收，就会把流块当自由框：让位整页失效，块直接压在框上
+     （用户报的"文本框和表格重叠了"）。这里对不一致的包裹直接返回 null（本次不参与，console 留痕），
+     由整页重绘（render）自愈 */
+  function wrapBlock(page, w) {
+    const b = page.blocks[+w.getAttribute('data-idx')];
+    if (!b) return null;
+    if (!!b.free !== w.classList.contains('free-box')) {
+      try {
+        console.warn('[让位保险丝] data-idx 与 DOM 类别不一致，本次跳过该块（整页重绘即自愈）',
+          { idx: +w.getAttribute('data-idx'), 类: String(w.className) });
+      } catch (eM) { /* noop */ }
+      return null;
+    }
+    return b;
+  }
   /* 一次性测量（仅拖拽开始与 渲染/窗口缩放/对齐操作 等静态时刻调用）：
      ★ 修复68（松手/抓框时下面的块「跳上去又弹下来」）：旧版先把所有流块的 margin-top 清零再量基线，
        而 margin-top 上带着 0.4s 过渡 → 浏览器按「归零后的位置」起步、再动画回让位量，
@@ -510,7 +527,7 @@ window.LMApp = (function () {
     if (!page || !page.blocks) return null;
     const flows = [], frees = [];
     col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
-      const b = page.blocks[+w.getAttribute('data-idx')];
+      const b = wrapBlock(page, w); /* ★ 修复70：映射/类别不一致的包裹一律跳过（见 wrapBlock） */
       if (!b) return;
       if (b.free) frees.push({ b: b, w: w });
       else flows.push({ b: b, w: w });
@@ -658,7 +675,7 @@ window.LMApp = (function () {
       if (!page || !page.blocks) return;
       const flows = [], frees = [];
       col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
-        const b = page.blocks[+w.getAttribute('data-idx')];
+        const b = wrapBlock(page, w); /* ★ 修复70：映射/类别不一致的包裹一律跳过（见 wrapBlock） */
         if (!b) return;
         (b.free ? frees : flows).push({ b: b, w: w });
       });
