@@ -783,7 +783,12 @@ window.LMCollab = (function () {
         }, 6000);
         return;
       }
-      if (r.ok) return r.json().then(function (j) { GH.sha = j.content && j.content.sha; });
+      if (r.ok) return r.json().then(function (j) {
+        GH.sha = j.content && j.content.sha;
+        /* ★ 修复62：上传成功 → 重拍「放弃更改」基准快照。语义：放弃 = 回到最近一次上传给 Hub 的
+           版本（上传后又改的那些被丢弃，已上传的内容不丢）；未同步过则仍是进入管理模式时的版本 */
+        try { if (window.LMApp && LMApp.takeAdminSnap && validContent(LMApp.state.content)) LMApp.takeAdminSnap(); } catch (eSnap) { /* noop */ }
+      });
     }).catch(function () { GH.inFlight = false; });
   }
   function ghInit() {

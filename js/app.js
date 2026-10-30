@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '61';
+var LM_ASSET_VER = '62';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1812,6 +1812,7 @@ window.LMApp = (function () {
     esc: esc, md: md, currentId: currentId, ensureConfig: ensureConfig,
     commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayoutSafe,
     fixFreeOverlapVisual: fixFreeOverlapVisual, discardChanges: discardChanges,
+    takeAdminSnap: takeAdminSnap, /* ★ 修复62：推送云端成功后由 collab 回调重拍快照（放弃更改=回到最近上传版） */
     unfreeBlock: unfreeBlock,
     applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,

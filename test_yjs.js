@@ -462,7 +462,7 @@ T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '61';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '62';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -520,6 +520,13 @@ T('hl 色板无选区时提示且 return（⊘ 清除除外），不再落 apply
     && edt2.indexOf("if (prop === 'hl' && v !== '') {") > 0
     && edt2.indexOf("if ((prop === 'color') && applyInlineSwatch(prop, v)) return;") > 0
     && edt2.indexOf("return; /* ★ 修复61：无选区不整块上色（确认路径同提示逻辑） */") > 0);
+
+/* ---------- 9.27) 修复62：放弃更改 = 回到最近一次上传到 Hub 的版本 ---------- */
+console.log('【9.27】修复62：ghPush 成功重拍基准快照 · takeAdminSnap 导出 · 确认弹窗文案更新');
+T('GitHub 上传成功回调 LMApp.takeAdminSnap() 重拍基准 + app 导出 takeAdminSnap + discard 弹窗写明新语义',
+  col.indexOf('try { if (window.LMApp && LMApp.takeAdminSnap && validContent(LMApp.state.content)) LMApp.takeAdminSnap(); } catch (eSnap) { /* noop */ }') > 0
+    && appSrc.indexOf('takeAdminSnap: takeAdminSnap, /* ★ 修复62：推送云端成功后由 collab 回调重拍快照') > 0
+    && edt2.indexOf('把内容恢复到最近一次「同步到 GitHub」上传的版本（从未同步过则回到进入管理模式时的版本）') > 0);
 
 
 

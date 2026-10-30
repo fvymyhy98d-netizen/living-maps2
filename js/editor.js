@@ -786,7 +786,7 @@ window.LMEditor = (function () {
     else if (k === 'hist') histModal();
     else if (k === 'pages') pagesModal();
     else if (k === 'backup') backupModal();
-    else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到你进入管理模式时的版本？此后的一切改动（包括协同期间其他设备同步来的修改）都会被撤销，恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
+    else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到最近一次「同步到 GitHub」上传的版本（从未同步过则回到进入管理模式时的版本）？此后的一切改动会被撤销（包括协同期间其他设备同步来的修改），恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
     else if (k === 'password') passwordModal();
   });
   /* ★ 修复㉝：手机端格式工具条把手（⌨️）点击开合 —— 事件委托挂在 document，renderToolbar 重建 DOM 也不丢。
