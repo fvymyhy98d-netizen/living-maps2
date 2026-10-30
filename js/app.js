@@ -661,12 +661,13 @@ window.LMApp = (function () {
          一次算准，不再振荡 */
       let moved = false;
       frees.forEach(function (fd) {
-        flows.forEach(function (f) {
+        for (let fi = 0; fi < flows.length; fi++) {
+          const f = flows[fi];
           const r = f.w.getBoundingClientRect();
           const cur = parseFloat(f.w.style.marginTop) || 0;
           const natTop = r.top + sy - cur;
           const ox = Math.min(fd.right, r.right) - Math.max(fd.left, r.left);
-          if (ox <= 16) return; /* 水平擦边不管（与让位引擎同标准） */
+          if (ox <= 16) continue; /* 水平擦边不管（与让位引擎同标准） */
           if (fd.top < natTop + r.height - 4 && fd.bot > natTop + 4) {
             const target = natTop + r.height + 6;
             const dy = Math.round(target - fd.top);
@@ -675,9 +676,11 @@ window.LMApp = (function () {
               fd.w.style.top = fd.b.free.y + 'px';
               fd.top += dy; fd.bot += dy;
               moved = true;
+              break; /* ★ 修复㊲：单轮只推一次 —— 连环推会一轮把框推到页尾（瞬移观感），
+                        剩余重叠留给下一轮渐进消解（每次交互/滚动都会再跑这里） */
             }
           }
-        });
+        }
       });
       if (moved) {
         try { LMStore.saveLocal(state.content); } catch (eS) { /* noop */ } /* 推框写数据要落盘，刷新不丢 */

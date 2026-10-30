@@ -292,6 +292,8 @@ living-maps/
   **根因**——操作栏的浮现规则依赖 `.block-wrap.selected`，但**自由框和图片块**在选中时只给 `.free-box` / 图片手柄加 selected，**一直没点亮到 block-wrap 上**——而课程页的标题、表格几乎全被转成了自由框 → 手机上点到哪都不弹；双击进编辑走的是另一条链路（第二击放行原生聚焦），所以双击好使、单击没反应；
   **修复**——① `refreshHandles` 的自由框/图片分支统一点亮 `block-wrap.selected`（自由框本身就是双类，一次 add 同时满足两套显示规则）；② 触屏单击处理里 `selectBlock` 后直接补加 selected（双保险，不依赖内部链路）；③ 显示规则加 `!important` 兜底；④ ⌨️ 把手开合从 click 改为 **pointerup**——触屏上 click 合成事件偶发丢失（快速轻点尤其明显），pointerup 全平台必达且只触发一次。
 - **回归（修复㊱）**：`node --check` 通过；`test_yjs.js` **113/113**、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
+- **修复㊲（推框单轮单推）**：修复㉟的推框循环一轮内会对多个重叠块连环推——框压住块 A 被推到 A 底、随即压住块 B 又被推……一轮就把框推到页尾（瞬移观感）。改为**单轮只推一次**（第一个重叠块），剩余重叠留给下一轮（每次交互/滚动都会再跑兜底）渐进消解。
+- **回归（修复㊲）**：`node --check` 通过；`test_yjs.js` **113/113**、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS（A–G）、`test_collab.js` 9/9 / `test_comments.js` 9/9 全 PASS。
 
 ## 三·补11、Yjs 网状实时协同（Mesh P2P · Cloudflare 信令版，2026-10-28 第六轮修订）
 
