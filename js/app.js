@@ -3,6 +3,23 @@
    数据来源：LMStore.load()（优先浏览器里保存的修改，
    否则使用 data/content.js 的初始内容）
    ========================================================= */
+/* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
+   页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
+   微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
+var LM_ASSET_VER = '55';
+(function () {
+  setInterval(function () {
+    if (document.hidden) return; /* 后台标签不折腾 */
+    if (document.body && (document.body.classList.contains('typing') || document.querySelector('.modal-mask'))) return; /* 输入中/弹窗中不打断 */
+    fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (t) {
+      const m = t && t.match(/LM_ASSET_VER\s*=\s*'([^']+)'/);
+      if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem('lm_ver_reload') === m[1])) {
+        try { sessionStorage.setItem('lm_ver_reload', m[1]); } catch (eS) { /* noop */ }
+        location.reload(); /* 新版本自动刷新一次（sessionStorage 防止异常循环刷新） */
+      }
+    }).catch(function () { /* 离线/网络失败静默跳过 */ });
+  }, 600000);
+})();
 window.LMApp = (function () {
   const app = document.getElementById('app');
   const state = { content: null, admin: false, root: false, pageId: 'home', view: 'auto', ready: false };

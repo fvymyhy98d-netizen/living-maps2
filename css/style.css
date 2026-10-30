@@ -754,7 +754,11 @@ body.mobile-view .blocks{padding:18px 12px 120px;gap:20px}
 body.mobile-view .block-wrap{max-width:100%}
 body.mobile-view .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 /* —— 块工具条（悬停在手机上不存在：点选块后出现，靠已选中态展示） —— */
-body.mobile-view .block-tools{gap:4px}
+body.mobile-view .block-tools{gap:3px}
+/* ★ 修复55：手机端操作栏分组分隔线隐藏 + 自由框操作栏给左上角 ⠿ 把手让位（42px ≥ 把手宽 34px+left 2）——
+   两者同处框外左上水平带会重叠（⠿ 与 ⇤ 按钮叠在一起）；分隔线取消 + 紧凑 gap + 左侧让位，重合消失 */
+body.mobile-view .block-tools .sep{display:none}
+body.mobile-view .free-box .block-tools{padding-left:42px}
 body.mobile-view .block-tools button{width:27px;height:27px;font-size:12px}
 /* ★ 手机没有 hover：块工具条（上移/下移/删除/并排勾选…）常显，不依赖悬停或选中态；
    多选模式（multi-mode）的 display:none !important 仍优先生效，勾选时自动隐藏 */
