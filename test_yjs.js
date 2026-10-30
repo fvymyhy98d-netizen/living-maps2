@@ -462,7 +462,7 @@ T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '59';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '60';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -505,6 +505,13 @@ T('登录弹窗 pwEye 切换 type=password/text 并 focus 回输入框',
     && appSrc.indexOf("inp.type = show ? 'text' : 'password';") > 0
     && appSrc.indexOf("this.textContent = show ? '🙈' : '👁';") > 0
     && appSrc.indexOf('id="pwEye"') > 0);
+
+/* ---------- 9.25) 修复60：自由框去白底（透明文本框）+ 管理态淡虚线 ---------- */
+console.log('【9.25】修复60：自由框背景透明 · 访客无框 · 管理态淡蓝虚线 · 白卡阴影移除');
+T('自由框 background:transparent + shadow:none + admin 淡蓝虚线 + 旧白底规则不再出现',
+  cssSrc.indexOf('.free-box{position:absolute;background:transparent;border:1px dashed transparent;border-radius:14px;') > 0
+    && cssSrc.indexOf('body.admin .free-box{border-color:rgba(0,113,227,.14)}') > 0
+    && cssSrc.indexOf('.free-box{position:absolute;background:rgba(255,255,255') < 0);
 
 
 

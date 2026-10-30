@@ -464,8 +464,12 @@ body.admin .col-grip:hover{background:rgba(0,113,227,.18);border-radius:3px}
    自由文本框（像 Word：拖 ⠿ 移动 / 拖边角缩放 / 字号随框宽自动缩放）
    ========================================================= */
 .blocks{position:relative}
-.free-box{position:absolute;background:rgba(255,255,255,.85);border:1px solid rgba(0,0,0,.1);border-radius:14px;
-  padding:12px 14px;box-shadow:0 6px 20px rgba(0,0,0,.07)}
+.free-box{position:absolute;background:transparent;border:1px dashed transparent;border-radius:14px;
+  padding:12px 14px;box-shadow:none}
+/* ★ 修复60：自由框去白底——白卡（rgba(255,255,255,.85)+阴影）会盖住压在下面的文档流文字，
+   用户明确要求"透明的文本框"。访客视角完全透明无边框（文字直接浮在页面上，与普通段落同观感）；
+   管理模式保留一条极淡蓝虚线标出可抓取范围（选中/悬停高亮不变），拖放热区（padding）不变 */
+body.admin .free-box{border-color:rgba(0,113,227,.14)}
 /* 反馈留言区与上方内容列对齐（.blocks 同款 780px 居中列，修复“提交反馈溢出屏幕”） */
 #fbMount{max-width:780px;margin:0 auto;padding:0 22px 110px}
 .free-box .b-p{margin:0}
