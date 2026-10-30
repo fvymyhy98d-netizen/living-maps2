@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '67';
+var LM_ASSET_VER = '68';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -496,7 +496,15 @@ window.LMApp = (function () {
        · 松手用同一快照收尾，目标值与最后一帧相同 → 零跳动。 */
   var FREE_GAP = 16;
   /* 一次性测量（仅拖拽开始与 渲染/窗口缩放/对齐操作 等静态时刻调用）：
-     清掉旧 margin → 临时关过渡 + 强制回流 → 记录每个流块的无让位基线几何 */
+     ★ 修复68（松手/抓框时下面的块「跳上去又弹下来」）：旧版先把所有流块的 margin-top 清零再量基线，
+       而 margin-top 上带着 0.4s 过渡 → 浏览器按「归零后的位置」起步、再动画回让位量，
+       视觉就是「跳上去又弹下来」。改为**完全不写 DOM**：
+         · 自然顶端 = 实测顶端 − 上游（含自己）全部让位量之和 —— 与「清零后测量」数学等价
+           （flex 列里每个块的 margin-top 会把自己及后续块一起推下，前缀和正好还原）；
+         · 每个块当前的让位量取 computedStyle：过渡进行中它返回动画当前值，
+           与同一时刻的矩形自洽 → 不会因「动画中途测量」而低估基线（修复㊾ 的老坑）。
+       好处：不打断正在跑的过渡、不产生「归零帧」，松手时下面的块只做一次连续动画。
+       注意：没有自由框时仍要把残留让位清掉（框被删/取消自由摆放后，让位必须归零） */
   function freeScan(col) {
     const page = state.content.pages.find(function (x) { return x.id === state.pageId; });
     if (!page || !page.blocks) return null;
@@ -507,21 +515,29 @@ window.LMApp = (function () {
       if (b.free) frees.push({ b: b, w: w });
       else flows.push({ b: b, w: w });
     });
-    flows.forEach(function (f) { if (f.w.style.marginTop) f.w.style.marginTop = ''; });
-    if (!frees.length) return null;
-    col.classList.add('no-measure-anim');
-    void col.offsetWidth;
+    if (!frees.length) {
+      /* 页面上已没有自由框：残留让位一次性清掉（关过渡执行，不产生动画） */
+      if (flows.some(function (f) { return f.w.style.marginTop; })) {
+        col.classList.add('no-measure-anim');
+        flows.forEach(function (f) { if (f.w.style.marginTop) f.w.style.marginTop = ''; });
+        void col.offsetWidth;
+        col.classList.remove('no-measure-anim');
+        void col.offsetWidth;
+      }
+      return null;
+    }
     const sy = window.scrollY || window.pageYOffset || 0;
     const colTop = col.getBoundingClientRect().top + sy;
+    let accM = 0; /* ★ 修复68：上游让位量前缀和（含自己） */
     flows.forEach(function (f) {
       const r = f.w.getBoundingClientRect();
-      f.natTop = r.top + sy; /* margin 已清零 → 此即自然基线 */
+      const m = parseFloat(getComputedStyle(f.w).marginTop) || 0;
+      accM += m;
+      f.natTop = r.top + sy - accM; /* ★ 修复68：反推自然基线（不清零 margin，零跳动） */
       f.h = r.height;
       f.left = r.left; f.right = r.right;
       f.m0 = 0;
     });
-    col.classList.remove('no-measure-anim');
-    void col.offsetWidth;
     return { col: col, colTop: colTop, flows: flows, frees: frees };
   }
   /* 纯计算核心（不碰 DOM；自动测试直接从源码提取本函数做验证）。
@@ -716,7 +732,9 @@ window.LMApp = (function () {
         for (let fi = 0; fi < flows.length; fi++) {
           const f = flows[fi];
           const r = f.w.getBoundingClientRect();
-          const cur = parseFloat(f.w.style.marginTop) || 0;
+          /* ★ 修复68：让位量取 computedStyle（过渡中=动画当前值），与同一时刻的矩形自洽；
+             旧版读 style（目标值）→ 动画途中算出的自然基线偏高，会误推框 */
+          const cur = parseFloat(getComputedStyle(f.w).marginTop) || 0;
           const natTop = r.top + sy - cur;
           const ox = Math.min(fd.right, r.right) - Math.max(fd.left, r.left);
           if (ox <= 16) continue; /* 水平擦边不管（与让位引擎同标准） */

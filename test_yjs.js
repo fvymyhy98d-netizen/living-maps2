@@ -464,7 +464,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '67';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '68';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -578,6 +578,16 @@ T('applyFreeScan 建 flowGeo 记账 + commitFreeRide 用 _lastScan 烘焙 free.r
     && appSrc.indexOf('if (commitFreeRide()) { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0
     && appSrc.indexOf('function dumpLayout() {') > 0
     && appSrc.indexOf('dumpLayout: dumpLayout,') > 0);
+
+/* ---------- 9.33) 修复68：松手/抓框不再「跳上去又弹下来」（基线反推，不清零 margin） ---------- */
+console.log('【9.33】修复68：自然基线 = 实测顶端 − 上游让位前缀和（零 DOM 写入，不打断过渡）');
+T('freeScan 去掉「清零 margin 再量」：改 computedStyle 让位量 + accM 前缀和反推；无自由框时才清残留',
+  appSrc.indexOf('let accM = 0;') > 0
+    && appSrc.indexOf('const m = parseFloat(getComputedStyle(f.w).marginTop) || 0;') > 0
+    && appSrc.indexOf('accM += m;') > 0
+    && appSrc.indexOf('f.natTop = r.top + sy - accM;') > 0
+    && appSrc.indexOf('const cur = parseFloat(getComputedStyle(f.w).marginTop) || 0;') > 0
+    && appSrc.indexOf('/* margin 已清零 → 此即自然基线 */') < 0);
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
