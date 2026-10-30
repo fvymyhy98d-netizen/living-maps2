@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793357765763,
+      "syncTs": 1793374729937,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -352,6 +352,18 @@ window.SITE_CONTENT = {
               "长尾知识与实时信息上容易失败"
             ]
           ]
+        },
+        {
+          "type": "paragraph",
+          "size": "normal",
+          "text": "",
+          "style": {},
+          "free": {
+            "x": 12.5,
+            "y": 232,
+            "w": 44,
+            "ride": 0
+          }
         },
         {
           "type": "heading",
