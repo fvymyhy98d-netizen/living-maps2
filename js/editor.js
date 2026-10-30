@@ -3489,7 +3489,14 @@ window.LMEditor = (function () {
     /* ★ 修复53：调高的下限 = 内容实际高度（scrollHeight 含 padding，+2px 边框余量），不再硬编码 50px——
        旧版把「核心概念」这类一行标题缩到 50px 时，文字（约 70px 高）直接溢出格子（字超出白色背景）；
        现在最小只能缩到内容刚好装下，已溢出的框一拖也会自动回弹到内容高度 */
-    const minH = Math.max(50, (wrap.scrollHeight || 0) + 2);
+    /* ★ 修复65：下限测量被「自身当前高度」污染 —— scrollHeight 永远 ≥ height，框一旦拖大到
+       400px，下限就被锁死在 402px，往上拖永远缩不回去（「高度缩不小了」）。测量时先把
+       height 置 auto 瞬间读真实内容高，再恢复原值（仅 mousedown 时同步重排一次，拖动中零开销） */
+    const _prevH = wrap.style.height;
+    wrap.style.height = 'auto';
+    const contentH = wrap.scrollHeight || 0;
+    wrap.style.height = _prevH;
+    const minH = Math.max(50, contentH + 2);
     const col = document.querySelector('.blocks');
     const colW = (col ? col.getBoundingClientRect().width : window.innerWidth) || 1;
     let lastX = e.clientX, lastY = e.clientY;

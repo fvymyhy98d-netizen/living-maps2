@@ -453,17 +453,17 @@ T('↑↓ 邻居为自由框时 delete free 放回流再 swapWith 互换 + 延�
     && edt2.indexOf('已下移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）') > 0
     && edt2.indexOf('const offX = e.clientX - r0.left, offY = Math.min(e.clientY - r0.top, 12);') > 0);
 /* ---------- 9.20) 修复53：自由框调高下限 = 内容实际高度（不再硬编码 50px，字不溢出格子） ---------- */
-console.log('【9.20】修复53：调高下限改 minH = max(50, scrollHeight+2)，缩不到位溢出文字');
-T('startFreeResize 抓取时记录 minH（scrollHeight+2）并用于 s/se 高度钳制',
-  edt2.indexOf('const minH = Math.max(50, (wrap.scrollHeight || 0) + 2);') > 0
-    && edt2.indexOf('if (dir === \'s\' || dir === \'se\') b.free.h = Math.max(minH, Math.round(f0.h + dy));') > 0);
+console.log('【9.20】修复53：调高下限 = 内容实际高度（65 起用 auto 瞬测，不再被自身高度锁死）');
+T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se 高度钳制',
+  edt2.indexOf('const minH = Math.max(50, contentH + 2);') > 0
+    && edt2.indexOf("if (dir === 's' || dir === 'se') b.free.h = Math.max(minH, Math.round(f0.h + dy));") > 0);
 
 
 
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '64';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '65';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -545,6 +545,15 @@ T('管理条 🩺 整理布局按钮 + fixLayout 导出（清 _freeSession/margi
     && appSrc.indexOf('function fixLayout() {') > 0
     && appSrc.indexOf('fixLayout: fixLayout, /* ★ 修复64：一键整理布局') > 0
     && appSrc.indexOf("if (!w.classList.contains('free-box')) w.style.marginTop = '';") > 0);
+/* ---------- 9.30) 修复65：调高下限不再被自身高度锁死（拖大后能缩回去） ---------- */
+console.log('【9.30】修复65：minH 测量前 height 置 auto 瞬测内容高 · 不再 ≥ 当前高度');
+T('startFreeResize 测内容高时 height 置 auto 再恢复（scrollHeight 不被自身高度污染）',
+  edt2.indexOf("const _prevH = wrap.style.height;") > 0
+    && edt2.indexOf("wrap.style.height = 'auto';") > 0
+    && edt2.indexOf('const contentH = wrap.scrollHeight || 0;') > 0
+    && edt2.indexOf('wrap.style.height = _prevH;') > 0
+    && edt2.indexOf('const minH = Math.max(50, contentH + 2);') > 0);
+
 
 
 
