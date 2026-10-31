@@ -2,9 +2,14 @@
 #  可选：用 GitHub Actions 发布 GitHub Pages（模板，不会自动生效）
 #  为什么要有它：官方口径「GitHub Pages 站点有每小时 10 次构建的软限制；
 #  用自定义 GitHub Actions 工作流构建和发布时，此限制不适用」。
-#  而本站每次协同保存都会提交 data/content.js —— 分支发布模式下这等于每次
-#  保存都触发一次 Pages 构建，协同一多小时就会把 10 次/小时 用光，导致
-#  「发代码后线上还是旧版」。本模板用 paths-ignore 把内容提交挡在部署之外。
+#
+#  ★ 修复89 起，协同内容改写到独立的数据分支（默认 lm-data）——**不进 main、
+#    也不触发任何构建**；main 上的 data/content.js 只是「首屏快照」（≤1 次 / 30 分钟，
+#    最多 2 次构建/小时）。所以本模板已经不是必需的，它的作用是「再上一层保险」：
+#    连代码提交也不再受 10 次/小时软限约束（一天连发十几个版本也不会互相顶掉）。
+#
+#  ⚠ 快照要能被新访客看到，就必须让 data/content.js 的提交照常部署 ——
+#    所以下面的 paths-ignore **不要**再把 data/content.js 挡掉。
 #
 #  启用三步（约 5 分钟，可回退）：
 #    ① 把本文件移动到 .github/workflows/pages.yml
@@ -19,10 +24,8 @@ name: pages
 on:
   push:
     branches: [main]
-    # ★ 关键：协同内容提交不触发部署 —— 内容由页内脚本经 GitHub API / raw 实时同步，
-    #   与站点构建无关；因此这些路径的提交不占 Pages 构建配额。
+    # 纯文档 / 模板文件的提交不必重新发布（内容提交不在此列：快照需要部署）
     paths-ignore:
-      - 'data/content.js'
       - 'README.md'
       - 'deploy/**'
   workflow_dispatch:   # 允许在 Actions 页面手动点一次「Run workflow」重新发布

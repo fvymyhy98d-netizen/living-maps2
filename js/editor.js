@@ -1043,7 +1043,12 @@ window.LMEditor = (function () {
       + '<form id="ghForm">'
       + field('GitHub 用户名 / 组织名', F.text('owner', cfg.owner, '例如 fvymyhy98d-netizen'))
       + field('仓库名', F.text('repo', cfg.repo, '例如 living-maps2'))
-      + field('分支', F.text('branch', cfg.branch || 'main', '一般保持 main'))
+      + field('分支（Pages 发布分支）', F.text('branch', cfg.branch || 'main', '一般保持 main'))
+      + field('内容数据分支（协同内容写这里，不触发 Pages 构建）',
+          F.text('dataBranch', cfg.dataBranch == null ? 'lm-data' : cfg.dataBranch, '默认 lm-data；留空 = 跟随上面的分支（旧行为）'),
+          'GitHub Pages 每次往发布分支提交都会重新构建，而「10 次构建/小时」是软上限 —— 协同编辑很容易把它用光，导致「发了代码，线上还是旧版」。'
+          + '把实时内容放到单独的 lm-data 分支后，构建次数只跟发代码的频率有关（main 上每 30 分钟最多刷一次快照，供新访客首屏加载）。'
+          + '若 Token 只对发布分支有写权限，程序会自动回退到发布分支（等于旧行为）。')
       + field('内容文件路径', F.text('path', cfg.path || 'data/content.js', '一般保持默认'))
       + field('GitHub Token（默认只存当前标签页，关闭浏览器即清除）',
           '<input class="input" type="password" name="token" autocomplete="off" placeholder="'
@@ -1067,6 +1072,8 @@ window.LMEditor = (function () {
           owner: String(fd.get('owner') || '').trim(),
           repo: String(fd.get('repo') || '').trim(),
           branch: String(fd.get('branch') || '').trim() || 'main',
+          /* ★ 修复89：留空 = 跟随 branch（旧行为）；默认 lm-data（不触发 Pages 构建） */
+          dataBranch: String(fd.get('dataBranch') || '').trim(),
           path: String(fd.get('path') || '').trim() || 'data/content.js',
           token: String(fd.get('token') || ''),
           remember: !!(root.querySelector('#ghRemember') && root.querySelector('#ghRemember').checked)
@@ -1075,7 +1082,7 @@ window.LMEditor = (function () {
       const vaultize = function (c) { /* 团队保险箱：填了团队密码才更新（随内容上云分发给普通管理员） */
         const pw = String((new FormData(form)).get('teamPw') || '').trim();
         if (!pw) return Promise.resolve(false);
-        return LMStore.encryptForTeam(JSON.stringify({ owner: c.owner, repo: c.repo, branch: c.branch, path: c.path, token: c.token }), pw).then(function (box) {
+        return LMStore.encryptForTeam(JSON.stringify({ owner: c.owner, repo: c.repo, branch: c.branch, dataBranch: c.dataBranch, path: c.path, token: c.token }), pw).then(function (box) {
           const cc = LMApp.state.content.config = LMApp.state.content.config || {};
           cc.collab = cc.collab || {};
           cc.collab.tokenVault = box;

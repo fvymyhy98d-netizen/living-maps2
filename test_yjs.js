@@ -466,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '88';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '89';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -1901,8 +1901,9 @@ console.log('【9.54】Pages 构建软限：内容同步不受影响 · 发代�
   const yamlClean = !!yml && yml.indexOf('\t') < 0
     && yml.split('\n').filter(function (l) { return l.trim() && l.trim().indexOf('#') !== 0; })
       .every(function (l) { return (/^ */).exec(l)[0].length % 2 === 0; });
-  T('真跑模板：paths-ignore 含 data/content.js（内容保存不占构建配额）· 无 tab 缩进 · 缩进偶数',
-    !!ignore && ignore.indexOf('data/content.js') >= 0 && yamlClean,
+  T('真跑模板：paths-ignore 不含 data/content.js（快照要能部署）· 仍忽略 README/deploy · 无 tab · 缩进偶数',
+    !!ignore && ignore.indexOf('data/content.js') < 0
+      && ignore.indexOf('README.md') >= 0 && ignore.indexOf('deploy/**') >= 0 && yamlClean,
     JSON.stringify({ pathsIgnore: ignore, yamlClean: yamlClean }));
 
   T('README 写清官方口径与三条解法（不受影响 / 临时缓解 / Actions 一劳永逸 + 回退步骤）',
@@ -1911,6 +1912,109 @@ console.log('【9.54】Pages 构建软限：内容同步不受影响 · 发代�
       && readme.indexOf('deploy/pages-actions.yml') > 0
       && readme.indexOf('完全不受影响：协同内容本身') > 0
       && readme.indexOf('回退') > 0);
+})();
+
+
+/* ---------- 9.55) 修复89：内容写数据分支（不触发 Pages 构建）+ main 低频快照 ---------- */
+console.log('【9.55】修复89：实时内容写 lm-data（0 构建）· main 仅 30 分钟快照 · 权限不足自动回退 main');
+(function () {
+  const collab = srcOf('js/collab.js');
+  const store = srcOf('js/store.js');
+  const editor = srcOf('js/editor.js');
+  const readme = srcOf('README.md');
+
+  /* 1) 真跑：分支判定（老配置没有 dataBranch 字段也要吃到默认值） */
+  let dataRefOf = null;
+  try {
+    const defM = /const DEF_GH = (\{[^}]*\});/.exec(store);
+    const a = store.indexOf('  function dataRefOf(cfg) {');
+    const b = store.indexOf('\n  }', a);
+    const DEF_GH = eval('(' + defM[1] + ')');
+    dataRefOf = new Function('DEF_GH', store.slice(a, b + 4) + '\nreturn dataRefOf;')(DEF_GH);
+  } catch (e) { dataRefOf = null; }
+  let dOK = false, dDetail = '提取失败';
+  if (dataRefOf) {
+    const r = {
+      '未配置': dataRefOf({ branch: 'main' }),
+      '空串': dataRefOf({ branch: 'main', dataBranch: '' }),
+      '自定义': dataRefOf({ branch: 'main', dataBranch: 'lm-db' }),
+      '非 main 分支+空串': dataRefOf({ branch: 'gh-pages', dataBranch: '' })
+    };
+    dOK = r['未配置'] === 'lm-data' && r['空串'] === 'main'
+      && r['自定义'] === 'lm-db' && r['非 main 分支+空串'] === 'gh-pages';
+    dDetail = JSON.stringify(r);
+  }
+  T('真跑 dataRefOf：未配置→lm-data · 空串→跟随 branch · 自定义生效（老配置/保险箱也吃到默认值）', dOK, dDetail);
+
+  /* 2) 真跑：快照节流（30 分钟 → 最多 2 次构建/小时） */
+  let snapDue = null, sOK = false, sDetail = '';
+  try {
+    const i1 = collab.indexOf('function snapDue(');
+    snapDue = new Function(collab.slice(i1, collab.indexOf('\n', i1)) + '\nreturn snapDue;')();
+    const MIN30 = 30 * 60 * 1000;
+    const src = /const SNAP_MIN = ([^;]+);/.exec(collab);
+    sOK = snapDue(1000, 0, MIN30) === true            /* 从没写过 → 立即快照 */
+      && snapDue(1000 + MIN30 - 1, 1000, MIN30) === false  /* 29:59 → 不动 */
+      && snapDue(1000 + MIN30, 1000, MIN30) === true       /* 30:00 → 可以 */
+      && !!src && eval(src[1]) === MIN30;
+    sDetail = JSON.stringify({ MIN: src && eval(src[1]), 每小时上限: MIN30 / eval(src[1]) * 2 });
+  } catch (e) { sDetail = '提取失败: ' + e.message; }
+  T('真跑 snapDue：30 分钟内不重写 main 快照（≤2 次构建/小时，不再是「每次保存 1 次」）', sOK, sDetail);
+
+  /* 3) 读写都走数据分支：管理员 API ?ref / 访客 raw 一致，不会一个读 main 一个读 lm-data */
+  T('读写同源：ghPull(管理员 ?ref=) 与 ghRaw(访客) 都用 ghBranch()，默认数据分支',
+    collab.indexOf('function ghBranch() { return GH.useMain ? ghMainRef() : ghDataRef(); }') > 0
+      && collab.indexOf("const ref = ghBranch();") >= 0
+      && collab.indexOf("'?ref=' + encodeURIComponent(ref)") > 0
+      && collab.indexOf("encodeURIComponent(ghBranch()) + '/' + path.split('/')") > 0
+      && collab.indexOf('LMStore.dataRefOf') > 0);
+
+  /* 4) 首次写数据分支：文件/分支都不存在(422/404) → 建 ref 再重试一次 */
+  T('首次落库自建分支：git/refs 以发布分支头为起点 · 422=已存在也算成功 · 只重试一次',
+    store.indexOf("'/git/refs'") > 0 && store.indexOf("'refs/heads/' + branch") > 0
+      && store.indexOf('return r2.ok || r2.status === 422;') > 0
+      && collab.indexOf('function ensureDataBranch()') > 0
+      && collab.indexOf('if (!had && (r.status === 422 || r.status === 404) && br !== ghMainRef()) {') > 0
+      && collab.indexOf('return ensureDataBranch().then(function (ok) {') > 0);
+
+  /* 5) 降级路径：写不进去就回退 main（= 旧行为），只提示一次，并且立刻用 main 重推 */
+  T('降级：数据分支不可写 → 回退 main + toast 一次 + 立刻重推（内容不会卡在本机）',
+    collab.indexOf("if (!GH.useMain && ghDataRef() !== ghMainRef()) {") > 0
+      && collab.indexOf('GH.useMain = true;') > 0
+      && collab.indexOf("GH.etag = ''; delete shaOf[ghMainRef()];") > 0
+      && collab.indexOf('已回退到') > 0
+      && collab.indexOf('if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);') > 0);
+
+  /* 6) 快照本身是「尽力而为」：不占 inFlight、失败静默，绝不拖慢实时同步 */
+  T('快照只喂首屏：独立 sha 缓存 · 失败静默 · 只在推送成功后触发',
+    collab.indexOf('function maybeSnapshot(text)') > 0
+      && collab.indexOf('if (ghBranch() === main) return;') > 0
+      && collab.indexOf('snapDue(now, GH.snapAt, SNAP_MIN)') > 0
+      && collab.indexOf('/* 快照失败：下次再试 */') > 0
+      && /maybeSnapshot\(text\);\s*\/\* ★ 修复89/.test(collab));
+
+  /* 7) 配置与界面：默认可关（清空 = 跟随 branch），保险箱也带着它分发 */
+  T('配置链路完整：DEF_GH=lm-data · setGhCfg 保留 · 设置界面可改/可清空 · 团队保险箱带上它',
+    /dataBranch: 'lm-data'/.test(store)
+      && store.indexOf('dataBranch: (cfg.dataBranch == null ? DEF_GH.dataBranch : cfg.dataBranch)') > 0
+      && editor.indexOf("F.text('dataBranch'") > 0
+      && editor.indexOf("dataBranch: String(fd.get('dataBranch') || '').trim()") > 0
+      && editor.indexOf('dataBranch: c.dataBranch') > 0);
+
+  /* 8) 手动「☁ 同步」：也写数据分支，并顺手刷新 main 快照 */
+  T('手动同步：先写数据分支（失败才建分支重试），再刷新 main 快照（首屏不是陈年内容）',
+    store.indexOf('const ref = dataRefOf(cfg);') > 0
+      && store.indexOf('let res = await ghPutFile(cfg, ref, text, token);') > 0
+      && store.indexOf('await ghPutFile(cfg, main, text, token,') > 0);
+
+  /* 9) 现场可核对：协作诊断里显示「内容分支 / 是否已回退」 */
+  T('协作诊断显示当前内容分支（回退时标注「已回退 main」），面板里能当场核对',
+    collab.indexOf('内容分支: (function ()') > 0 && collab.indexOf('（已回退 main）') > 0);
+
+  /* 10) 文档：README 讲清「驱动 89」的原因与代价 */
+  T('README 记录修复89：数据分支 lm-data · 30 分钟快照 · 10 次构建 口径',
+    readme.indexOf('修复89') > 0 && readme.indexOf('lm-data') > 0
+      && readme.indexOf('30 分钟') > 0 && readme.indexOf('10 次构建') > 0);
 })();
 
 

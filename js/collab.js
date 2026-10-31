@@ -919,11 +919,30 @@ window.LMCollab = (function () {
     /* ★ Yjs 网状协同：本地保存同步写入 Y.Doc（CRDT 合并），与 GitHub 回传完全解耦、互不阻塞 */
     if (window.LMYCollab && window.LMYCollab.pushLocal) { try { window.LMYCollab.pushLocal(content); } catch (eY) { /* noop */ } }
   }
-  /* ---------- 云端（GitHub 仓库直存）----------
-     管理员设备（有 Token）：保存 → 防抖提交 data/content.js（与「☁ 同步」同一 API）；
-       轮询 GET contents API（无 CDN 缓存，能及时发现别人的提交），sha 乐观锁，409 自动重拉
-     访客设备（无 Token，GitHub Pages 上）：从网址推导 owner/repo → fetch raw 文件（≤5 分钟级） */
-  const GH = { cfg: null, token: '', sha: null, etag: '', lastPush: 0, timer: 0, inFlight: false, lastPullTs: 0 };
+  /* ---------- 云端（GitHub 仓库直存 · 数据分支 + 首屏快照）----------
+     ★ 修复89：内容不再写进「Pages 发布分支」（默认 main）—— 那里每写一次就触发一次 Pages 构建，
+       协同半小时就能把「10 次构建/小时」的软限用光，导致「发了代码，线上还是旧版」。现在分两层：
+       ▸ **数据分支**（默认 lm-data）：每次保存实时提交（2.6s / 6s 防抖），**不触发任何构建**；
+       ▸ **main 上的 data/content.js**：低频快照（≤1 次 / 30 分钟）——只服务「新访客首屏」，
+         因为 index.html 是从 Pages(main) 加载这个文件的。构建次数因此 ≤2 次/小时 + 发代码时。
+     读：管理员走 Contents API（?ref=数据分支，If-None-Match 命中 304 不耗额度）；访客读 raw(数据分支)。
+     兜底：数据分支建不出来 / 写不进去（Token 权限不足等）→ 自动回退 main（= 旧行为）并提示一次。 */
+  const SNAP_MIN = 30 * 60 * 1000;   /* main 快照最小间隔 → 最多 2 次构建/小时 */
+  const GH = { cfg: null, token: '', etag: '', lastPush: 0, timer: 0, inFlight: false, lastPullTs: 0,
+               useMain: false,      /* 已回退到 main（本页会话内有效） */
+               snapAt: 0,           /* 上次写 main 快照的时刻 */
+               _mk: null };         /* 建数据分支的进行中 Promise（去重） */
+  const shaOf = {};                  /* 分支 → 该文件 blob sha（乐观锁缓存，按分支分开） */
+  /* 内容分支：默认数据分支；dataBranch:'' → 跟随 branch；未配置 → lm-data（判定在 store.js） */
+  function ghDataRef() {
+    try { return (window.LMStore && LMStore.dataRefOf) ? LMStore.dataRefOf(GH.cfg) : ((GH.cfg && GH.cfg.branch) || 'main'); }
+    catch (e) { return 'main'; }
+  }
+  function ghMainRef() { return (GH.cfg && GH.cfg.branch) || 'main'; }
+  /* 当前实际读写的分支（回退后就是 main） */
+  function ghBranch() { return GH.useMain ? ghMainRef() : ghDataRef(); }
+  /* 快照是否到期（纯函数，test_yjs 直接提取验数字） */
+  function snapDue(now, lastAt, minGap) { return !lastAt || (now - lastAt) >= minGap; }
   function ghApi() {
     const path = (GH.cfg.path || 'data/content.js').replace(/^\/+/, '');
     return 'https://api.github.com/repos/' + encodeURIComponent(GH.cfg.owner) + '/'
@@ -932,7 +951,7 @@ window.LMCollab = (function () {
   function ghRaw() {
     const path = (GH.cfg.path || 'data/content.js').replace(/^\/+/, '');
     return 'https://raw.githubusercontent.com/' + GH.cfg.owner + '/' + GH.cfg.repo + '/'
-      + encodeURIComponent(GH.cfg.branch || 'main') + '/' + path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now();
+      + encodeURIComponent(ghBranch()) + '/' + path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now();
   }
   function parseFileText(txt) {
     const a = txt.indexOf('/*CONTENT-START*/'), b = txt.lastIndexOf('/*CONTENT-END*/');
@@ -950,7 +969,8 @@ window.LMCollab = (function () {
     if (!GH.cfg || GH.inFlight) return;
     GH.inFlight = true;
     const useApi = !!GH.token;
-    const url = useApi ? (ghApi() + '?ref=' + encodeURIComponent(GH.cfg.branch || 'main')) : ghRaw();
+    const ref = ghBranch();
+    const url = useApi ? (ghApi() + '?ref=' + encodeURIComponent(ref)) : ghRaw();
     const opt = useApi ? { headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json' } } : {};
     if (useApi && GH.etag) opt.headers['If-None-Match'] = GH.etag; /* 条件请求：没更新时返回 304，且不消耗 API 限额 */
     fetch(url, opt).then(function (r) {
@@ -958,7 +978,7 @@ window.LMCollab = (function () {
       if (!r.ok) throw new Error('http ' + r.status);
       if (useApi) { const et = r.headers.get('etag'); if (et) GH.etag = et; }
       return r.json().then(function (j) {
-        if (useApi) { GH.sha = j.sha; return parseFileText(atobUh(j.content)); }
+        if (useApi) { shaOf[ref] = j.sha; return parseFileText(atobUh(j.content)); }
         return parseFileText(j);
       });
     }).then(function (c) {
@@ -985,6 +1005,43 @@ window.LMCollab = (function () {
       LMApp.toast('🔄 已同步「云端（GitHub）」的修改');
     }).catch(function () { GH.inFlight = false; });
   }
+  /* ★ 修复89：数据分支不存在时按需创建（复用 store.js 的同一实现，避免两份建分支逻辑） */
+  function ensureDataBranch() {
+    const br = ghDataRef(), main = ghMainRef();
+    if (br === main) return Promise.resolve(true);
+    if (GH._mk) return GH._mk;
+    const store = window.LMStore;
+    if (!store || !store.ensureBranchRef) return Promise.resolve(false);
+    GH._mk = Promise.resolve(store.ensureBranchRef(GH.cfg, br, GH.token, main))
+      .then(function (ok) { GH._mk = null; return !!ok; }, function () { GH._mk = null; return false; });
+    return GH._mk;
+  }
+  /* main 快照：≤1 次 / 30 分钟，只为「新访客首屏」不是陈年内容；失败静默，绝不影响实时同步 */
+  function maybeSnapshot(text) {
+    try {
+      const main = ghMainRef();
+      if (ghBranch() === main) return;                 /* 回退态已在写 main，无需快照 */
+      const now = Date.now();
+      if (!snapDue(now, GH.snapAt, SNAP_MIN)) return;
+      GH.snapAt = now;
+      const S = window.LMStore;
+      if (!S) return;
+      const b64 = S.utf8ToBase64 ? S.utf8ToBase64(text) : btoa(unescape(encodeURIComponent(text)));
+      const H = { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
+      const body = { message: '内容快照（供首屏加载）' + new Date().toLocaleString('zh-CN'), content: b64, branch: main };
+      const url = ghApi();
+      const getSha = shaOf[main] ? Promise.resolve(shaOf[main])
+        : fetch(url + '?ref=' + encodeURIComponent(main), { headers: H })
+          .then(function (r) { return r.ok ? r.json().then(function (j) { return j.sha; }) : null; });
+      getSha.then(function (sha) {
+        if (sha) body.sha = sha;
+        return fetch(url, { method: 'PUT', headers: H, body: JSON.stringify(body) });
+      }).then(function (r) {
+        if (!r.ok) { delete shaOf[main]; return; }      /* 409 等：下次重新取 sha */
+        return r.json().then(function (j) { shaOf[main] = j.content && j.content.sha; });
+      }).catch(function () { /* 快照失败：下次再试 */ });
+    } catch (e) { /* noop */ }
+  }
   function ghPush(content) {
     if (!GH.cfg || !GH.token || !window.LMStore) return;
     /* 防旧覆盖新守卫：最近一次轮询看到的云端版本比本机内容新（其他设备刚推过）→
@@ -994,7 +1051,7 @@ window.LMCollab = (function () {
     const now = Date.now();
     if (GH.inFlight) return;
     const wait = pushWaitMin(peersHot()) - (now - GH.lastPush); /* ★ 修复88：有人在线 → 2.6s 就推，不再死等 6s */
-    if (wait > 0) { /* 防抖：连续保存只在安静 6 秒后补推最新版（尾随触发，不会漏推） */
+    if (wait > 0) { /* 防抖：连续保存只在安静一小会儿后补推最新版（尾随触发，不会漏推） */
       if (!GH._defer) GH._defer = setTimeout(function () {
         GH._defer = null;
         if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);
@@ -1002,44 +1059,72 @@ window.LMCollab = (function () {
       return;
     }
     if (GH._defer) { clearTimeout(GH._defer); GH._defer = null; }
+    const ref = ghBranch();      /* ★ 修复89：默认写数据分支（不触发 Pages 构建） */
     GH.lastPush = now;
     GH.inFlight = true;
     const text = LMStore.buildFileText(content);
     const b64 = LMStore.utf8ToBase64 ? LMStore.utf8ToBase64(text) : btoa(unescape(encodeURIComponent(text)));
-    const put = function (sha) {
-      const body = { message: '协作同步（' + me.name + '）' + new Date().toLocaleString('zh-CN'), content: b64, branch: GH.cfg.branch || 'main' };
+    const H = { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
+    const put = function (br, sha) {
+      const body = { message: '协作同步（' + me.name + '）' + new Date().toLocaleString('zh-CN'), content: b64, branch: br };
       if (sha) body.sha = sha;
-      return fetch(ghApi(), {
-        method: 'PUT',
-        headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+      return fetch(ghApi(), { method: 'PUT', headers: H, body: JSON.stringify(body) });
+    };
+    const getSha = function (br) {
+      if (shaOf[br]) return Promise.resolve(shaOf[br]);
+      return fetch(ghApi() + '?ref=' + encodeURIComponent(br), {
+        headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json' }
+      }).then(function (r) { return r.ok ? r.json().then(function (j) { return j.sha; }) : null; });
+    };
+    const tryPut = function (br) {
+      return getSha(br).then(function (sha) {
+        const had = !!sha;
+        return put(br, sha).then(function (r) {
+          /* 文件与分支都不存在（数据分支还没建）→ 建分支后重试一次；已有文件却 422 = 冲突，交给外层 */
+          if (!had && (r.status === 422 || r.status === 404) && br !== ghMainRef()) {
+            return ensureDataBranch().then(function (ok) {
+              /* 建分支失败（Token 没有建 ref 的权限）→ 用 status 0 交给外层走「回退 main」，
+                 绝不能原样返回 422：外层会把 422 当「别人先提交」每 6 秒重试，永远退化不下去 */
+              if (!ok) return { ok: false, status: 0, _mkFail: true };
+              delete shaOf[br];
+              return getSha(br).then(function (s2) { return put(br, s2); });
+            });
+          }
+          return r;
+        });
       });
     };
-    const getSha = GH.sha ? Promise.resolve(GH.sha)
-      : fetch(ghApi() + '?ref=' + encodeURIComponent(GH.cfg.branch || 'main'), { headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json' } })
-        .then(function (r) { return r.ok ? r.json().then(function (j) { return j.sha; }) : null; });
-    getSha.then(put).then(function (r) {
+    tryPut(ref).then(function (r) {
       GH.inFlight = false;
       if (r.status === 409 || r.status === 422) { /* 别人先提交 → 拉最新；6 秒后尾随重推一次（防 409 后最后一笔只留本机） */
-        GH.sha = null; ghPull();
+        delete shaOf[ref]; ghPull();
         if (!GH._409T) GH._409T = setTimeout(function () {
           GH._409T = null;
           if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);
         }, 6000);
         return;
       }
-      if (r.ok) return r.json().then(function (j) {
-        GH.sha = j.content && j.content.sha;
-        /* ★ 修复62：上传成功 → 重拍「最近上传版」基准快照（放弃 = 回到最近一次上传给 Hub 的版本）。
-           ★ 修复83：只拍 pushSnap，**绝不再动** adminSnap（进入管理模式那一刻）——
-           因为 commit 每改一笔都会 publish → ghPush，若这里重拍 adminSnap，
-           「放弃修改」就被压成「退回上一次保存前」（用户：只退一步，甚至退一步都不确定） */
+      if (!r.ok) {
+        /* ★ 修复89：数据分支彻底写不进去（Token 权限不足 / 仓库策略限制）→ 回退 main（= 旧行为），只提示一次 */
+        if (!GH.useMain && ghDataRef() !== ghMainRef()) {
+          const bad = ghDataRef();
+          GH.useMain = true;
+          GH.etag = ''; delete shaOf[ghMainRef()];
+          toast('⚠ 数据分支「' + bad + '」不可用（Token 权限或分支受限），已回退到 ' + ghMainRef() + '：内容同步照常，但会触发 Pages 构建');
+          if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);
+        }
+        return;
+      }
+      return r.json().then(function (j) {
+        shaOf[ref] = j.content && j.content.sha;
+        /* ★ 修复62 / 83：上传成功 → 只重拍「最近上传版」pushSnap，绝不再动 adminSnap */
         try {
           if (window.LMApp && validContent(LMApp.state.content)) {
             if (LMApp.takePushSnap) LMApp.takePushSnap();
             else if (LMApp.takeAdminSnap) LMApp.takeAdminSnap(); /* 旧版兜底 */
           }
         } catch (eSnap) { /* noop */ }
+        maybeSnapshot(text);   /* ★ 修复89：顺带刷新 main 快照（≤2 次/小时，只喂首屏） */
       });
     }).catch(function () { GH.inFlight = false; });
   }
@@ -1273,6 +1358,7 @@ window.LMCollab = (function () {
         Yjs同伴: (window.LMYCollab && window.LMYCollab.peerCount) ? window.LMYCollab.peerCount() : 0,
         在线设备: liveCount(),
         通道: modeLabel,
+        内容分支: (function () { try { return ghBranch() + (GH.useMain ? '（已回退 main）' : '') + (ghBranch() !== ghMainRef() ? '（不触发 Pages 构建）' : ''); } catch (e) { return '?'; } })(),
         /* ★ 修复88：现场可核对当前节奏（有人在线会自动更快） */
         节奏: (function () {
           try {

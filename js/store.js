@@ -9,7 +9,9 @@
 window.LMStore = (function () {
   const LS_KEY = 'lm_content_v1';
   const LS_GH = 'lm_github_cfg_v1';
-  const DEF_GH = { owner: '', repo: '', branch: 'main', path: 'data/content.js' };
+  /* ★ 修复89：内容单独放一个「数据分支」（默认 lm-data）——写它不触发 Pages 构建。
+     dataBranch 为 '' 表示跟随 branch（= 旧行为，内容写进 Pages 发布分支）。 */
+  const DEF_GH = { owner: '', repo: '', branch: 'main', path: 'data/content.js', dataBranch: 'lm-data' };
 
   function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
@@ -38,11 +40,23 @@ window.LMStore = (function () {
   function resetLocal() { localStorage.removeItem(LS_KEY); }
 
   function getGhCfg() {
-    try { return JSON.parse(localStorage.getItem(LS_GH) || 'null') || Object.assign({}, DEF_GH); }
+    try { return Object.assign({}, DEF_GH, JSON.parse(localStorage.getItem(LS_GH) || 'null') || {}); }
     catch (e) { return Object.assign({}, DEF_GH); }
   }
+  /* ★ 修复89：内容分支（实时内容读写的地方）。纯函数，collab.js 与测试共用：
+       dataBranch === ''  → 跟随 branch（旧行为）
+       dataBranch 未配置   → 默认 'lm-data'
+       dataBranch 有值     → 用它 */
+  function dataRefOf(cfg) {
+    const c = cfg || {};
+    const main = String(c.branch || 'main');
+    if (c.dataBranch === '') return main;
+    const br = String(c.dataBranch == null ? DEF_GH.dataBranch : c.dataBranch).trim();
+    return br || main;
+  }
   function setGhCfg(cfg) {
-    const keep = { owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main', path: cfg.path || DEF_GH.path };
+    const keep = { owner: cfg.owner, repo: cfg.repo, branch: cfg.branch || 'main', path: cfg.path || DEF_GH.path,
+      dataBranch: (cfg.dataBranch == null ? DEF_GH.dataBranch : cfg.dataBranch) }; /* ★ 修复89 */
     if (cfg.token) {
       sessionStorage.setItem('lm_gh_token', cfg.token);
       /* ★ 记住 Token（修复㉙）：勾选后同时写入 localStorage —— sessionStorage 关标签页/清
@@ -143,34 +157,66 @@ window.LMStore = (function () {
       + '/*CONTENT-END*/\n';
   }
 
-  /* 通过 GitHub Contents API 提交内容文件 */
+  /* 单文件 PUT 工具（指定分支）：返回 Response */
+  async function ghPutFile(cfg, branch, text, token, msg) {
+    const path = (cfg.path || DEF_GH.path).replace(/^\/+/, '');
+    const api = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/'
+      + encodeURIComponent(cfg.repo) + '/contents/'
+      + path.split('/').map(encodeURIComponent).join('/');
+    const headers = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
+    let sha = null;
+    const g = await fetch(api + '?ref=' + encodeURIComponent(branch), { headers: headers });
+    if (g.ok) { sha = (await g.json()).sha; }
+    else if (g.status !== 404) {
+      throw new Error('读取文件失败：HTTP ' + g.status + '（请检查 Token 权限、仓库名、分支名）');
+    }
+    const body = { message: msg || ('内容更新（网站后台）' + new Date().toLocaleString('zh-CN')), content: utf8ToBase64(text), branch: branch };
+    if (sha) body.sha = sha;
+    return fetch(api, { method: 'PUT', headers: headers, body: JSON.stringify(body) });
+  }
+
+  /* ★ 修复89：按需创建分支（以 base 分支头为起点建 ref）。已存在（422）也算成功 */
+  async function ensureBranchRef(cfg, branch, token, base) {
+    const H = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' };
+    const repo = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo);
+    try {
+      const r = await fetch(repo + '/git/ref/heads/' + encodeURIComponent(base || cfg.branch || 'main'), { headers: H });
+      if (!r.ok) return false;
+      const j = await r.json();
+      const sha = j && j.object && j.object.sha;
+      if (!sha) return false;
+      const r2 = await fetch(repo + '/git/refs', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, H),
+        body: JSON.stringify({ ref: 'refs/heads/' + branch, sha: sha })
+      });
+      return r2.ok || r2.status === 422;
+    } catch (e) { return false; }
+  }
+
+  /* 通过 GitHub Contents API 提交内容文件
+     ★ 修复89：写「数据分支」（默认 lm-data，**不触发 Pages 构建**），再顺手刷新 main 快照；
+     数据分支不存在 → 自动建分支重试一次；彻底失败才报错（调用方负责提示） */
   async function saveGitHub(cfg, content) {
     const token = cfg.token || ghToken();
     if (!cfg.owner || !cfg.repo || !token) {
       throw new Error('请先填写仓库名和 GitHub Token');
     }
-    const path = (cfg.path || DEF_GH.path).replace(/^\/+/, '');
-    const api = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/'
-      + encodeURIComponent(cfg.repo) + '/contents/'
-      + path.split('/').map(encodeURIComponent).join('/');
-    const headers = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' };
-
-    let sha = null;
-    const g = await fetch(api + '?ref=' + encodeURIComponent(cfg.branch || 'main'), { headers: headers });
-    if (g.ok) { sha = (await g.json()).sha; }
-    else if (g.status !== 404) {
-      throw new Error('读取文件失败：HTTP ' + g.status + '（请检查 Token 权限、仓库名、分支名）');
+    const text = buildFileText(content);
+    const main = cfg.branch || 'main';
+    const ref = dataRefOf(cfg);
+    let res = await ghPutFile(cfg, ref, text, token);
+    if (!res.ok && (res.status === 422 || res.status === 404) && ref !== main) {
+      const okB = await ensureBranchRef(cfg, ref, token, main);
+      if (okB) res = await ghPutFile(cfg, ref, text, token);
     }
-    const body = {
-      message: '内容更新（网站后台）' + new Date().toLocaleString('zh-CN'),
-      content: utf8ToBase64(buildFileText(content)),
-      branch: cfg.branch || 'main'
-    };
-    if (sha) body.sha = sha;
-    const res = await fetch(api, { method: 'PUT', headers: headers, body: JSON.stringify(body) });
     if (!res.ok) {
       const t = await res.text();
       throw new Error('保存失败：HTTP ' + res.status + ' ' + t.slice(0, 160));
+    }
+    /* main 快照（新访客首屏读它）：手动同步时一并刷新，失败不影响本次保存 */
+    if (ref !== main) {
+      try { await ghPutFile(cfg, main, text, token, '内容快照（供首屏加载）' + new Date().toLocaleString('zh-CN')); } catch (e2) { /* noop */ }
     }
     return true;
   }
@@ -178,6 +224,7 @@ window.LMStore = (function () {
   return {
     load: load, saveLocal: saveLocal, resetLocal: resetLocal,
     getGhCfg: getGhCfg, setGhCfg: setGhCfg, ghToken: ghToken,
+    dataRefOf: dataRefOf, ensureBranchRef: ensureBranchRef, /* ★ 修复89：内容分支判定 / 建分支 */
     encryptForTeam: encryptForTeam, decryptForTeam: decryptForTeam,
     sha256Hex: sha256Hex, pbkdf2Hex: pbkdf2Hex, randomSaltHex: randomSaltHex,
     PBKDF2_ITERS: PBKDF2_ITERS,
