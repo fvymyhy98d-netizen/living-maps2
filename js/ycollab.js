@@ -125,13 +125,13 @@
         /* ★ 修复121：删页前先判断「本机内容是不是本来就不完整」
            —— 本地只加载到几页（拉取失败 / 旧缓存 / 刚清过站点数据）时，
            一次保存就会把别人的页从协同文档里全删掉，而且会传染给所有设备。
-           判定：要删的页超过云端页数的一半，或本机页数不到云端的一半 → 必须二次确认；
+           判定：要删的页达到云端页数的一半（≥50%），或本机页数不到云端的一半（≤50%）→ 必须二次确认；
            没确认就这一轮只同步改动、不删页（不阻断保存，下次保存会再问）。 */
         if (stale.length) {
           var docPages = 0;
           ymap.keys().forEach(function (k) { if (k.indexOf('page:') === 0) docPages++; });
           var minePages = Object.keys(seen).length;
-          var risky = (docPages > 0) && (stale.length * 2 > docPages || minePages * 2 < docPages);
+          var risky = (docPages > 0) && (stale.length * 2 >= docPages || minePages * 2 <= docPages);
           if (risky && !pruneConfirmed) {
             var okDel = false;
             try {

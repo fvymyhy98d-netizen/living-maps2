@@ -2693,7 +2693,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       const s = srcOf('js/ycollab.js');
       return s.indexOf('var pruneConfirmed = false;') > 0
         && s.indexOf('var stale = [];') > 0
-        && s.indexOf('var risky = (docPages > 0) && (stale.length * 2 > docPages || minePages * 2 < docPages);') > 0
+        && s.indexOf('var risky = (docPages > 0) && (stale.length * 2 >= docPages || minePages * 2 <= docPages);') > 0
         && s.indexOf('okDel = window.confirm(') > 0
         && s.indexOf("已跳过删除 ' + stale.length + ' 个页面") > 0
         && s.indexOf('confirmPrune: function () { pruneConfirmed = true; }') > 0
