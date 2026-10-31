@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '75';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '76';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -861,6 +861,56 @@ T('CSS：条目卡片/列表/磁贴 + 面包屑 + 条目树缩进（手机端单
       && api.pageTitle(pages3[3]) === '深层网络' && api.pageTitle(pages3[0]) === '认知地图';
   } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
   T('pagePath 面包屑链（cognition › neuron › deep）、childPages 同级名单、pageTitle 回落标题', ok);
+})();
+/* ---------- 9.41) 修复76：「整理布局」只算让位 · 悬空自由框一键收拢 ---------- */
+console.log('【9.41】修复76：整理布局管「不重叠/不错位」，框顶大空白交给「⇧ 收拢空隙」');
+T('app.js：scanFreeGaps 量「框顶 ↔ 上方最近块下缘」+ tidyGaps 只改 free.y 且走 commit（可撤销），不重置 ride',
+  appSrc.indexOf('function scanFreeGaps() {') > 0
+    && appSrc.indexOf('function tidyGaps(minGap) {') > 0
+    && appSrc.indexOf('if (o.bottom <= it.top + 1 && o.bottom > base) base = o.bottom;') > 0
+    && appSrc.indexOf('f.y = Math.max(0, Math.round((+f.y || 0) - (g.gap - FREE_GAP)));') > 0
+    && appSrc.indexOf("commit({ msg: '已收拢 ' + list.length + ' 处空隙") > 0
+    && appSrc.indexOf('f.ride = 0;') < 0
+    && appSrc.indexOf('scanFreeGaps: scanFreeGaps, tidyGaps: tidyGaps,') > 0);
+T('整理布局提示改造（悬空时报数量 + 最大空隙并指向新按钮）+ 管理条「⇧ 收拢空隙」按钮与确认弹窗',
+  appSrc.indexOf("另有 ' + big.length + ' 个自由框悬空（最大 '") > 0
+    && edt2.indexOf('data-panel="gaps"') > 0
+    && edt2.indexOf("else if (k === 'gaps') {") > 0
+    && edt2.indexOf('LMApp.tidyGaps(40);') > 0
+    && edt2.indexOf('只重算「让位间距」') > 0);
+/* 真实执行 scanFreeGaps：把纯算部分从源码截出来，用桩 DOM 跑一遍，验证「距离=框顶−上方最近块下缘」 */
+(function () {
+  const a4 = appSrc.indexOf('function scanFreeGaps() {');
+  const z4 = appSrc.indexOf('\n  }', a4);
+  const code4 = (a4 >= 0 && z4 > a4) ? appSrc.slice(a4, z4 + 4) : '';
+  const mk = function (idx, top, bottom) {
+    return {
+      getAttribute: function (n) { return n === 'data-idx' ? String(idx) : null; },
+      getBoundingClientRect: function () { return { top: top, bottom: bottom, left: 0, right: 100 }; }
+    };
+  };
+  let ok = false;
+  try {
+    const w0 = mk(0, 0, 200), w1 = mk(1, 300, 460), w2 = mk(2, 480, 600);
+    const col = {
+      getBoundingClientRect: function () { return { top: 0, bottom: 9999 }; },
+      querySelectorAll: function () { return [w0, w1, w2]; }
+    };
+    const st = { pageId: 'p', content: { pages: [{ id: 'p', blocks: [{ type: 'paragraph' }, { type: 'table', free: { y: 300 } }, { type: 'paragraph' }] }] } };
+    const run = new Function('app', 'state', 'FREE_GAP', 'window', code4 + '\nreturn scanFreeGaps;')(
+      { querySelector: function () { return col; } }, st, 16, { scrollY: 0, pageYOffset: 0 });
+    const r1 = run();
+    /* 第一块就是自由框：基准退回内容列顶端（colTop=0）→ 距离 = 框顶 100 */
+    const wb = mk(0, 100, 260);
+    const col2 = { getBoundingClientRect: function () { return { top: 0 }; }, querySelectorAll: function () { return [wb]; } };
+    const st2 = { pageId: 'p', content: { pages: [{ id: 'p', blocks: [{ type: 'heading', free: { y: 100 } }] }] } };
+    const run2 = new Function('app', 'state', 'FREE_GAP', 'window', code4 + '\nreturn scanFreeGaps;')(
+      { querySelector: function () { return col2; } }, st2, 16, { scrollY: 0, pageYOffset: 0 });
+    const r2 = run2();
+    ok = r1.length === 1 && r1[0].gap === 100 && r1[0].b.free.y === 300
+      && r2.length === 1 && r2[0].gap === 100;
+  } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
+  T('scanFreeGaps 真跑：只挑自由框、距离=框顶−上方块下缘（100px），首块以列顶为基准；文档流块不参与', ok);
 })();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

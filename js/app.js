@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '75';
+var LM_ASSET_VER = '76';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1078,7 +1078,62 @@ window.LMApp = (function () {
     });
     adjustFreeLayoutSafe();
     setTimeout(function () { col.classList.remove('no-measure-anim'); }, 90);
-    toast('🩺 已重新整理本页布局（模块间距已按自由框位置重算）');
+    /* ★ 修复76：整理完顺手体检一次。若还有自由框「悬空」（框顶上一条大空白），
+       说明这不是整理失败，而是那张框本身停得太靠下 —— 直接指路「⇧ 收拢空隙」 */
+    let gaps = [];
+    try { gaps = scanFreeGaps(); } catch (eG) { gaps = []; }
+    const big = gaps.filter(function (g) { return g.gap > 40; });
+    if (big.length) {
+      const mx = big.reduce(function (m, g) { return Math.max(m, g.gap); }, 0);
+      toast('🩺 间距已重算；另有 ' + big.length + ' 个自由框悬空（最大 ' + mx + 'px）—— 点「⇧ 收拢空隙」可一键贴紧上文');
+    } else {
+      toast('🩺 已重新整理本页布局（模块间距已按自由框位置重算）');
+    }
+  }
+  /* ★ 修复76：自由框「悬空」体检 —— 框的位置是绝对像素（free.y），页面内容变短、或整理布局把
+     压住的重叠拆开之后，框常常「悬」在半空：框顶上一条大空白，下面的块还得让到框底，
+     看起来就像「间距莫名其妙特别大」。这里算出每个自由框上缘与「它上方最近的块下缘」的距离
+     （上方什么都没有时以内容列顶端为基准），供提示与「⇧ 收拢空隙」使用。不改任何数据 */
+  function scanFreeGaps() {
+    const col = app.querySelector('.blocks');
+    const page = state.content.pages.find(function (x) { return x.id === state.pageId; });
+    if (!col || !page || !page.blocks) return [];
+    const sy = window.scrollY || window.pageYOffset || 0;
+    const colTop = col.getBoundingClientRect().top + sy;
+    const all = [];
+    col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
+      const b = page.blocks[+w.getAttribute('data-idx')];
+      if (!b) return;
+      const r = w.getBoundingClientRect();
+      all.push({ b: b, w: w, top: r.top + sy, bottom: r.bottom + sy });
+    });
+    const out = [];
+    all.forEach(function (it) {
+      if (!it.b.free) return;
+      let base = colTop;
+      all.forEach(function (o) {
+        if (o === it) return;
+        if (o.bottom <= it.top + 1 && o.bottom > base) base = o.bottom;
+      });
+      const gap = Math.round(it.top - base);
+      if (gap > FREE_GAP + 4) out.push({ b: it.b, w: it.w, gap: gap });
+    });
+    return out;
+  }
+  /* ★ 修复76「⇧ 收拢空隙」：把悬空的自由框上移贴紧上文（新位置 = 旧位置 − 空隙 + 标准缝 16px）。
+     只改这些框的 free.y，正文与其它块一律不动；走 commit → 记历史 + 协同广播，Ctrl+Z 可撤销。
+     刻意与「手动拖框」走同一条路（不重置 free.ride）：烘焙量若已与上文让位相等，下一轮位移为 0，不会弹回去 */
+  function tidyGaps(minGap) {
+    const lim = Math.max(FREE_GAP + 8, +(minGap || 0) || 0);
+    const list = scanFreeGaps().filter(function (g) { return g.gap > lim; });
+    if (!list.length) { toast('本页没有悬空的自由框（都贴着上文）'); return 0; }
+    list.forEach(function (g) {
+      const f = g.b.free;
+      if (!f) return;
+      f.y = Math.max(0, Math.round((+f.y || 0) - (g.gap - FREE_GAP)));
+    });
+    commit({ msg: '已收拢 ' + list.length + ' 处空隙（自由框上移贴紧上文，可按 Ctrl+Z 撤销）' });
+    return list.length;
   }
   /* ★ 修复67：布局体检（管理模式下控制台执行 `LMApp.dumpLayout()`）—— 打印每块的摆放方式、
      位置与让位量，用来定位「框压块 / 上下顺序被翻 / 块间大空隙」这类现场问题。不改任何数据，
@@ -2072,6 +2127,7 @@ window.LMApp = (function () {
     adjustImages: adjustImages,
     setViewMode: setViewMode, applyView: applyView, isMobileDevice: isMobileDevice,
     pageById: pageById, pageChildren: childPages, pagePath: pagePath, pageTitle: pageTitle, /* ★ 修复75：第 3 层嵌套条目 */
+    scanFreeGaps: scanFreeGaps, tidyGaps: tidyGaps, /* ★ 修复76：悬空体检 / 收拢空隙 */
     undo: undo, redo: redo, canUndo: canUndo, canRedo: canRedo
   };
 })();

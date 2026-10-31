@@ -788,7 +788,9 @@ window.LMEditor = (function () {
       + '<button class="btn btn-mini" data-panel="site" type="button">🏠 网站信息</button>'
       + '<button class="btn btn-mini" data-panel="pages" type="button">📄 页面管理</button>'
       + '<button class="btn btn-mini" data-panel="tree" type="button">🗂 条目树</button>'
-      + '<button class="btn btn-mini" data-panel="fixlayout" type="button">🩺 整理布局</button>'
+      + '<button class="btn btn-mini" data-panel="fixlayout" type="button" title="只重算「让位间距」（自由框与正文不重叠用的安全距离），不改内容、不做美化排版，也不负责把框往上贴；框顶留下的大空白请点「⇧ 收拢空隙」">🩺 整理布局</button>'
+      /* ★ 修复76：自由框悬空（框顶一条大空白）的专用解法 —— 把框上移贴紧上文，只动框位置、可撤销 */
+      + '<button class="btn btn-mini" data-panel="gaps" type="button" title="本页有自由框悬在半空？点这里把它上移贴紧上文（只动这些框的位置，正文不动，可按 Ctrl+Z 撤销）">⇧ 收拢空隙</button>'
       + '<button class="btn btn-mini" data-panel="hist" type="button">🕘 历史版本</button>'
       + '<button class="btn btn-mini" data-panel="backup" type="button">💾 备份 / 恢复</button>'
       + '<button class="btn btn-mini" data-panel="discard" type="button">↩ 放弃修改</button>'
@@ -811,6 +813,16 @@ window.LMEditor = (function () {
     else if (k === 'pages') pagesModal();
     else if (k === 'tree') treeModal(); /* ★ 修复75：第 3 层嵌套条目的树状控制台 */
     else if (k === 'fixlayout') LMApp.fixLayout();
+    else if (k === 'gaps') {
+      /* ★ 修复76：先体检再说清楚要动什么，绝不静默挪框 */
+      const gaps0 = LMApp.scanFreeGaps().filter(function (g) { return g.gap > 40; });
+      if (!gaps0.length) { LMApp.toast('本页没有悬空的自由框（间距都贴着上文）'); return; }
+      const mx0 = gaps0.reduce(function (m, g) { return Math.max(m, g.gap); }, 0);
+      confirmModal('⇧ 收拢空隙',
+        '本页有 <b>' + gaps0.length + '</b> 个自由框悬在半空，框顶上方留有空隙（最大 <b>' + mx0 + 'px</b>）。'
+        + '<br><br>要把它们<b>上移贴紧上文</b>（留标准缝 16px）吗？只改这几个框的位置，正文与其它块一律不动，可按 Ctrl+Z 撤销。',
+        '收拢', function () { LMApp.tidyGaps(40); });
+    }
     else if (k === 'backup') backupModal();
     else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到最近一次「同步到 GitHub」上传的版本（从未同步过则回到进入管理模式时的版本）？此后的一切改动会被撤销（包括协同期间其他设备同步来的修改），恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
     else if (k === 'password') passwordModal();
