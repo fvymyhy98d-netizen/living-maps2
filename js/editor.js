@@ -2568,11 +2568,14 @@ window.LMEditor = (function () {
       } else {
         if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false; /* ref/jump/link 等骑跨 → 回退整段 */
         if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return false;
-        /* ★ 只包选区；选区内完整的旧颜色/高亮对先剥掉再包新标记（嵌套安全：内层对紧贴
-           新外层开标记，md.js 的 [^@]+ 空匹配失败会先消耗内层）。外层包裹骑跨选区的
-           情况已在上方整体外扩（= 换掉外层包裹的语义）—— 那种嵌套永不安全：外层
-           [^@]+ 内容非空时会抢内层 @@ 的开标记当闭合，配对全线错乱 */
-        nt = r.text.slice(0, r.s) + '@@' + tag + ',' + r.text.slice(r.s, r.e) + '@@' + r.text.slice(r.e);
+        /* ★ 修复81：这里原来直接用了 r.text / r.s / r.e，而 r 只在上面 hl 分支里声明过 ——
+           于是「选中文字点 A 文字颜色 / 点 🌈 渐变」100% 抛 ReferenceError: r is not defined，
+           被全局兜底吞成「⚠ 页面出现一个小问题」，颜色自然一点没上。就地算一次剥离结果。
+           ★ 只剥选区内完整的旧颜色对，**保留 == 高亮**：md.js 先渲染 == 再渲染 @@色,?@@，
+           所以 @@色,==高亮==@@ 能正确嵌套（反过来 @@ 套在 == 里才是坏的，那条路已在上方
+           整体外扩处理）。剥掉高亮等于「上色把荧光笔抹了」，用户不会想要 */
+        const rs = stripToks(t, w.toks, s0, e0, ['@@o', '@@c']);
+        nt = rs.text.slice(0, rs.s) + '@@' + tag + ',' + rs.text.slice(rs.s, rs.e) + '@@' + rs.text.slice(rs.e);
         msg = '已对选中文字应用' + kind;
       }
     }

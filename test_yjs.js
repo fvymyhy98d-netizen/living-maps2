@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '80';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '81';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -1212,6 +1212,93 @@ T('CSS：返回键胶囊（含手机端收紧、[hidden] 隐藏）+ 关联卡片
       && btn.hidden === false;
   } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
   T('浏览栈真跑：首页无处可返 · 逐级入栈 · 跨母项跳转后返回的是「上一屏」而非自己的母项 · 返回后截断 · 深链接退回上级', ok);
+})();
+/* ---------- 9.46) 修复81：选中文字上「A 文字颜色 / 🌈 渐变」100% 抛错（r is not defined） ---------- */
+console.log('【9.46】修复81：行内上色不再抛 ReferenceError —— 选文字点颜色真的会上色');
+T('editor.js：颜色/渐变分支就地算剥离结果，不再引用只在 hl 分支里声明的 r',
+  edt2.indexOf("const rs = stripToks(t, w.toks, s0, e0, ['@@o', '@@c']);") > 0
+    && edt2.indexOf("nt = rs.text.slice(0, rs.s) + '@@' + tag + ',' + rs.text.slice(rs.s, rs.e) + '@@' + rs.text.slice(rs.e);") > 0
+    && edt2.indexOf("nt = r.text.slice(0, r.s) + '@@' + tag") < 0);
+T('上色只剥旧颜色对、保留选区内的 == 高亮（md.js 先渲染 == 再渲染 @@色,?@@，可安全嵌套）',
+  edt2.indexOf('★ 只剥选区内完整的旧颜色对，**保留 == 高亮**') > 0);
+T('全局兜底把真实错误写进控制台（下次「已自动跳过」可直接定位，不用再猜）',
+  appSrc.indexOf('[LM] 未捕获错误') > 0 && appSrc.indexOf('ev.error.stack') > 0);
+
+/* 真跑：从源码截出 walkInline…applyInlineSwatchBlock，用桩 DOM 跑真实选区 + 真 md.js 渲染 */
+(function () {
+  const a9 = edt2.indexOf('  function walkInline(t, depth) {');
+  const b9 = edt2.indexOf('  /* ★ 块级行内字号 / 字体（修复㉔）');
+  const code9 = (a9 >= 0 && b9 > a9) ? edt2.slice(a9, b9) : '';
+  let LMMD9 = null;
+  try { LMMD9 = require(path.join(DIR, 'js/md.js')); } catch (e9) { LMMD9 = null; }
+  const P = '前置基础：高等数学（概率与矩阵）→ **核心覆盖**：**人工智能导论、机器学习** → **实践应用**：本课程大作业 → **自主拓展**：经典论文与开源项目。 以上为示例。';
+  let run = null;
+  if (code9 && LMMD9) {
+    const page = { blocks: [{ type: 'paragraph', text: '' }] };
+    const tbS = { active: 0, hero: null };
+    let cur = '';
+    const selS = {
+      rangeCount: 1, isCollapsed: false,
+      toString: function () { return cur; },
+      getRangeAt: function () { return { startContainer: { nodeType: 1, closest: function () { return null; } } }; }
+    };
+    const LMAppS = {
+      md: function (t) { return LMMD9.mdToHtml(t); },
+      commit: function () {}, toast: function () {}
+    };
+    const applyFn = new Function('document', 'window', 'LMApp', 'markSaved', 'pageOf', 'activeBlock', 'isTextType', 'tb',
+      'textElOf', 'refreshTextEl', 'restoreSelectionIn',
+      code9 + '\nreturn applyInlineSwatchBlock;')(
+      { querySelector: function () { return null; } },
+      { getSelection: function () { return selS; } },
+      LMAppS, function () {}, function () { return page; }, function () { return page.blocks[0]; },
+      function (x) { return !!x && x.type === 'paragraph'; }, tbS,
+      function () { return null; }, function () {}, function () {});
+    run = function (text, needle, prop, v) {
+      page.blocks[0].text = text; cur = needle;
+      const ok = applyFn(prop, v);
+      return { ok: ok, text: page.blocks[0].text };
+    };
+  }
+  const plain = function (h) { return String(h).replace(/<[^>]*>/g, ''); };
+  let ok9 = false, detail = '切片/md.js 不可用';
+  if (run) {
+    try {
+      const r1 = run(P, '经典论文与开源项目', 'color', '#0071e3');
+      const h1 = LMMD9.inlineFmt(r1.text);
+      const r2 = run('==已高亮== 与 **加粗** 混排', '已高亮', 'color', '#ff3b30');
+      const h2 = LMMD9.inlineFmt(r2.text);
+      const r3 = run(P, '经典论文与开源项目', 'grad', '2');
+      const h3 = LMMD9.inlineFmt(r3.text);
+      const r4 = run('@@#0071e3,蓝色文字@@普通', '蓝色文字', 'color', '#34c759');
+      const r5 = run(P, '经典论文与开源项目', 'hl', '#ffd60a');
+      /* 穷举单个可见字符上色：任何一处都不许抛错（旧代码在这里 100% 抛 r is not defined） */
+      const w9 = (function () { try { return new Function(code9 + '\nreturn walkInline;')()(P); } catch (e) { return null; } })();
+      let sweepBad = 0, sweepN = 0;
+      if (w9) {
+        const vis = w9.map.map(function (i9) { return P.charAt(i9); }).join('');
+        for (let s9 = 0; s9 < vis.length; s9++) {
+          const ch = vis.charAt(s9);
+          if (!ch.trim()) continue;
+          sweepN++;
+          try { run(P, ch, 'color', '#0071e3'); } catch (e2) { sweepBad++; }
+        }
+      }
+      ok9 = r1.ok === true
+        && r1.text.indexOf('@@#0071e3,经典论文与开源项目@@') >= 0
+        && r1.text.indexOf('**核心覆盖**') >= 0 /* 选区外的加粗原样保留 */
+        && h1.indexOf('@@') < 0 && h1.indexOf('==') < 0
+        && /color:#0071e3/.test(h1) && plain(h1).indexOf('经典论文与开源项目') >= 0
+        && r2.text === '@@#ff3b30,==已高亮==@@ 与 **加粗** 混排' /* 上色不抹掉高亮 */
+        && /color:#ff3b30/.test(h2) && /<mark/.test(h2)
+        && r3.text.indexOf('@@grad2,经典论文与开源项目@@') >= 0 && h3.indexOf('@@') < 0 && /grad-2/.test(h3)
+        && r4.text === '@@#34c759,蓝色文字@@普通' /* 已有颜色里换色 = 原地换，不嵌套 */
+        && r5.text.indexOf('==#ffd60a,经典论文与开源项目==') >= 0 /* 高亮回归 */
+        && sweepN > 40 && sweepBad === 0;
+      if (!ok9) detail = JSON.stringify({ r1: r1.text, h1: h1, r2: r2.text, r3: r3.text, r4: r4.text, sweepBad: sweepBad, sweepN: sweepN }).slice(0, 300);
+    } catch (e3) { ok9 = false; detail = '抛出 ' + e3.message; }
+  }
+  T('真跑上色：文字颜色/渐变不再抛错 · 源码与渲染都干净 · 高亮被保留 · 换色原地改 · 高亮功能回归 · 逐字穷举零抛错', ok9, detail);
 })();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

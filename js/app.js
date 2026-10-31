@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '80';
+var LM_ASSET_VER = '81';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2267,7 +2267,15 @@ window.LMApp = (function () {
     _lastErrMsg = m; _lastErrAt = t;
     try { toast(m); } catch (e) { /* noop */ }
   }
-  window.addEventListener('error', function () { softErrToast('⚠ 页面出现一个小问题，已自动跳过（内容已保存）'); });
+  window.addEventListener('error', function (ev) {
+    /* ★ 修复81：把真实错误写进控制台 —— 提示语是给用户看的，排查必须靠这一行 */
+    try {
+      console.error('[LM] 未捕获错误：' + (ev && ev.message) + '  @'
+        + (ev && ev.filename ? String(ev.filename).split('/').pop() : '?') + ':' + (ev && ev.lineno)
+        + (ev && ev.error && ev.error.stack ? '\n' + ev.error.stack : ''));
+    } catch (e0) { /* noop */ }
+    softErrToast('⚠ 页面出现一个小问题，已自动跳过（内容已保存）');
+  });
   window.addEventListener('unhandledrejection', function () { softErrToast('⚠ 一个后台任务失败了，已自动跳过'); });
   function setupResilience() {
     try {
