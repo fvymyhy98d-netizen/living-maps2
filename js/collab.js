@@ -934,6 +934,7 @@ window.LMCollab = (function () {
                blockUntil: 0,       /* ★ 修复90：限流/退避到期时刻，到期前一律不写（越撞越死） */
                rateLeft: null,      /* ★ 修复90：X-RateLimit-Remaining 观测值 */
                lastText: '',        /* ★ 修复90：上次成功推送的文件文本，内容没变就不重复 PUT */
+               mergedTs: 0,         /* ★ 修复105：已按块级合并过的云端版本戳（同一份不反复合并） */
                _mk: null };         /* 建数据分支的进行中 Promise（去重） */
   const shaOf = {};                  /* 分支 → 该文件 blob sha（乐观锁缓存，按分支分开） */
   /* 内容分支：默认数据分支；dataBranch:'' → 跟随 branch；未配置 → lm-data（判定在 store.js） */
@@ -1042,8 +1043,33 @@ window.LMCollab = (function () {
       }
       /* 时间戳不占优 ≠ 内容相同：多端并发或时钟错位时，云端可能带着本机没有的修改。
          无 Token 的访客只读不写 → 云端恒为权威：内容与本地不同就采用（防本地旧缓存永久卡死）；
-         管理员（可写）保持「后写赢」，避免云端旧版盖掉本机尚未推送的新编辑。 */
-      if (GH.token) return;
+         管理员（可写）原来在这里**无条件 return** —— 见下方修复105。 */
+      if (GH.token) {
+        /* ★ 修复105（「手机改了，电脑一两分钟都没反应，刷新才看到」）：
+           管理员这条路径原来直接 return，于是只要本机保存过一次（lastTs = 本机此刻，永远比云端那份新），
+           另一台设备的修改就**永远进不来**：本机越编辑越新，云端的包一直被当「过期」丢掉。
+           现在只要云端内容与本机**不同**就吸收，走的还是块级后写优先（mergeBlocks）：
+           本机更晚改的块照旧保住（_ts 更新者胜），对方改的块应用 —— 与 Yjs / 旧通道同一个合并漏斗，
+           不会互相整包覆盖，也不会卡住。同一份云端版本只合并一次（GH.mergedTs 记账）。 */
+        if (GH.mergedTs === ts) return;
+        let same = false;
+        try { same = JSON.stringify(c) === JSON.stringify(LMApp.state.content); } catch (eS0) { same = false; }
+        if (same) { GH.mergedTs = ts; return; }
+        if (localBusy() || !verifyBanList(c)) return;   /* 本机正在输入 → 下一轮再来，不打断 */
+        let merged = null;
+        try { merged = mergeBlocks(JSON.parse(JSON.stringify(c))); } catch (eM0) { return; }
+        let sameM = false;
+        try { sameM = JSON.stringify(merged) === JSON.stringify(LMApp.state.content); } catch (eS1) { sameM = false; }
+        if (sameM) { GH.mergedTs = ts; return; }        /* 合并后没有实质变化：记账后不再重算 */
+        try {
+          LMApp.applyRemoteContent(merged);
+          if (window.LMStore) LMStore.saveLocal(LMApp.state.content);
+          GH.mergedTs = ts;
+        } catch (eD0) { return; }
+        setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
+        LMApp.toast('🔄 已吸收「云端（GitHub）」另一台设备的修改');
+        return;
+      }
       try { if (JSON.stringify(c) === JSON.stringify(LMApp.state.content)) return; } catch (eC) { return; }
       if (localBusy() || !verifyBanList(c)) return;
       try {

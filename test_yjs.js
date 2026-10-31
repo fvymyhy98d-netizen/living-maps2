@@ -449,10 +449,17 @@ T('非 free 块统一 ⇤⇆⇥（sep 分组）+ halign 处理器（63 起全宽
     && appSrc.indexOf("al === 'center' ? 'margin-left:auto;margin-right:auto;'") > 0);
 /* ---------- 9.19/9.21) 修复52+54：↑↓ 与自由框真互换（自动放回流）+ 拖动克隆块顶贴鼠标 ---------- */
 console.log('【9.19】修复52+54：换位遇自由框 = 放回流再互换 · 拖动统一「块顶贴鼠标」');
-T('↑↓ 按「视觉相邻」换位（★ 修复86 取代修复54 的「放回流再换数组」）+ 延时重算让位 + 克隆 offX/offY≤12',
+T('↑↓ 按「视觉相邻」换位（★ 修复86 取代修复54 的「放回流再换数组」）+ 与自由框互换按高度落到另一侧（★ 修复104）+ 延时重算让位 + 克隆 offX/offY≤12',
   edt2.indexOf('function swapNeighbor(page, i, up) {') > 0
     && edt2.indexOf("if (act === 'up' || act === 'down') { swapNeighbor(page, i, act === 'up'); return; }") > 0
     && edt2.indexOf('page.blocks[i] = other; page.blocks[j] = mine;') > 0
+    && edt2.indexOf('const bothFlow = !mine.free && !other.free;') > 0
+    && edt2.indexOf('if (bothFlow) { page.blocks[i] = other; page.blocks[j] = mine; }') > 0
+    && edt2.indexOf('mine.free.y = up ? Math.max(0, otherNat - myH - GAP) : otherNat + otherH + GAP;') > 0
+    && edt2.indexOf('other.free.y = up ? myNat + myH + GAP : Math.max(0, myNat - otherH - GAP);') > 0
+    && edt2.indexOf('自由摆放框已整块让到另一侧') > 0
+    && edt2.indexOf('else if (mine.free) mine.free.y = otherTop;') < 0
+    && edt2.indexOf('else if (other.free) other.free.y = myTop;') < 0
     && edt2.indexOf('delete prev.free') < 0
     && edt2.indexOf('delete next.free') < 0
     && edt2.indexOf('const offX = e.clientX - r0.left, offY = Math.min(e.clientY - r0.top, 12);') > 0);
@@ -1662,13 +1669,13 @@ T('旧实现已清除：freeJump（整格移动）与 swapWith（放回流再换
         NF(doc, lm, {}, function () {})({ blocks: blocks }, i, up);
         return { blocks: blocks, toasts: toasts, msgs: msgs };
       };
-      /* ① 自由框在末尾：↑ 与上方 B 互换，框落到 B 的 top */
+      /* ① 自由框在末尾：↑ 与上方 B 互换，框让到 B 上方（B 自然顶 200 − 框高 50 − 缝 16） */
       const b1 = [{ id: 'A' }, { id: 'B' }, { id: 'F', free: { y: 350 } }];
       const r1 = run([[0, 0, 100], [1, 200, 300], [2, 350, 400]], b1, 2, true);
       /* ② 已经最下面：只提示，不动数据 */
       const b2 = [{ id: 'A' }, { id: 'B' }, { id: 'F', free: { y: 350 } }];
       const r2 = run([[0, 0, 100], [1, 200, 300], [2, 350, 400]], b2, 2, false);
-      /* ③ 自由框在最上面，↓ 与 A 互换 */
+      /* ③ 自由框在最上面，↓ 与 A 互换：框落到 A 下方（A 自然顶 100 + A 高 100 + 缝 16） */
       const b3 = [{ id: 'F', free: { y: 0 } }, { id: 'A' }];
       const r3 = run([[0, 0, 50], [1, 100, 200]], b3, 0, false);
       /* ④ 两块都在文档流：只交换数组 */
@@ -1686,23 +1693,38 @@ T('旧实现已清除：freeJump（整格移动）与 swapWith（放回流再换
       /* ⑧ 两个自由框相邻：↑ 时双方 y 互换（否则会重叠在一起） */
       const b8 = [{ id: 'F1', free: { y: 100 } }, { id: 'F2', free: { y: 300 } }];
       const r8 = run([[0, 100, 160], [1, 300, 360]], b8, 1, true);
+      /* ⑨ 流块 ↓ 越过自由框：框让到块上方（A 自然顶 100 − 框高 50 − 缝 16 = 34），
+         修复104 前这里会把框设成 A 的顶端 100（框压住 A，A 永远翻不下去） */
+      const b9 = [{ id: 'A' }, { id: 'F', free: { y: 300 } }];
+      const r9 = run([[0, 100, 200], [1, 300, 350]], b9, 0, false);
       const ids = function (r) { return r.blocks.map(function (x) { return x.id; }).join(''); };
-      okA = ids(r1) === 'AFB' && r1.blocks[1].free.y === 200
+      okA = ids(r1) === 'ABF' && r1.blocks[2].free.y === 134
         && ids(r2) === 'ABF' && r2.blocks[2].free.y === 350
         && r2.toasts.join('|').indexOf('下面已经没有模块了') >= 0
-        && ids(r3) === 'AF' && r3.blocks[1].free.y === 100
+        && ids(r3) === 'FA' && r3.blocks[0].free.y === 216
         && ids(r4) === 'BA'
         && ids(r5) === 'AF' && r5.blocks[1].free.y === 200 && r5.toasts.join('|').indexOf('并排') >= 0
-        && ids(r6) === 'FA' && r6.blocks[0].free.y === 300
-        && ids(r7) === 'FA' && r7.blocks[0].free.y === 40
-        && ids(r8) === 'F2F1' && r8.blocks[0].free.y === 100 && r8.blocks[1].free.y === 300
+        && ids(r6) === 'AF' && r6.blocks[1].free.y === 416
+        && ids(r7) === 'AF' && r7.blocks[1].free.y === 0
+        && ids(r8) === 'F1F2' && r8.blocks[0].free.y === 300 && r8.blocks[1].free.y === 100
+        && ids(r9) === 'AF' && r9.blocks[1].free.y === 34
         && r1.msgs.join('|').indexOf('已与上面的模块互换位置') >= 0
+        && r1.msgs.join('|').indexOf('自由摆放框已整块让到另一侧') >= 0
         && r3.msgs.join('|').indexOf('已与下面的模块互换位置') >= 0;
-      if (!okA) dA = JSON.stringify({ r1: ids(r1) + '/' + (r1.blocks[1].free || {}).y, r2: ids(r2), r3: ids(r3) + '/' + (r3.blocks[1].free || {}).y, r4: ids(r4), r5: ids(r5), r6: ids(r6) + '/' + (r6.blocks[0].free || {}).y, r7: (r7.blocks[0].free || {}).y, r8: ids(r8) + '/' + (r8.blocks[0].free || {}).y + '/' + (r8.blocks[1].free || {}).y });
+      if (!okA) dA = JSON.stringify({ r1: ids(r1) + '/' + (r1.blocks[2].free || {}).y, r2: ids(r2), r3: ids(r3) + '/' + (r3.blocks[0].free || {}).y, r4: ids(r4), r5: ids(r5), r6: ids(r6) + '/' + (r6.blocks[1].free || {}).y, r7: (r7.blocks[1].free || {}).y, r8: ids(r8) + '/' + (r8.blocks[0].free || {}).y + '/' + (r8.blocks[1].free || {}).y, r9: ids(r9) + '/' + (r9.blocks[1].free || {}).y });
     } catch (eA) { okA = false; dA = '抛出 ' + eA.message; }
   }
-  T('真跑换位：只和视觉相邻那一块换 · 自由框保持自由并落到对方 top · 两个自由框互相换 y · 触底只提示 · 并排组不参与 · 下标≠视觉时也对', okA, dA);
+  T('真跑换位：只和视觉相邻那一块换 · 自由框保持自由并落在块的另一侧（高度+16px 缝，修复104）· 两个自由框互相换 y · 触底只提示 · 并排组不参与 · 下标≠视觉时也对', okA, dA);
 })();
+
+/* ---------- 修复105：云端回传不再被「本机刚保存过」挡死 ---------- */
+console.log('【9.53】修复105：手机改了、电脑一两分钟没反应 → ghPull 管理员分支不再无条件 return');
+T('collab.js：管理员拉云端时按「内容不同就块级合并」收敛（旧的无条件 return 已删除）',
+  col.indexOf('if (GH.mergedTs === ts) return;') > 0
+    && col.indexOf('merged = mergeBlocks(JSON.parse(JSON.stringify(c)));') > 0
+    && col.indexOf('已吸收「云端（GitHub）」另一台设备的修改') > 0
+    && col.indexOf('mergedTs: 0,') > 0
+    && col.indexOf('if (GH.token) return;') < 0);
 
 /* ---------- 9.52) 修复87：表格/文本框里的高亮与渐变真生效（一份逻辑，两条路径共用） ---------- */
 console.log('【9.52】修复87：表格单元格高亮只出黄 · 换色生成坏标记 · ∅ 清不掉 · 渐变不显示 —— 与正文块统一成一份逻辑');
@@ -2631,10 +2653,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=103 · LM_ASSET_VER=103',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=105 · LM_ASSET_VER=105',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=102/g) || []).length === 0 && /\?v=103/.test(html)
-      && /LM_ASSET_VER = '103'/.test(appJs));
+      && (html.match(/\?v=104/g) || []).length === 0 && /\?v=105/.test(html)
+      && /LM_ASSET_VER = '105'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -2987,10 +3009,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 103（?v=103 共 20 处 · v102 无残留 · LM_ASSET_VER=103）',
-    (html.match(/\?v=103/g) || []).length === 20 && (html.match(/\?v=102/g) || []).length === 0
-      && /LM_ASSET_VER = '103'/.test(appJs),
-    'v103=' + (html.match(/\?v=103/g) || []).length + ' v102=' + (html.match(/\?v=102/g) || []).length);
+  T('版本已升到 105（?v=105 共 20 处 · v104 无残留 · LM_ASSET_VER=105）',
+    (html.match(/\?v=105/g) || []).length === 20 && (html.match(/\?v=104/g) || []).length === 0
+      && /LM_ASSET_VER = '105'/.test(appJs),
+    'v105=' + (html.match(/\?v=105/g) || []).length + ' v104=' + (html.match(/\?v=104/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

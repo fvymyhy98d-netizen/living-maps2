@@ -570,9 +570,11 @@ window.LMEditor = (function () {
      「移动 40 像素」（功能根本不存在，用户：标错了，而且不需要这个功能）。现在统一成：
        · 邻居 = 按实际矩形排序后紧邻的上/下一块（同一行按左缘）；
        · 两块都在文档流 → 交换数组条目，视觉正好互换；
-       · 其中有自由框 → 同时交换数组条目 + 把这个框的 y 设成对方原来所在的 top，
-         让位引擎随即把对方推到框的另一侧 —— 结果就是两者位置互换，数据顺序也与视觉一致
-         （以后再点 ⌂ 归位也能落到正确位置）；自由框**保持自由**，不会被强行放回流。
+       · 其中有自由框 → **不动数组**（自由框不占位，换数组会把流块甩到数组末尾 = 页面最后），
+         只按「高度 + 16px 缝」把这个框放到块的**另一侧**（★ 修复104：旧写法把框放到对方的
+         *顶端*，等于把块整个盖住，块再也翻不到框上面 —— 「完全没法把标题放到表格上面」）；
+         落点用块的**自然顶**（扣掉让位量），被推下去的块也能一次贴紧；
+         自由框**保持自由**，不会被强行放回流。
      并排组（free.g）里的块不参与换位：整行一起动会拆散行，提示改用「取消并排」。 */
   function swapNeighbor(page, i, up) {
     const col = document.querySelector('.blocks');
@@ -586,7 +588,7 @@ window.LMEditor = (function () {
       if (!b) return;
       const r = w.getBoundingClientRect();
       if (!r || (!r.height && !r.width)) return;
-      items.push({ i: k, b: b, r: r });
+      items.push({ i: k, b: b, w: w, r: r });
     });
     items.sort(function (a, b) {
       if (Math.abs(a.r.top - b.r.top) > 2) return a.r.top - b.r.top; /* 先按视觉行 */
@@ -603,17 +605,42 @@ window.LMEditor = (function () {
     }
     /* 位置互换：自由框拿对方原来的 top（列内像素）；两个都是自由框就互相换 y */
     const colTop = col.getBoundingClientRect().top;
+    /* 自然顶端 = 实测顶端 − 当前让位量（computedStyle 取动画当前值）：被自由框推下去的块
+       也能算出「没有被推时会在哪里」，落点才贴得紧（读不到 computedStyle 的环境按 0 处理） */
+    const mtOf = function (w2) { try { return (typeof getComputedStyle === 'function') ? (parseFloat(getComputedStyle(w2).marginTop) || 0) : 0; } catch (e2) { return 0; } };
     const myTop = Math.max(0, Math.round(items[at].r.top - colTop));
     const otherTop = Math.max(0, Math.round(nb.r.top - colTop));
-    /* 交换数据位置（顺序与视觉保持一致） */
-    page.blocks[i] = other; page.blocks[j] = mine;
+    const myNat = Math.max(0, Math.round(items[at].r.top - colTop - mtOf(items[at].w)));
+    const otherNat = Math.max(0, Math.round(nb.r.top - colTop - mtOf(nb.w)));
+    const myH = Math.max(0, Math.round(items[at].r.height || 0));
+    const otherH = Math.max(0, Math.round(nb.r.height || 0));
+    const GAP = 16; /* 与让位引擎的 FREE_GAP 一致：框与块之间留同样的小缝 */
+    /* 交换数据位置（顺序与视觉保持一致）—— 只对「两块都在文档流」有意义。
+       自由框不占位：跟流块互换时**绝不动数组**，否则流块会顶到自由框的数组槽位
+       （往往在页面末尾）→ 一按 ↑ 就掉到页面最后。参考：⌂ 归位按**视觉位置**插回数组
+       （unfreeTargetIndex 读实测矩形），所以数组顺序不必跟着自由框走 */
+    const bothFlow = !mine.free && !other.free;
+    if (bothFlow) { page.blocks[i] = other; page.blocks[j] = mine; }
     if (mine.free && other.free) { mine.free.y = otherTop; other.free.y = myTop; }
-    else if (mine.free) mine.free.y = otherTop;
-    else if (other.free) other.free.y = myTop;
-    /* 工具条跟着被移动的块走（数组已换位，否则 ↑↓ 会作用到"换过来的那一块"） */
-    if (tb.active === i) tb.active = j; else if (tb.active === j) tb.active = i;
-    if (tb.pressBi === i) tb.pressBi = j; else if (tb.pressBi === j) tb.pressBi = i;
-    LMApp.applyEdit('已与' + (up ? '上' : '下') + '面的模块互换位置');
+    /* ★ 修复104（「完全没法把标题放到表格上面，表格完全不让路」）：
+       旧写法把自由框的 y 直接设成对方的 **顶端** —— 框正好压在块身上（框是绝对定位、z-index 20，
+       块被它整个盖住），而让位引擎只会把块往**下**推，块永远翻不到框上面；连着按 ↑ 也只会
+       「框跟着块跑」，看着就是「不让路」。现在按高度 + 缝算落点，框只会落在块的**另一侧**：
+         · 我（自由框）↑：落到块上方 = 块自然顶 − 我的高 − 缝（贴边不足则夹到 0）
+         · 我（自由框）↓：落到块下方 = 块自然顶 + 块高 + 缝
+         · 我（流块）↑/↓：对方框让到我的另一侧（我上去了→框下沉；我下去了→框上浮） */
+    else if (mine.free) {
+      mine.free.y = up ? Math.max(0, otherNat - myH - GAP) : otherNat + otherH + GAP;
+    } else if (other.free) {
+      other.free.y = up ? myNat + myH + GAP : Math.max(0, myNat - otherH - GAP);
+    }
+    /* 工具条跟着被移动的块走（只有两块都在文档流、真的换过数组时才需要跟着走） */
+    if (bothFlow) {
+      if (tb.active === i) tb.active = j; else if (tb.active === j) tb.active = i;
+      if (tb.pressBi === i) tb.pressBi = j; else if (tb.pressBi === j) tb.pressBi = i;
+    }
+    LMApp.applyEdit('已与' + (up ? '上' : '下') + '面的模块互换位置'
+      + ((mine.free || other.free) ? '（自由摆放框已整块让到另一侧）' : ''));
     setTimeout(function () { try { if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout(); } catch (eX) { /* noop */ } }, 30);
   }
   /* ---------- 管理员工具条 ---------- */
