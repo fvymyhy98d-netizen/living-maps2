@@ -2219,12 +2219,58 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return hit.length >= 1 && hit[0].answer.length >= 8 && none.length === 0;
     })(), JSON.stringify(ai.ask(ix, 'RAG 是什么', 1).map(function (r) { return r.pageId + '|' + r.answer.slice(0, 24); })));
 
-  T('零成本：ai.js 无任何网络请求（不 fetch / 不 XHR · 不引 CDN），CSP 不用改',
+  T('零成本仍是默认：本地提炼/问答不发一个请求，只有填了 Key 的 DeepSeek 分支才联网（全文仅一处 fetch）',
     (function () {
       const s = srcOf('js/ai.js');
-      return s.indexOf('fetch(') < 0 && s.indexOf('XMLHttpRequest') < 0
-        && s.indexOf('api.github.com') < 0 && /https?:\/\//.test(s) === false;
+      const oneFetch = (s.match(/fetch\(/g) || []).length === 1;
+      const noXhr = s.indexOf('XMLHttpRequest') < 0 && s.indexOf('api.github.com') < 0;
+      const guarded = s.indexOf('if (!key) return Promise.reject') > 0;
+      const host = s.indexOf("'https://api.deepseek.com'") > 0;
+      return oneFetch && noXhr && guarded && host;
+    })(), 'fetch 出现 ' + (srcOf('js/ai.js').match(/fetch\(/g) || []).length + ' 次');
+
+  T('CSP 只新增 api.deepseek.com 一个域名（没放开裸 https: · iframe 仍然 frame-src none）',
+    (function () {
+      const html = srcOf('index.html');
+      const csp = (html.match(/connect-src[^;]*/) || [''])[0];
+      const bare = /(^|\s)https:(\s|$)/.test(csp);   /* 通配 https: 才是「全放开」 */
+      return html.indexOf('https://api.deepseek.com') > 0 && !bare
+        && html.indexOf("frame-src 'none'") > 0;
+    })(), (srcOf('index.html').match(/connect-src[^;]*/) || [''])[0].slice(0, 80));
+
+  T('pageDigest 真跑：标题层级 / 表格逐行 / 图表数据 / 来源都进上下文（图表只有数据、没有图形）',
+    (function () {
+      const p = { id: 't', label: '测试页', blocks: [
+        { id: 'b1', type: 'heading', text: '一级' },
+        { id: 'b2', type: 'text', text: '正文一句。' },
+        { id: 'b3', type: 'table', title: '对照表', headers: ['A', 'B'], rows: [['a1', 'b1'], ['a2', 'b2']] },
+        { id: 'b4', type: 'chart', title: '柱图', labels: ['一月', '二月'], data: [3, 4], unit: '%' },
+        { id: 'b5', type: 'sources', title: '来源', items: [{ name: '论文A' }] }
+      ] };
+      const d = ai.pageDigest(p);
+      return d.indexOf('# 测试页') === 0 && d.indexOf('## 一级') > 0 && d.indexOf('A | B') > 0
+        && d.indexOf('a2 | b2') > 0 && d.indexOf('一月：3%') > 0 && d.indexOf('- 论文A') > 0;
+    })(), ai.pageDigest({ id: 't', label: '测试页', blocks: [{ id: 'b1', type: 'table', headers: ['A'], rows: [['a1']] }] }).replace(/\n/g, ' / '));
+
+  T('promptFor 真跑：空问题给默认总结指令 · 问句原样落进【我的问题】· 页面正文在【页面内容】里',
+    (function () {
+      const p = { id: 't', label: '测试页', blocks: [{ id: 'b1', type: 'text', text: '正文。' }] };
+      const a = ai.promptFor(p, ''), b = ai.promptFor(p, '什么是 RAG？');
+      return a.indexOf('【我的问题】') > 0 && a.indexOf('3-5 条要点') > 0
+        && b.indexOf('什么是 RAG？') > b.indexOf('【我的问题】') && b.indexOf('正文。') > 0
+        && b.indexOf('不要编造') > 0;
     })());
+
+  T('askDeepSeek 真跑：没填 Key 就**不联网**（返回被拒绝的 Promise，fetch 一次都没被调）',
+    (function () {
+      let called = 0;
+      const oldF = global.fetch;
+      global.fetch = function () { called++; return Promise.resolve({ ok: true, status: 200, json: function () { return {}; } }); };
+      let p = null;
+      try { p = ai.askDeepSeek('问一句', null); } catch (e) { p = null; }
+      global.fetch = oldF;
+      return called === 0 && !!p && typeof p.then === 'function';
+    })(), 'fetch 调用次数=0 · Key 只存本机（lm_ai_key_v1）');
 
   T('接入完毕：index.html 引入 js/ai.js（带版本号）· 样式有浮标与面板 · README 把 AI 能力标成已完成',
     (function () {
@@ -2653,10 +2699,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=105 · LM_ASSET_VER=105',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=106 · LM_ASSET_VER=106',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=104/g) || []).length === 0 && /\?v=105/.test(html)
-      && /LM_ASSET_VER = '105'/.test(appJs));
+      && (html.match(/\?v=105/g) || []).length === 0 && /\?v=106/.test(html)
+      && /LM_ASSET_VER = '106'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3009,10 +3055,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 105（?v=105 共 20 处 · v104 无残留 · LM_ASSET_VER=105）',
-    (html.match(/\?v=105/g) || []).length === 20 && (html.match(/\?v=104/g) || []).length === 0
-      && /LM_ASSET_VER = '105'/.test(appJs),
-    'v105=' + (html.match(/\?v=105/g) || []).length + ' v104=' + (html.match(/\?v=104/g) || []).length);
+  T('版本已升到 106（?v=106 共 20 处 · v105 无残留 · LM_ASSET_VER=106）',
+    (html.match(/\?v=106/g) || []).length === 20 && (html.match(/\?v=105/g) || []).length === 0
+      && /LM_ASSET_VER = '106'/.test(appJs),
+    'v106=' + (html.match(/\?v=106/g) || []).length + ' v105=' + (html.match(/\?v=105/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
