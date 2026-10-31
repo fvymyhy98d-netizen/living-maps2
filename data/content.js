@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793376062282,
+      "syncTs": 1793407766788,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -165,8 +165,9 @@ window.SITE_CONTENT = {
           "text": "核心概念",
           "free": {
             "x": 2.8,
-            "y": 1056,
-            "w": 94.4
+            "y": 1038,
+            "w": 94.4,
+            "ride": 0
           }
         },
         {
@@ -201,8 +202,9 @@ window.SITE_CONTENT = {
           ],
           "free": {
             "x": 2.8,
-            "y": 1244,
-            "w": 94.4
+            "y": 1252,
+            "w": 94.4,
+            "ride": 104
           }
         }
       ],
