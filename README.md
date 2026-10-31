@@ -450,6 +450,8 @@ living-maps/
 - **修复98（「云存档配置不该人人可见」「同步弹窗别写内部角色」）**：① **云存档面板只在专有通道登录时渲染** —— `fbAdminHtml()` 里的 `fbCloudHtml()` 改为 `(state.root ? fbCloudHtml() : '')`，其他管理员**看不到**类型 / URL / anon key / 表名 / 测试 / 粘贴导入，页面上不出现任何端点或密钥痕迹；他们仍然能批阅（列表 + `✔ 采纳 / ✅ 已修改 / ✖ 保留原判断 / ↺ 待处理` 四个动作 + 三段说明输入框），因为这套 UI 不依赖云存档面板。**数据通道不受影响**：`cloudCfg()` 读的是已公开的 `content.config.fbCloud`，收发照旧。② **文案**：`js/editor.js` 的「同步到 GitHub」轻量弹窗删掉「由××统一分发管理」这类说明，未开启分支也只讲通道状态。
 - **修复99（「不许让人看出有等级之分」全站清痕）**：把「两种管理员」这套说法从**所有会外泄的地方**清干净 —— ① 界面文案：密码试错的 toast 不再写「××可提前解禁 / ××身份不受限」，协作提交消息同步改成中性的「已自动解除本设备的限时限制」；`js/editor.js` 的完整配置弹窗标题去掉「××专属」，团队密码字段改成「团队管理密码（组员登录用）」；② **源码注释也算泄露**（访客 view-source 就能读 `js/`）：`app.js / editor.js / collab.js / store.js` 里的相关注释统一改为「专有通道 / 团队密码」这类中性表述；③ README 的权限小节改成「登录凭据与后台能力（界面不作任何区分提示）」，并写死维护约定：**任何界面、截图、对外说明一律只称"管理员"**；④ 新增守卫用例：扫描 `js/` 全部文件 + `index.html` + `css/style.css`，出现这两个词即失败（`test_yjs.js`），另有两条断言确保 toast 文案不含「可提前解禁」。资源版本升至 `?v=99` / `LM_ASSET_VER='99'`。
 - **回归（修复98/99）**：`node --check js/app.js / js/editor.js / js/collab.js / js/store.js / test_yjs.js` 通过；`test_yjs.js` **341/341**（新增 4 条：云存档只在 `state.root` 下渲染且 `fbCloudHtml()` / `cloudCfg()` 仍在（只隐藏 UI 不改通道）、四个批阅动作齐全、`editor.js` 里 `统一分发` 与「角色称呼」字样必须为 0、**`js/` 全文件 + `index.html` + `css` 零痕迹守卫**（待查词用 Unicode 转义写，测试文件自身也不留原文）、toast 文案不含「可提前解禁」；版本断言 97 → 98 → 99（`?v=99` 共 20 处、v98 必须为 0））；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
+- **修复100（讨论区也上云存档：`lm_discuss`）**：① **问题**：讨论区的跨设备同步只靠协作 WebSocket 的 `dcommit` 帧（`collab.js:408 dcSend`），而**访客态根本不连协作通道**（`registerAdminTransports` 非管理员直接 return，`app.js` 也写着"管理员登录后才启动实时协同"）→ 同学发的帖**只写进他自己的 localStorage**，别人看不到、管理员也收不到；「谁都没开网页就丢」的问题比反馈更严重（反馈还有 MQTT + 云存档双通道）。② **写**：`dcPersist()` 在本地落盘后顺手 `LMFB.dcSave(changed)`（fire-and-forget，失败静默），走 `POST /rest/v1/lm_discuss?on_conflict=id` + `Prefer: resolution=merge-duplicates,return=minimal`（同 id 覆盖，删除墓碑与昵称修改才能更新上去）。③ **读**：打开讨论区即 `dcCloudPull()`（60 秒节流）→ `dcList()` 全量拉回 → `dcMerge()` **并集合并**：按 `id` 去重、**删除墓碑优先**、已有正文不被覆盖（发言不可变，只允许"删"）；补齐成功会在页面上提示「☁ 讨论区从云存档补齐 N 条」。④ **离线自愈**：拉取后把「本机有、云端没有」的条目（当时离线、上次写失败、或刚换表）补推一次（一次最多 30 条，含墓碑），所以手机在地铁里发的帖、回家再开页面也会自己上去。⑤ **边界**：讨论区只支持 Supabase（Worker / 群机器人没有约定的读回格式）；未配置云存档时 `dcCloudPull()` 直接 return，界面一个字都不变；缺表 / 没权限时静默（不影响发帖）。资源版本升至 `?v=100` / `LM_ASSET_VER='100'`。
+- **回归（修复100）**：`node --check js/fbsync.js / js/app.js / test_yjs.js` 通过；`test_yjs.js` **353/353**（新增 12 条：接口齐全；`dcTableName()` 默认 `lm_discuss` 且支持 `config.fbCloud.dcTable` 覆盖；`dcSlim()` 只留同步字段且 `del` 归一 / 空 id 返回 null；`dcMerge()` 三条真跑 —— 并集去重、删除墓碑落到本机、已有正文不被云端覆盖；`dcSave()` 真跑断言 URL `…/rest/v1/lm_discuss?on_conflict=id` + `Prefer: resolution=merge-duplicates,return=minimal` + body 是数组；`dcList()` 真跑断言 `select=*&order=ts.asc&limit=1000` + apikey 头；源码守护 —— `dcPersist` 必须调 `LMFB.dcSave`、`mountDiscuss` 必须调 `dcCloudPull`、节流 60000 与补推上限 30、提示文案；README 必须含 `lm_discuss` 建表 SQL（`"updatedAt" bigint`）与 `grant select, insert, update`；版本断言 99 → 100（`?v=100` 共 20 处、v99 必须为 0））；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
 
 
 
@@ -629,6 +631,29 @@ living-maps/
 3. **Project Settings → API**，复制 `Project URL` 和 `anon public` key（**URL 只到 `.supabase.co` 为止**；手滑带上 `/rest/v1` 也会被 `cloudCfg()` 自动剥掉）。表请**一定用第 2 步的 SQL 建**，别在 Table Editor 里手点 —— 那个界面默认给的是 `id int8` + `created_at`，与页面字段对不上（写入会报 `PGRST204 Could not find the 'ts' column`），而且建完还得手动补 2 条策略。
 4. 打开本站 → 管理员模式 → 反馈页 → 展开「☁ 云存档」→ 类型选 *Supabase*、填 URL / anon key / 表名（`lm_feedback`）→ **保存云存档设置**。
 5. 点顶部 **☁️ 同步到 GitHub**（让所有访客都拿到这个端点）→ 再点「测试 / 立即拉取」应显示「云存档可读：共 N 条」。
+6. **讨论区也要一张表**（★ 修复100；不建表 = 讨论区退回「只有本机看得见」）。SQL Editor 里再跑一次：
+   ```sql
+   -- 讨论区云存档：与反馈表分开（字段不同，互不干扰）
+   create table if not exists lm_discuss (
+     id          text primary key,
+     pid         text default '',   -- 回复指向的帖子 id（空 = 主帖）
+     dev         text default '',
+     nick        text default '',
+     text        text,
+     rto         text default '',   -- 楼中楼「回复给谁」
+     ts          bigint,
+     del         bigint default 0,  -- 删除墓碑（时间戳；0/空 = 未删除）
+     "updatedAt" bigint             -- ⚠ 同样必须加双引号
+   );
+   grant select, insert, update on lm_discuss to anon, authenticated;  -- update 是给「删除墓碑」和 upsert 用的
+   alter table lm_discuss enable row level security;
+   create policy "dc read"   on lm_discuss for select using (true);
+   create policy "dc insert" on lm_discuss for insert with check (true);
+   create policy "dc update" on lm_discuss for update using (true) with check (true);
+   -- 讨论区不需要 delete 权限：删除是写墓碑（del = 时间戳），记录仍留档
+   ```
+   > 写入用的是 **upsert**（`POST /rest/v1/lm_discuss?on_conflict=id` + `Prefer: resolution=merge-duplicates`），所以 `grant` 里必须有 **update**；表名固定 `lm_discuss`（想改的话在 `content.config.fbCloud.dcTable` 写另一个名字即可，不用改代码）。
+
 
 > 备注：Supabase 的 `select=*` 会把整行 JSON 原样返回，字段名与页面一致（`check` 等），所以「写得进、读得回」一次到位。如果写入报 `PGRST204 Could not find the 'xxx' column`，说明表少了列（建表时漏了，或 `"check"` 没加双引号）—— 删表按上面重新建一次即可。若重复执行这段 SQL 报 `policy "public read" already exists`，说明策略已在，忽略即可（或先 `drop policy` 再建）。若**写入**报 `permission denied for table lm_feedback`（错误码 `42501`），说明表的权限没给到 `anon`（建项目时没勾 `Automatically expose new tables` 就会出现），补跑第 2 步里的 `grant select, insert on lm_feedback to anon, authenticated;` 即可。若**写入**报 `PGRST204 Could not find the 'updatedAt' column`，说明建表时 `updatedAt` 没加双引号、被 Postgres 存成了全小写 `updatedat`（用旧版 SQL 建的表一定会这样），跑一次重命名即可：`alter table lm_feedback rename column updatedat to "updatedAt";`（若提示列不存在，改用 `alter table lm_feedback add column "updatedAt" bigint;`）。
 >

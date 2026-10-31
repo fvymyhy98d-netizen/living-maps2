@@ -2631,10 +2631,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=99 · LM_ASSET_VER=99',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=100 · LM_ASSET_VER=100',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=98/g) || []).length === 0 && /\?v=99/.test(html)
-      && /LM_ASSET_VER = '99'/.test(appJs));
+      && (html.match(/\?v=99/g) || []).length === 0 && /\?v=100/.test(html)
+      && /LM_ASSET_VER = '100'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -2770,6 +2770,103 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
   }).catch(function (e) {
     T('云存档链路无异常抛出', false, String(e && e.message || e));
   }).then(function () { finishAll(); });
+})();
+
+/* ---------- 9.62) 修复100：讨论区云存档（独立表 lm_discuss） ---------- */
+console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨设备 / 跨时间到达（upsert + 并集合并 + 离线自愈）');
+(function () {
+  const fb = require(path.join(DIR, 'js/fbsync.js'));
+  const appJs = srcOf('js/app.js');
+  const html = srcOf('index.html');
+  const readme = srcOf('README.md');
+
+  T('讨论区云存档接口齐全：dcTableName / dcSlim / dcMerge / dcSave / dcList',
+    typeof fb.dcTableName === 'function' && typeof fb.dcSlim === 'function'
+      && typeof fb.dcMerge === 'function' && typeof fb.dcSave === 'function'
+      && typeof fb.dcList === 'function');
+
+  function setCfg(c) { globalThis.LMApp = { state: { content: { config: { fbCloud: c } } } }; }
+  delete globalThis.LMApp;
+  const t0 = fb.dcTableName();
+  setCfg({ kind: 'supabase', url: 'https://abc.supabase.co', key: 'anon-key', dcTable: 'lm_dc2' });
+  const t1 = fb.dcTableName();
+  T('表名默认 lm_discuss、可在 config.fbCloud.dcTable 覆盖（与反馈表分开，互不干扰）',
+    t0 === 'lm_discuss' && t1 === 'lm_dc2', t0 + ' / ' + t1);
+
+  const sl = fb.dcSlim({ id: 'D-1', pid: '', dev: 'AB12', nick: '小明', text: 'hi', ts: 1000, del: 5, rto: '小王', junk: 'x' });
+  T('dcSlim 真跑：只留同步字段（junk 丢掉）、del / rto 归一、空 id 返回 null',
+    !!sl && sl.id === 'D-1' && sl.del === 5 && sl.rto === '小王'
+      && sl.junk === undefined && fb.dcSlim({ text: 'no id' }) === null,
+    JSON.stringify(sl));
+
+  const local = [{ id: 'A', text: '本机正文', ts: 1 }, { id: 'B', text: 'b', ts: 2, del: 9 }, { id: 'D', text: 'd', ts: 4 }];
+  const inc = [{ id: 'A', text: '云端不同正文', ts: 5 }, { id: 'C', text: 'c', ts: 3 }, { id: 'B', text: 'b', ts: 2 }, { id: 'D', text: 'd2', ts: 4, del: 77 }];
+  const mg = fb.dcMerge(local, inc);
+  T('dcMerge 真跑：并集按 id 去重（3+4 条 → 4 条，不出现重复 id）',
+    mg.length === 4 && mg.map(function (m) { return m.id; }).sort().join(',') === 'A,B,C,D',
+    JSON.stringify(mg.map(function (m) { return m.id; })));
+  T('dcMerge 真跑：删除墓碑优先（云端已删 → 本机跟着删，正文留着不动）',
+    !!mg.find(function (m) { return m.id === 'B'; }).del
+      && !!mg.find(function (m) { return m.id === 'D'; }).del,
+    JSON.stringify(mg));
+  T('dcMerge 真跑：已有正文不被云端覆盖（发言不可变，只允许「删」；防止把别人改的内容冲掉）',
+    mg.find(function (m) { return m.id === 'A'; }).text === '本机正文'
+      && mg.find(function (m) { return m.id === 'D'; }).text === 'd');
+
+  /* —— 真跑：写（upsert）/ 读（select）的 URL 与请求头 —— */
+  const calls = [];
+  const prevFetch = globalThis.fetch;   /* 用完必须还原：上一节 9.61 的异步链还在用它的桩 */
+  globalThis.fetch = function (u, o) {
+    calls.push({ u: u, o: o || {} });
+    return Promise.resolve({ ok: true, status: 201, json: function () { return Promise.resolve([]); }, text: function () { return Promise.resolve(''); } });
+  };
+  setCfg({ kind: 'supabase', url: 'https://abc.supabase.co/', key: 'anon-key' });
+  fb.dcSave([
+    { id: 'D-1', pid: '', dev: 'AB12', nick: '小明', text: '主帖', ts: 1000 },
+    { id: 'D-2', pid: 'D-1', dev: 'CD34', nick: '小王', text: '回复', ts: 1001, del: 5 }
+  ]);
+  const w = calls[0] || {};
+  T('dcSave 真跑：POST /rest/v1/lm_discuss?on_conflict=id · Prefer=resolution=merge-duplicates · body 是数组',
+    /\/rest\/v1\/lm_discuss\?on_conflict=id$/.test(w.u || '')
+      && String((w.o.headers || {}).Prefer) === 'resolution=merge-duplicates,return=minimal'
+      && (w.o.headers || {}).apikey === 'anon-key'
+      && String((w.o.headers || {}).Authorization) === 'Bearer anon-key'
+      && Array.isArray(JSON.parse(w.o.body || '[]')) && JSON.parse(w.o.body || '[]').length === 2
+      && JSON.parse(w.o.body || '[]')[1].del === 5,
+    (w.u || '') + ' ' + JSON.stringify((w.o.headers || {}).Prefer));
+
+  calls.length = 0;
+  fb.dcList();
+  const r1 = calls[0] || {};
+  T('dcList 真跑：GET /rest/v1/lm_discuss?select=*&order=ts.asc&limit=1000 · 带 apikey',
+    /\/rest\/v1\/lm_discuss\?select=\*&order=ts\.asc&limit=1000$/.test(r1.u || '')
+      && (r1.o.headers || {}).apikey === 'anon-key',
+    r1.u || '');
+
+  T('接线：发帖即写云（dcPersist → LMFB.dcSave）、打开讨论区即拉（mountDiscuss → dcCloudPull）',
+    appJs.indexOf('if (changed && changed.length && window.LMFB && LMFB.dcSave)') > 0
+      && appJs.indexOf('function dcCloudPull()') > 0
+      && appJs.indexOf('dcCloudPull();   /* ★ 修复100') > 0
+      && appJs.indexOf('window.LMFB.dcMerge(cur, list)') > 0);
+
+  T('离线自愈 + 节流：60 秒节流、本机有云端没有的补推（上限 30 条）、补齐时页面提示',
+    appJs.indexOf('if (now - _dcPullAt < 60000 || _dcPulling) return;') > 0
+      && appJs.indexOf('!cloudIds[m.id] && m.dev !== \'import\'' ) > 0
+      && appJs.indexOf('.slice(0, 30)') > 0
+      && appJs.indexOf('☁ 讨论区从云存档补齐 ') > 0);
+
+  T('README 记录修复100：lm_discuss 建表 SQL（含 "updatedAt" bigint）+ grant select, insert, update + upsert 说明',
+    readme.indexOf('修复100') > 0 && readme.indexOf('lm_discuss') > 0
+      && /create table if not exists lm_discuss/.test(readme)
+      && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
+      && readme.indexOf('on_conflict=id') > 0);
+
+  T('版本已升到 100（?v=100 共 20 处 · v99 无残留 · LM_ASSET_VER=100）',
+    (html.match(/\?v=100/g) || []).length === 20 && (html.match(/\?v=99/g) || []).length === 0
+      && /LM_ASSET_VER = '100'/.test(appJs),
+    'v100=' + (html.match(/\?v=100/g) || []).length + ' v99=' + (html.match(/\?v=99/g) || []).length);
+
+  globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */

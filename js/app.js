@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '99';
+var LM_ASSET_VER = '100';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2297,6 +2297,55 @@ window.LMApp = (function () {
     LMCommunity.dcStore(dcAll());
     try { LMStore.saveLocal(state.content); } catch (e) { /* noop */ }
     if (changed && changed.length && window.LMCollab) { try { LMCollab.dcSend(changed); } catch (e2) { /* noop */ } }
+    /* ★ 修复100：顺手写云存档 —— 否则「谁都没开网页」或「对方没连协作」时，这条发言永远只在本机。
+       失败不打扰用户：下次打开讨论区会按「云端缺的本机补推」再补一次。 */
+    if (changed && changed.length && window.LMFB && LMFB.dcSave) { try { LMFB.dcSave(changed); } catch (e3) { /* noop */ } }
+  }
+  /* ★ 修复100：讨论区云存档（独立表 lm_discuss）
+     —— 打开讨论区时拉一次（60 秒节流）：云端有、本机没有的并进来（删除墓碑优先）；
+     本机有、云端没有的（离线发的、上次写失败、刚换表）补推一次，双向自愈。 */
+  var _dcPullAt = 0, _dcPulling = false;
+  function dcCloudApply(list) {
+    const cur = dcAll();
+    const have = {};
+    cur.forEach(function (m) { if (m && m.id) have[m.id] = 1; });
+    let added = 0;
+    (list || []).forEach(function (m) { if (m && m.id && !have[m.id]) added++; });
+    const merged = window.LMFB.dcMerge(cur, list);
+    const sig = function (l) {
+      return l.length + '|' + l.map(function (m) { return (m && m.id) + ':' + ((m && m.del) || 0); }).join(',');
+    };
+    const before = sig(cur);
+    if (sig(merged) === before) return { added: 0, changed: false };
+    state.content.discuss = merged;
+    try { LMCommunity.dcStore(merged); } catch (e1) { /* noop */ }
+    try { LMStore.saveLocal(state.content); } catch (e2) { /* noop */ }
+    return { added: added, changed: true };
+  }
+  function dcCloudPull() {
+    if (!window.LMFB || !LMFB.dcList || !LMFB.cloudCfg) return;
+    let cfg = null;
+    try { cfg = LMFB.cloudCfg(); } catch (e0) { cfg = null; }
+    if (!cfg) return;                                   /* 没配云存档：一个字都不提，界面照旧 */
+    const now = Date.now();
+    if (now - _dcPullAt < 60000 || _dcPulling) return;
+    _dcPullAt = now; _dcPulling = true;
+    LMFB.dcList().then(function (r) {
+      _dcPulling = false;
+      if (!r || !r.ok || !Array.isArray(r.list)) return;
+      const cloudIds = {};
+      r.list.forEach(function (m) { if (m && m.id) cloudIds[m.id] = 1; });
+      if (r.list.length) {
+        const res = dcCloudApply(r.list);
+        if (res.added && document.getElementById('dcMount')) {
+          mountDiscuss();
+          toast('☁ 讨论区从云存档补齐 ' + res.added + ' 条');
+        }
+      }
+      /* 本机有、云端没有 → 补推（含删除墓碑），一次最多 30 条，避免把整库怼上去 */
+      const miss = dcAll().filter(function (m) { return m && m.id && !cloudIds[m.id] && m.dev !== 'import'; }).slice(0, 30);
+      if (miss.length) { try { LMFB.dcSave(miss); } catch (e3) { /* noop */ } }
+    }).catch(function () { _dcPulling = false; });
   }
   function dcHtml() {
     const isAdmin = state.admin; /* 被屏蔽的言论所有管理员都能看到（与普通权限一致，看不出谁有特殊通道） */
@@ -2476,6 +2525,7 @@ window.LMApp = (function () {
     host.innerHTML = commentsOff()
       ? '<p class="fb-empty">🗣️ 讨论区已由管理员暂时关闭。你可以继续浏览全部内容；有需要请通过课程渠道联系小组。</p>'
       : dcHtml();
+    dcCloudPull();   /* ★ 修复100：打开讨论区就把云存档里的发言补回来（60 秒节流，未配置则什么也不做） */
   }
   /* 提交统一处理：#fbForm 反馈 / #dcForm 讨论帖 / [data-dcreply] 楼中楼回复
      全部经 LMCommunity.gate()：限流 → 屏蔽 → 禁言 → 敏感词拦截（连续拦截累计禁言） */

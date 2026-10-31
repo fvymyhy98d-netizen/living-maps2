@@ -385,6 +385,88 @@ W.LMFB = (function () {
   }
 
 
+  /* ---------- ②c·补 ★ 修复100：讨论区也走云存档（lm_discuss）----------
+     为什么必须做：讨论区只靠协作 WebSocket 广播（dcommit 帧），而**访客态根本不连协作通道**
+     （非管理员不注册传输层），所以同学发的帖只存在他自己的浏览器里 —— 别人看不到、管理员也收不到，
+     比反馈更严重（反馈至少还有 MQTT + 云存档双通道）。
+     做法：发帖 / 回复 / 删除 → 顺手 upsert 进 lm_discuss；打开讨论区（60 秒节流）→ 全量拉回，
+     按 id 并集合并（删除墓碑优先，已有正文不覆盖）；本机有、云端没有的再补推一次（离线自愈）。
+     讨论区只支持 supabase（worker / 群机器人没有约定读回格式）；缺表 / 没权限时一律静默。 */
+  function dcTableName() {
+    var f = contentCfg() || {};
+    var t = String(f.dcTable || '').trim();
+    return t || 'lm_discuss';
+  }
+  /* 只留同步需要的字段；del 统一成时间戳（0 / 空 = 未删除） */
+  function dcSlim(m) {
+    if (!m || !m.id) return null;
+    var o = {
+      id: String(m.id), pid: String(m.pid || ''), dev: String(m.dev || ''),
+      nick: String(m.nick || ''), text: String(m.text || ''), ts: +(m.ts || 0)
+    };
+    if (m.rto) o.rto = String(m.rto);
+    if (m.del) o.del = +(m.del) || 1;
+    if (m.updatedAt) o.updatedAt = +m.updatedAt;
+    return o;
+  }
+  /* 并集合并：按 id 去重；删除墓碑优先；已有正文不被覆盖（发言不可变，只允许「删」） */
+  function dcMerge(local, incoming) {
+    var out = (Array.isArray(local) ? local : []).filter(function (m) { return m && m.id; });
+    var idx = {};
+    out.forEach(function (m) { idx[m.id] = m; });
+    (Array.isArray(incoming) ? incoming : []).forEach(function (m) {
+      var n = dcSlim(m);
+      if (!n) return;
+      var cur = idx[n.id];
+      if (!cur) { out.push(n); idx[n.id] = n; return; }
+      if (n.del && !cur.del) cur.del = n.del;
+    });
+    return out;
+  }
+  /* 批量写（upsert）：同一个 id 再写就覆盖 —— 删除墓碑、昵称修改都要能更新到云端 */
+  function dcSave(items) {
+    var c = cloudCfg();
+    var arr = (Array.isArray(items) ? items : [items]).map(dcSlim).filter(Boolean);
+    if (!c || !arr.length) return Promise.resolve(false);
+    if (c.kind !== 'supabase') return Promise.resolve(false);   /* 讨论区只支持 Supabase */
+    try {
+      return fetch(c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?on_conflict=id', {
+        method: 'POST', cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json', apikey: c.key,
+          Authorization: 'Bearer ' + c.key,
+          Prefer: 'resolution=merge-duplicates,return=minimal'
+        },
+        body: JSON.stringify(arr)
+      }).then(function (r) { return !!r && r.ok; }).catch(function () { return false; });
+    } catch (e) { return Promise.resolve(false); }
+  }
+  /* 读全部（按时间正序；limit 1000 足够一个课程站） */
+  function dcList() {
+    var c = cloudCfg();
+    if (!c) return Promise.resolve({ ok: false, list: [], why: '未配置' });
+    if (c.kind !== 'supabase') return Promise.resolve({ ok: false, list: [], why: '讨论区云存档只支持 Supabase' });
+    var url = c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?select=*&order=ts.asc&limit=1000';
+    var opt = { cache: 'no-store', headers: { apikey: c.key, Authorization: 'Bearer ' + c.key } };
+    try {
+      return fetch(url, opt).then(function (r) {
+        if (!r || !r.ok) {
+          var st = (r && r.status) || 0, bad = { ok: false, list: [], why: 'HTTP ' + st, status: st };
+          if (!r) return bad;
+          var rd = r.text ? r.text()
+            : (r.json ? r.json().then(function (j) { return JSON.stringify(j); }) : Promise.resolve(''));
+          return Promise.resolve(rd)
+            .then(function (b) { bad.why = whyText(st, b); return bad; })
+            .catch(function () { return bad; });
+        }
+        return r.json().then(function (j) {
+          var arr = Array.isArray(j) ? j : (j && Array.isArray(j.items) ? j.items : []);
+          return { ok: true, list: arr, why: '' };
+        });
+      }).catch(function () { return { ok: false, list: [], why: '网络失败（CSP / 域名白名单）' }; });
+    } catch (e) { return Promise.resolve({ ok: false, list: [], why: String(e && e.message || e) }); }
+  }
+
   /* ---------- ②d 粘贴导入（★ 修复96）：云文档导出后直接粘进来 ----------
      适用：飞书多维表格 / 腾讯文档 / 金山文档 / Excel —— 导出或直接框选复制，带表头粘进文本框。
      表头按中英文同义词匹配（时间/称呼/类型/内容…），没认出来就按「时间, 称呼, 类型, 内容」兜底。
@@ -609,7 +691,9 @@ W.LMFB = (function () {
     fixStatus: fixStatus, statuses: STS.slice(),
     /* ★ 修复96：云存档（永久收件箱，不受 6 小时限制）+ 粘贴导入 */
     cloudCfg: cloudCfg, cloudInfo: cloudInfo, cloudSave: cloudSave, cloudList: cloudList,
-    parseImport: parseImport, contentCfg: contentCfg, cloudWhy: whyText
+    parseImport: parseImport, contentCfg: contentCfg, cloudWhy: whyText,
+    /* ★ 修复100：讨论区云存档（独立表 lm_discuss，upsert + 并集合并） */
+    dcTableName: dcTableName, dcSlim: dcSlim, dcMerge: dcMerge, dcSave: dcSave, dcList: dcList
   };
 })();
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {}));
