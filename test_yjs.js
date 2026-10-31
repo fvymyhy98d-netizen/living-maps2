@@ -2272,12 +2272,67 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
   T('问答升级6：站里没写过就问空（宁可不答也不编）—— 与旧版行为一致',
     ai.askSmart(ix, '紫砂壶怎么养', 2).length === 0);
 
+  /* ★ 修复111：检索升级（BM25 长度归一 · 句子索引缓存 · 清单步骤 · 追问上下文 · 因果排序 · 诚实护栏） */
+  const fx2 = ai.buildIndex([
+    { id: 'fx-vec', label: '示例页：向量库', blocks: [
+      { type: 'text', text: '向量数据库 用来存 向量 并做 相似度 检索。' },
+      { type: 'text', text: '这一页还顺带提了一句 向量 这个词，但整句话拉得很长，讲的是部署时要注意磁盘、网络、备份、监控、告警、灰度、回滚、容量规划以及值班安排等一长串和问题无关的细节，用来验证长度归一化确实在起作用。' }
+    ] },
+    { id: 'fx-shard', label: '示例页：分片', blocks: [
+      { type: 'text', text: '分片的原因是索引太大放不进一台机器的内存。' },
+      { type: 'text', text: '分片还可以让查询并行跑得更快，因为多台机器可以同时查。' }
+    ] },
+    { id: 'fx-step', label: '示例页：上线步骤', blocks: [
+      { type: 'list', title: '上线步骤', items: ['先跑本地测试', '再推送到远端', '最后刷新缓存'] }
+    ] }
+  ]);
+
+  T('检索升级1：BM25 长度归一 —— 又短又准的句子排在「碰巧含一个词的长句」前面',
+    (function () {
+      const r = ai.rankSent(fx2, '向量数据库 检索', 5);
+      return r.length >= 2 && r[0].s.indexOf('向量数据库 用来存 向量') > 0 && r[0].score > r[1].score
+        && r.every(function (x, i) { return i === 0 || r[i - 1].score >= x.score; });
+    })(), JSON.stringify(ai.rankSent(fx2, '向量数据库 检索', 3).map(function (x) { return x.score; })));
+
+  T('检索升级2：句子级索引只建一次（同一 index 复用缓存），warm() 可预热',
+    (function () {
+      const a = ai.sentIndex(fx2), b = ai.sentIndex(fx2);
+      return !!a && a === b && a.n > 0 && a.avgdl > 0 && ai.warm(fx2) === true
+        && ai.sentIndex(ai.buildIndex([])) !== a;
+    })());
+
+  T('检索升级3：问「怎么做」且页里有清单 → 按原文条目列 1./2./3. 步骤（不自己编步骤）',
+    (function () {
+      const r = ai.askSmart(fx2, '上线 怎么做', 1);
+      const a = (r[0] || {}).answer || '';
+      return !!r[0] && r[0].kind === '步骤'
+        && a.indexOf('1. 先跑本地测试') > 0 && a.indexOf('3. 最后刷新缓存') > 0;
+    })(), JSON.stringify((ai.askSmart(fx2, '上线 怎么做', 1)[0] || {}).answer));
+
+  T('检索升级4：追问「它 / 这个」会把上一问的词带进检索；没有指代就原样不动',
+    ai.expandQuery('它有什么用', 'RAG 是什么').indexOf('RAG') === 0
+      && ai.expandQuery('分片怎么做', 'RAG 是什么') === '分片怎么做'
+      && ai.expandQuery('上面那个怎么用', '') === '上面那个怎么用');
+
+  T('检索升级5：问「为什么」时含因果连词的原句排前面（只调顺序，不改内容）',
+    (function () {
+      const a = ((ai.askSmart(fx2, '为什么要分片', 1)[0] || {}).answer || '');
+      return a.indexOf('因为') > 0 && a.indexOf('分片') > 0;
+    })(), JSON.stringify((ai.askSmart(fx2, '为什么要分片', 1)[0] || {}).answer));
+
+  T('检索升级6：诚实护栏 —— 只找到一条就明说「可能没完全对上」并指路 DeepSeek；页面打开即预热',
+    (function () {
+      const s = srcOf('js/ai.js');
+      return s.indexOf('res.length === 1') > 0 && s.indexOf('可能没完全对上你的问法') > 0
+        && s.indexOf('warm(ix0)') > 0 && s.indexOf('expandQuery(q, prev)') > 0;
+    })());
+
   T('问答升级7：对话框顶部有模式切换键 · 默认「本站速答」· 选择存 localStorage · 样式已加',
     (function () {
       const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
       return s.indexOf('lm-ai-modes') > 0 && s.indexOf('data-mode="local"') > 0
         && s.indexOf("localStorage.getItem(MODE_KEY) === 'ds' ? 'ds' : 'local'") > 0
-        && s.indexOf('askSmart(ix, q, 3)') > 0 && c.indexOf('.lm-ai-mode.on') > 0;
+        && s.indexOf('askSmart(ix, expandQuery(q, prev), 3)') > 0 && c.indexOf('.lm-ai-mode.on') > 0;
     })());
 
   T('零 API：ai.js 全文 **0 处 fetch**、没有 askDeepSeek、不存任何 Key（lm_ai_key_v1 必须 0 处）',
@@ -2804,10 +2859,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=110 · LM_ASSET_VER=110',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=111 · LM_ASSET_VER=111',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0
-      && (html.match(/\?v=109/g) || []).length === 0 && /\?v=110/.test(html)
-      && /LM_ASSET_VER = '110'/.test(appJs));
+      && (html.match(/\?v=110/g) || []).length === 0 && /\?v=111/.test(html)
+      && /LM_ASSET_VER = '111'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3160,10 +3215,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 110（?v=110 共 20 处 · v109 无残留 · LM_ASSET_VER=110）',
-    (html.match(/\?v=110/g) || []).length === 20 && (html.match(/\?v=109/g) || []).length === 0
-      && /LM_ASSET_VER = '110'/.test(appJs),
-    'v110=' + (html.match(/\?v=110/g) || []).length + ' v109=' + (html.match(/\?v=109/g) || []).length);
+  T('版本已升到 111（?v=111 共 20 处 · v110 无残留 · LM_ASSET_VER=111）',
+    (html.match(/\?v=111/g) || []).length === 20 && (html.match(/\?v=110/g) || []).length === 0
+      && /LM_ASSET_VER = '111'/.test(appJs),
+    'v111=' + (html.match(/\?v=111/g) || []).length + ' v110=' + (html.match(/\?v=110/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

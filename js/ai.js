@@ -297,33 +297,66 @@ W.LMAI = (function () {
     };
     return pre[kind] || pre['概览'];
   }
-  /* 句子级打分：与 ask() 同一套权重，但保留页/序号，便于"按页聚合成一段回答" */
+  /* ---------- ⑧.3 ★ 修复111：句子级 BM25 检索（懒建 + 缓存，换内容自动重建） ----------
+     比原来的「覆盖度 × 稀有词权重」更稳：长句不会被无脑抬高，碰巧命中一个怪词也压不住正常句子。 */
+  let sentCache = null;
+  function sentIndex(index) {
+    if (!index || !index.docs) return null;
+    if (sentCache && sentCache.src === index) return sentCache;
+    const docs = [], df = {};
+    let total = 0, cnt = 0;
+    index.docs.forEach(function (d) {
+      const sents = [];
+      sentences(d.text).forEach(function (s, i) {
+        const tk = tokens(s);
+        if (!tk.length) return;
+        const tf = {};
+        tk.forEach(function (t) { tf[t] = (tf[t] || 0) + 1; });
+        Object.keys(tf).forEach(function (t) { df[t] = (df[t] || 0) + 1; });
+        total += tk.length; cnt++;
+        sents.push({ s: s, i: i, tf: tf, len: tk.length });
+      });
+      docs.push({ pageId: d.id, title: d.label, blocks: d.blocks || [], sents: sents });
+    });
+    const idf = {};
+    Object.keys(df).forEach(function (t) { idf[t] = Math.log(1 + (cnt - df[t] + 0.5) / (df[t] + 0.5)); });
+    sentCache = { src: index, docs: docs, idf: idf, avgdl: (total / Math.max(cnt, 1)) || 1, n: cnt };
+    return sentCache;
+  }
+  function warm(index) { return !!sentIndex(index); }        /* 空闲预热：打开页面就先算好 */
+  function bm25(se, qTerms, si) {
+    const k1 = 1.2, b = 0.75;
+    let sc = 0, hitN = 0;
+    qTerms.forEach(function (t) {
+      const f = si.tf[t];
+      if (!f) return;
+      hitN++;
+      sc += (se.idf[t] || 0) * (f * (k1 + 1)) / (f + k1 * (1 - b + b * si.len / se.avgdl));
+    });
+    return { sc: sc, hitN: hitN };
+  }
+  /* 句子级打分（BM25）：按页/序号命中，供"按页聚合成一段回答"用 */
   function rankSent(index, q, limit) {
+    const se = sentIndex(index);
     const qt = tokens(q);
-    if (!index || !index.docs || !qt.length) return [];
+    if (!se || !qt.length) return [];
     const qset = {};
     qt.forEach(function (t) { qset[t] = 1; });
     const qUniq = Object.keys(qset);
     const out = [];
-    index.docs.forEach(function (d) {
+    se.docs.forEach(function (d) {
       const labHas = {};
-      tokens(d.label).forEach(function (t) { labHas[t] = 1; });
+      tokens(d.title).forEach(function (t) { labHas[t] = 1; });
       const labHit = qUniq.filter(function (t) { return labHas[t]; }).length;
       const labelBoost = 1 + 0.35 * (labHit / qUniq.length);
-      sentences(d.text).forEach(function (s, i) {
-        const st = tokens(s);
-        if (!st.length) return;
-        const has = {};
-        let mass = 0;
-        st.forEach(function (t) { if (has[t]) return; has[t] = 1; mass += (index.idf[t] || 0.1); });
-        let hitN = 0, hitW = 0;
-        qUniq.forEach(function (t) { if (has[t]) { hitN++; hitW += (index.idf[t] || 0.1); } });
-        if (!hitN) return;
-        const cover = hitN / qUniq.length;
-        const bonus = 1 + (i === 0 ? 0.12 : 0) + (/\d/.test(s) ? 0.06 : 0) + (/[a-zA-Z]{3,}/.test(s) ? 0.04 : 0);
+      d.sents.forEach(function (si) {
+        const r = bm25(se, qUniq, si);
+        if (!r.hitN) return;
+        const bonus = 1 + (si.i === 0 ? 0.12 : 0) + (/\d/.test(si.s) ? 0.06 : 0) + (/[a-zA-Z]{3,}/.test(si.s) ? 0.04 : 0);
         out.push({
-          s: s, i: i, pageId: d.id, title: d.label, cover: cover,
-          score: Math.round((cover * hitW) * (1 + hitW / (mass || 1)) * labelBoost * bonus * 100) / 100
+          s: si.s, i: si.i, pageId: d.pageId, title: d.title,
+          cover: r.hitN / qUniq.length,
+          score: Math.round(r.sc * labelBoost * bonus * 100) / 100
         });
       });
     });
@@ -359,6 +392,37 @@ W.LMAI = (function () {
     out.sort(function (a, b) { return b.hit - a.hit; });
     return out.slice(0, limit || 2);
   }
+  /* 方法/步骤题：页里本来就有清单块 → 直接按它的条目列步骤（结构来自原文，不是猜的） */
+  function listSteps(index, q, limit) {
+    const se = sentIndex(index);
+    const qset = {};
+    tokens(q).forEach(function (t) { qset[t] = 1; });
+    const uniq = Object.keys(qset);
+    if (!se || !uniq.length) return [];
+    const out = [];
+    se.docs.forEach(function (d) {
+      (d.blocks || []).forEach(function (b) {
+        if (!b || b.type !== 'list' || !Array.isArray(b.items) || b.items.length < 2) return;
+        const items = b.items.map(function (it) {
+          return plain(typeof it === 'string' ? it : (it && (it.text || it.label)) || '');
+        }).filter(Boolean);
+        if (!items.length) return;
+        const hay = tokens(plain(b.title || '') + ' ' + items.join(' '));
+        let hit = 0;
+        uniq.forEach(function (t) { if (hay.indexOf(t) >= 0) hit++; });
+        if (!hit) return;
+        out.push({ pageId: d.pageId, title: d.title, list: plain(b.title || '步骤'), items: items, hit: hit });
+      });
+    });
+    out.sort(function (a, b) { return b.hit - a.hit; });
+    return out.slice(0, limit || 1);
+  }
+  /* 追问时补一句上下文：「它 / 这个 / 上面」这类指代，把上一问的词一起拿去检索（不生成新内容） */
+  function expandQuery(q, prev) {
+    const s = plain(q);
+    if (!prev || !/(它|它们|这个|那个|该|其|上面|刚才|前面|这些|那些)/.test(s)) return q;
+    return plain(prev) + ' ' + s;
+  }
   /* 对比题：A、B 各取最贴切的一句，做"原文对照" */
   function compareAnswer(index, q) {
     const pair = qPair(q);
@@ -384,6 +448,16 @@ W.LMAI = (function () {
       const c = compareAnswer(index, q);
       if (c) res.push(c);
     }
+    /* ★ 修复111：问"怎么做"且页里本来就有清单 → 按它自己的条目列步骤（不自己编步骤） */
+    if (kind === '方法') {
+      listSteps(index, q, 1).forEach(function (r) {
+        res.push({
+          answer: '按《' + r.title + '》里的步骤（原文条目，共 ' + r.items.length + ' 条）：\n'
+            + r.items.map(function (t, i) { return (i + 1) + '. ' + t; }).join('\n'),
+          pageId: r.pageId, title: r.title, score: 9 + r.hit, kind: '步骤'
+        });
+      });
+    }
     tableHits(index.docs, q, 2).forEach(function (r) {
       res.push({
         answer: '📊 表格《' + r.table + '》里有一行对得上：\n'
@@ -402,6 +476,13 @@ W.LMAI = (function () {
     order.slice(0, room).forEach(function (pid) {
       if (res.some(function (r) { return r.pageId === pid; })) return;   /* 这页已经给过对比/表格答案 */
       const list = byPage[pid];
+      /* ★ 修复111：问「为什么」时，含因果连词的原句排前面（只调顺序，不改内容） */
+      if (kind === '原因') {
+        const cause = /(因为|由于|导致|带来|所以|因此|从而)/;
+        list.sort(function (a, b) {
+          return (cause.test(b.s) ? 1 : 0) - (cause.test(a.s) ? 1 : 0) || (b.score - a.score);
+        });
+      }
       const d = list[0];
       const pts = list.map(function (x) { return '· ' + x.s; }).join('\n');
       res.push({
@@ -664,7 +745,10 @@ W.LMAI = (function () {
     if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
     /* ★ 修复110：本地问答（默认模式）—— 判断问法 → 组织成一段回答；仍然只用原文，不编造 */
     const runLocal = function (q) {
-      const res = askSmart(ix, q, 3);
+      /* ★ 修复111：追问（「它 / 这个 / 上面」）→ 把上一问的词一起拿去检索，免得答非所问 */
+      const prevAsk = chatOf(id).filter(function (m) { return m.r === 'me'; });
+      const prev = prevAsk.length ? prevAsk[prevAsk.length - 1].t : '';
+      const res = askSmart(ix, expandQuery(q, prev), 3);
       chatPush(id, { r: 'me', t: q });
       if (!res.length) {
         chatPush(id, { r: 'local', t: '本站没写过相关内容。换个说法再试；想让它用通用知识回答，把上面的模式切到 🐋 DeepSeek。' });
@@ -672,6 +756,10 @@ W.LMAI = (function () {
         res.forEach(function (r) {
           chatPush(id, { r: 'local', t: r.answer, src: { pageId: r.pageId, title: r.title, score: r.score } });
         });
+        /* ★ 诚实护栏：只找到一条就明说"可能没完全对上"，不假装很懂 */
+        if (res.length === 1) {
+          chatPush(id, { r: 'local', t: '⚠️ 站里跟这个问题直接相关的只有上面这一条（可能没完全对上你的问法）。要更完整的解释，把模式切到 🐋 DeepSeek。' });
+        }
       }
       renderPanel();
     };
@@ -778,7 +866,13 @@ W.LMAI = (function () {
     /* 内容就绪后自动出浮标（访客与管理员都能用；纯阅读辅助，不写内容） */
     let tries = 0;
     const wait = setInterval(function () {
-      if (indexNow()) { clearInterval(wait); fab.hidden = false; if (!panel.hidden) renderPanel(); }
+      const ix0 = indexNow();
+      if (ix0) {
+        clearInterval(wait);
+        warm(ix0);        /* ★ 修复111：页面一打开就把句子级索引算好（后台 0.4s 后），点「问一句」几乎瞬回 */
+        fab.hidden = false;
+        if (!panel.hidden) renderPanel();
+      }
       else if (++tries > 40) { clearInterval(wait); fab.hidden = false; }
     }, 400);
     fab.hidden = false;
@@ -792,6 +886,7 @@ W.LMAI = (function () {
     plain: plain, blockText: blockText, pageText: pageText, sentences: sentences, tokens: tokens,
     buildIndex: buildIndex, related: related, keywords: keywords, summarize: summarize, ask: ask,
     askSmart: askSmart, qKind: qKind, qPair: qPair, rankSent: rankSent, tableHits: tableHits,
+    sentIndex: sentIndex, warm: warm, listSteps: listSteps, expandQuery: expandQuery,
     aiMode: aiMode, setAiMode: setAiMode,
     pageDigest: pageDigest, promptFor: promptFor,
     chatOf: chatOf, chatPush: chatPush, chatClear: chatClear,
