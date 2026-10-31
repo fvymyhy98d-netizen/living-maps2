@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '98';
+var LM_ASSET_VER = '99';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -24,8 +24,8 @@ window.LMApp = (function () {
   const app = document.getElementById('app');
   const state = { content: null, admin: false, root: false, pageId: 'home', view: 'auto', ready: false };
 
-  /* 个人专属通道（v2 密钥拉伸）：只存 PBKDF2-SHA256（60000 轮 + 固定盐）的结果，
-     明文不出现在任何页面/代码/文档里；「修改密码」无法改动此通道，忘记管理密码时仍可用它进入。
+  /* 专有通道（v2 密钥拉伸）：只存 PBKDF2-SHA256（60000 轮 + 固定盐）的结果，
+     明文不出现在任何页面/代码/文档里；「修改密码」不会改动这条通道的凭据，忘记管理密码时仍可用它进入。
      即使整份代码被公开，从这份拉伸哈希反推密码的成本也被放大了数万倍 */
   const MASTER_AUTH = {
     v: 2, iters: 60000,
@@ -1695,8 +1695,8 @@ window.LMApp = (function () {
     const adm = (state.content.config && state.content.config.admin) || {};
     const rec = adm.auth;
     return LMStore.pbkdf2Hex(v, MASTER_AUTH.salt, MASTER_AUTH.iters).then(function (mh) {
-      /* 两级权限：个人专属通道 = 根管理员（可屏蔽设备 / 看全部设备名单）；
-         团队管理密码（config.admin.auth）= 普通管理员（编辑内容，无屏蔽权） */
+      /* 密码校验顺序：专有通道 → 团队密码（config.admin.auth）；两者通过后界面完全一致，
+         不向登录者提示任何权限差别 */
       if (mh === MASTER_AUTH.hash) return { ok: true, root: true, chash: MASTER_AUTH.hash };
       if (rec && rec.salt && rec.hash) {
         return LMStore.pbkdf2Hex(v, rec.salt, rec.iters).then(function (h2) {
@@ -1805,7 +1805,7 @@ window.LMApp = (function () {
           const ok = !!(r && r.ok);
           if (ok) {
             /* 屏蔽签名密钥：所有管理员共用一把 —— 统一从「团队管理密码」派生（与登录用的具体密码无关），
-               这样 root 与普通管理员互相认可对方加的屏蔽记录（不会互判为篡改），界面上也看不出任何权限差别；
+               这样用不同密码登录的管理员互相认可对方加的屏蔽记录（不会互判为篡改），界面上也看不出任何权限差别；
                仅存本会话不落盘 */
             const adminAuth = (state.content.config && state.content.config.admin && state.content.config.admin.auth) || '';
             if (adminAuth && window.LMStore) {
@@ -1815,9 +1815,9 @@ window.LMApp = (function () {
                 try { sessionStorage.setItem('lm_ban_key', k); } catch (e2) { /* noop */ }
               }).catch(function () { /* noop */ });
             }
-            /* 屏蔽名单检查：管理员级屏蔽挡登录；但「根管理员 + 仅自动限时条目」放行——
-               root 密码验证通过即本人，登录流程里会自动清除限时条目（防 root 被自己锁死）；
-               手动屏蔽（另一台管理员设备有意加的）对 root 依然生效，需在别台解禁 */
+            /* 屏蔽名单检查：管理员级屏蔽挡登录；但「专有通道 + 仅自动限时条目」放行——
+               专有通道验证通过即本人，登录流程里会自动清除限时条目（防自己把自己锁死）；
+               手动屏蔽（另一台管理员设备有意加的）对专有通道依然生效，需在别台解禁 */
             if (window.LMCollab && LMCollab.banStateFor().admin) {
               const bs = LMCollab.banStateFor();
               if (r.root && bs.auto && !bs.manual) {
@@ -1838,18 +1838,18 @@ window.LMApp = (function () {
               + (r.refreshed ? '（已自动获取云端最新密码数据）' : ''));
             /* 密码试错自动限时限制：本机 1 小时内 ≥5 次密码错误 → 登录成功这一刻自动限制
                本设备管理员入口 30 分钟（banSelf 专用通道：等签名密钥就绪、允许作用于本机、
-               条目带 until 自动过期）；根管理员登录成功会自动清除本机限时条目（防锁死），
-               普通管理员被限制后可由根管理员在 ⚙ 协作与设备 里提前解禁 */
+               条目带 until 自动过期）；专有通道登录成功会自动清除本机限时条目（防锁死），
+               别的密码登录者被限制后，可由他人在 ⚙ 协作与设备 里提前解禁 */
             try {
               const fh = JSON.parse(localStorage.getItem('lm_fail_hist') || '[]')
                 .filter(function (t2) { return Date.now() - t2 < 3600000; });
               if (fh.length >= 5 && window.LMCollab) {
                 if (!r.root && LMCollab.banSelf) {
                   LMCollab.banSelf(1800000);
-                  toast('⛔ 本设备 1 小时内密码错误 ' + fh.length + ' 次，管理员入口将被限制 30 分钟（根管理员可提前解禁）');
+                  toast('⛔ 本设备 1 小时内密码错误 ' + fh.length + ' 次，管理员入口将被限制 30 分钟');
                 } else if (r.root) {
                   const cleared = LMCollab.clearAutoBan ? LMCollab.clearAutoBan() : 0;
-                  toast('⚠️ 本设备 1 小时内密码错误 ' + fh.length + ' 次（根管理员身份不受限' + (cleared ? '，已自动清除本机限时限制' : '') + '）');
+                  toast('⚠️ 本设备 1 小时内密码错误 ' + fh.length + ' 次' + (cleared ? '（已自动清除本机限时限制）' : ''));
                 }
                 localStorage.removeItem('lm_fail_hist');
               }
@@ -1859,7 +1859,7 @@ window.LMApp = (function () {
             /* 补启动旧协同通道（左下角徽章 + 同浏览器互连 + 心跳）：页面加载时还是访客，
                通道注册被跳过——登录成功这一刻必须补调，否则「先开页面再登录」协同永不出现 */
             try { if (window.LMCollab && LMCollab.startAsAdmin) LMCollab.startAsAdmin(); } catch (eS0) { /* noop */ }
-            /* 云端上传通道（团队保险箱）：普通管理员用「团队管理密码」解密根管理员分发的 GitHub 配置，
+            /* 云端上传通道（团队保险箱）：用「团队管理密码」登录时解密先前分发的 GitHub 配置，
                明文 Token 只进本机 sessionStorage，界面上任何地方都看不到、内容文件里只有密文 */
             if (!r.root && window.LMStore) {
               try {
@@ -2396,8 +2396,9 @@ window.LMApp = (function () {
             + '</p>';
         })()
         : '')
-      /* ★ 修复98：「云存档」是根管理员的运维配置（端点 / anon key / 表名 / 导入），
-         普通管理员不该看到、也不该改 —— 他们只需要批阅反馈（下面的列表 + 四个动作按钮）。
+      /* ★ 修复98：「云存档」属于后台运维配置（端点 / anon key / 表名 / 导入），
+         只在专有通道登录时渲染 —— 其他管理员只看到批阅区（列表 + 四个动作按钮），
+         页面上不出现任何端点、密钥，也不出现任何权限说明。
          数据通道不受影响：cloudCfg() 读的是已公开的 content.config.fbCloud，照常收发。 */
       + (state.root ? fbCloudHtml() : '')
       + (fb.length

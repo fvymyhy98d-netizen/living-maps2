@@ -855,7 +855,7 @@ window.LMCollab = (function () {
      与手动 banDevice 的三点不同：① 允许对本机生效（绕过「不能屏蔽本机」守卫——
      手动通道仍禁止屏蔽本机，防止误操作把自己踢出）；② 签名密钥在登录回调里是异步写入的，
      这里轮询等待最多 3 秒；③ 条目带 auto:1 + until 过期时间（默认 30 分钟自动失效），
-     且根管理员登录成功时会被自动清除（clearAutoBan）——保证 root 永远不会被锁死在门外 */
+     且专有通道登录成功时会被自动清除（clearAutoBan）——保证自己永远不会被锁死在门外 */
   function banSelf(ms) {
     if (!window.LMApp || !LMApp.state.admin || !window.LMStore) return Promise.resolve(false);
     return waitBanKey(30).then(function (s) {
@@ -868,7 +868,7 @@ window.LMCollab = (function () {
         cb.bans = Array.isArray(cb.bans) ? cb.bans : [];
         cb.bans = cb.bans.filter(function (e2) { return !(entryHit(e2, { id: me.id, fp: me.fp }) && e2.scope === 'admin'); });
         cb.bans.push(entry);
-        LMApp.commit({ msg: '本设备因 1 小时内多次密码错误，被自动限时限制管理员入口 30 分钟（根管理员可提前解禁）' });
+        LMApp.commit({ msg: '本设备因 1 小时内多次密码错误，被自动限时限制管理员入口 30 分钟' });
         return true;
       });
     }).catch(function () { return false; });
@@ -885,7 +885,7 @@ window.LMCollab = (function () {
     if (!cb || !Array.isArray(cb.bans)) return 0;
     const before = cb.bans.length;
     cb.bans = cb.bans.filter(function (e2) { return !(e2 && e2.auto && entryHit(e2, { id: me.id, fp: me.fp })); });
-    if (cb.bans.length !== before) LMApp.commit({ msg: '根管理员登录成功，已自动解除本设备的限时限制' });
+    if (cb.bans.length !== before) LMApp.commit({ msg: '已自动解除本设备的限时限制' });
     return before - cb.bans.length;
   }
   /* ---------- 对外：本地保存后广播（app.js commit 调用） ---------- */
@@ -1424,7 +1424,7 @@ window.LMCollab = (function () {
     coEditAsk: coEditAsk,
     enforceBans: enforceBans,
     paintChip: paintChip,
-    refreshGh: ghInit, /* 普通管理员登录取回 Token 后重探云端通道（ghInit 已重入化，不会重复接线） */
+    refreshGh: ghInit, /* 团队密码登录取回 Token 后重探云端通道（ghInit 已重入化，不会重复接线） */
     dropGhSha: function () {   /* ★ 修复90：手动同步成功后清 sha 缓存（否则下一笔自动推送必 409、白跑一轮） */
       try { delete shaOf[ghBranch()]; } catch (e) { /* noop */ }
     },

@@ -1000,7 +1000,7 @@ window.LMEditor = (function () {
   });
 
   /* ---------- GitHub 同步设置（双视图）----------
-     根管理员：完整配置界面（本机专属通道 + 团队保险箱分发）；普通管理员：只见「确认上传」一键操作，
+     专有通道登录：完整配置界面（本机通道 + 团队保险箱分发）；其他管理员：只见「确认上传」一键操作，
      看不到 Token/用户名/仓库名等任何配置（明文密钥永不出现在界面上） */
   function syncModal() {
     if (LMApp.state.root) syncModalRoot();
@@ -1040,7 +1040,7 @@ window.LMEditor = (function () {
     const cfg = LMStore.getGhCfg();
     const hasToken = !!LMStore.ghToken();
     const vault = ((LMApp.state.content.config || {}).collab || {}).tokenVault;
-    modal('<h3>同步到 GitHub（云端保存 · 根管理员专属）</h3>'
+    modal('<h3>同步到 GitHub（云端保存）</h3>'
       + '<p class="modal-note">在网站上保存的内容先存在<b>你自己的浏览器</b>里；配置下面信息后，即可把内容直接提交到 GitHub 仓库，GitHub Pages 会在 1-2 分钟后自动更新——<b>不需要手动上传文件</b>。</p>'
       + '<form id="ghForm">'
       + field('GitHub 用户名 / 组织名', F.text('owner', cfg.owner, '例如 fvymyhy98d-netizen'))
@@ -1058,10 +1058,10 @@ window.LMEditor = (function () {
           '生成方法：GitHub → Settings → Developer settings → Fine-grained tokens → 生成时仅选择本仓库 → 权限里把 Contents 勾选为 Read and write')
       + '<label class="modal-note" style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="ghRemember"'
           + (cfg.remembered ? ' checked' : '') + '> 在本机记住 Token（关浏览器/刷新都不丢，不用每次重填；公共电脑请勿勾选）</label>'
-      + field('团队管理密码（普通管理员的登录密码）',
+      + field('团队管理密码（组员登录用）',
           '<input class="input" type="password" name="teamPw" autocomplete="off" placeholder="'
-          + (vault ? '已配置团队分发，留空则保持不变' : '填写后普通管理员登录即可一键上传') + '">',
-          '可选：填写后会把上面的 GitHub 配置 AES-256-GCM 加密成「团队保险箱」随内容上云；普通管理员用这个密码登录时自动解密取回，一键上传。明文 Token 不会出现在任何界面与云端内容里。')
+          + (vault ? '已配置分发，留空则保持不变' : '填写后组员用该密码登录即可一键上传') + '">',
+          '可选：填写后会把上面的 GitHub 配置 AES-256-GCM 加密成「团队保险箱」随内容上云；组员用该密码登录时自动解密取回，一键上传。明文 Token 不会出现在任何界面与云端内容里。')
       + '<div class="form-actions">'
       + '<button type="button" class="btn btn-ghost" data-close>关闭</button>'
       + '<button type="button" class="btn btn-ghost" id="ghSaveCfg">只保存设置</button>'
@@ -1081,7 +1081,7 @@ window.LMEditor = (function () {
           remember: !!(root.querySelector('#ghRemember') && root.querySelector('#ghRemember').checked)
         };
       };
-      const vaultize = function (c) { /* 团队保险箱：填了团队密码才更新（随内容上云分发给普通管理员） */
+      const vaultize = function (c) { /* 团队保险箱：填了团队密码才更新（随内容上云分发给组员） */
         const pw = String((new FormData(form)).get('teamPw') || '').trim();
         if (!pw) return Promise.resolve(false);
         return LMStore.encryptForTeam(JSON.stringify({ owner: c.owner, repo: c.repo, branch: c.branch, dataBranch: c.dataBranch, path: c.path, token: c.token }), pw).then(function (box) {

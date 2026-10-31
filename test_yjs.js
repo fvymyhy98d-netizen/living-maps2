@@ -157,10 +157,10 @@ T('降级可观测 + 自愈：初始化失败 Console.error 留痕 + toast 带�
 T('团队 Token 保险箱：AES-256-GCM + PBKDF2（store 加解密导出，明文 Token 不进界面/内容/云端）',
   sto.indexOf('encryptForTeam') > 0 && sto.indexOf('decryptForTeam') > 0
     && sto.indexOf('AES-GCM') > 0 && sto.indexOf('PBKDF2') > 0);
-T('双视图上传：根管理员完整配置（含团队密码分发）+ 普通管理员一键上传（看不到任何密钥）',
+T('双视图上传：专有通道完整配置（含团队密码分发）+ 团队密码登录一键上传（看不到任何密钥）',
   edt.indexOf('syncModalLite') > 0 && edt.indexOf('syncModalRoot') > 0
     && edt.indexOf('teamPw') > 0 && edt.indexOf('tokenVault') > 0);
-T('登录回调：管理员登录启动协同，普通管理员自动解密保险箱取回上传通道（refreshGh 重入接线）',
+T('登录回调：管理员登录启动协同，团队密码登录自动解密保险箱取回上传通道（refreshGh 重入接线）',
   appSrc.indexOf('LMYCollabStart') > 0 && appSrc.indexOf('decryptForTeam') > 0
     && col.indexOf('refreshGh: ghInit') > 0);
 T('配置漂移自愈（防旧缓存分房：定时拉最新 config 对比 room/password，sessionStorage 防刷新循环）',
@@ -189,9 +189,9 @@ console.log('【7】密码试错防护 / 上线断线 Toast / 冲突重推');
 T('密码试错防护：1 小时滑动窗口持久化（localStorage）+ 指数退避锁定 + 「系统繁忙」假象文案',
   appSrc.indexOf('lm_fail_hist') > 0 && appSrc.indexOf('f >= 7 ? 600000') > 0
     && appSrc.indexOf('系统繁忙，请') > 0 && appSrc.indexOf('0x2F') > 0);
-T('试错自动入黑名单：登录成功时走 banSelf 限时通道（1 小时内 ≥5 次失败；根管理员豁免并自动清除限时）',
+T('试错自动入黑名单：登录成功时走 banSelf 限时通道（1 小时内 ≥5 次失败；专有通道豁免并自动清除限时）',
   appSrc.indexOf('LMCollab.banSelf(1800000)') > 0 && appSrc.indexOf('管理员入口将被限制 30 分钟') > 0
-    && appSrc.indexOf('根管理员身份不受限') > 0 && appSrc.indexOf('clearAutoBan()') > 0);
+    && appSrc.indexOf('已自动清除本机限时限制') > 0 && appSrc.indexOf('clearAutoBan()') > 0);
 T('上线/断线提示统一走设备状态机：上线 / 断线 / 已退出页面 / 重新连上 / 超时移除（8 秒去抖 + 启动静默期）',
   col.indexOf('已上线') > 0 && col.indexOf('已断线') > 0 && col.indexOf('已退出页面') > 0
     && col.indexOf('function peerToast(d, kind) {') > 0
@@ -2631,10 +2631,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=98 · LM_ASSET_VER=98',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=99 · LM_ASSET_VER=99',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=97/g) || []).length === 0 && /\?v=98/.test(html)
-      && /LM_ASSET_VER = '98'/.test(appJs));
+      && (html.match(/\?v=98/g) || []).length === 0 && /\?v=99/.test(html)
+      && /LM_ASSET_VER = '99'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -2654,20 +2654,41 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
     appJs.indexOf('id="fbCloudMsg"') > 0 && appJs.indexOf('function cloudMsg') > 0
       && appJs.indexOf('❌ 读取失败：') > 0 && css.indexOf('.fb-cloud-msg') > 0);
 
-  /* —— ★ 修复98：云存档是「根管理员」的运维配置，普通管理员只批阅、看不见也改不了 —— */
+  /* —— ★ 修复98/99：云存档是后台运维配置，只在专有通道登录时渲染；「两种管理员」全程不留痕 —— */
   const edtSrc = srcOf('js/editor.js');
-  T('云存档配置只给根管理员：普通管理员看不到端点 / anon key / 表名 / 导入（数据通道照常，只是不渲染面板）',
+  const colSrc = srcOf('js/collab.js');
+  /* 两个待查词用 Unicode 转义书写，免得测试文件自身成为泄露源 */
+  const BAD_A = '\u6839\u7ba1\u7406\u5458';       /* 第一种称呼 */
+  const BAD_B = '\u666e\u901a\u7ba1\u7406\u5458'; /* 第二种称呼 */
+  T('云存档配置面板只在专有通道登录时渲染（别的管理员看不到端点 / anon key / 表名 / 导入；数据通道照常）',
     appJs.indexOf("(state.root ? fbCloudHtml() : '')") > 0
       && appJs.indexOf('function fbCloudHtml()') > 0
       && appJs.indexOf('cloudCfg()') > 0);
 
-  T('普通管理员仍可批阅反馈（四个动作按钮 + 三段说明仍在列表项里，不依赖云存档面板）',
+  T('批阅功能不依赖云存档面板（四个动作按钮 + 三段说明仍在列表项里，任何管理员都能用）',
     appJs.indexOf('data-fbact="已采纳"') > 0 && appJs.indexOf('data-fbact="已修改"') > 0
       && appJs.indexOf('data-fbact="保留原判断"') > 0 && appJs.indexOf('data-fbact="待处理"') > 0);
 
-  T('同步到 GitHub 弹窗不再出现「根管理员」这种内部角色说法（普通管理员只看到通道状态）',
-    edtSrc.indexOf('统一分发') < 0 && edtSrc.indexOf('根管理员统一') < 0
+  T('同步到 GitHub 弹窗只说通道状态（不出现「统一分发 / 内部角色」说法）',
+    edtSrc.indexOf('统一分发') < 0 && edtSrc.indexOf(BAD_A + '统一') < 0
       && edtSrc.indexOf('云端上传通道已开启') > 0);
+
+  /* ★ 修复99：不让人看出「有两种管理员」—— js/ 全部文件（含注释，访客 view-source 就能读）+ 页面 + 样式 */
+  (function () {
+    const leaks = [];
+    fs.readdirSync(path.join(DIR, 'js')).filter(function (f) { return /\.js$/.test(f); }).forEach(function (f) {
+      const t2 = srcOf('js/' + f);
+      if (t2.indexOf(BAD_A) > -1 || t2.indexOf(BAD_B) > -1) leaks.push('js/' + f);
+    });
+    if (html.indexOf(BAD_A) > -1 || html.indexOf(BAD_B) > -1) leaks.push('index.html');
+    if (css.indexOf(BAD_A) > -1 || css.indexOf(BAD_B) > -1) leaks.push('css/style.css');
+    T('「两种管理员」零痕迹：js/ 全文件 + index.html + css 一处都不许有', leaks.length === 0,
+      '泄露位置: ' + leaks.join(', '));
+  })();
+
+  T('密码试错提示不透露角色（只说限制时长 / 已清除本机限时限制）',
+    appJs.indexOf('管理员入口将被限制 30 分钟') > 0 && appJs.indexOf('已自动清除本机限时限制') > 0
+      && appJs.indexOf('可提前解禁') < 0 && colSrc.indexOf('可提前解禁') < 0);
 
   T('README 记录修复96（6 小时为何改不了 / 云存档三种接法 / 表格导入）', readme.indexOf('修复96') > 0);
 

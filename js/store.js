@@ -71,8 +71,8 @@ window.LMStore = (function () {
   function ghToken() { return sessionStorage.getItem('lm_gh_token') || localStorage.getItem('lm_gh_token_r') || ''; }
 
   /* ---------- 团队 Token 保险箱（AES-GCM + PBKDF2，浏览器原生 WebCrypto） ----------
-     根管理员用「团队管理密码」把 GitHub 配置加密成保险箱，随内容 JSON 上云分发；
-     普通管理员登录（同一密码）自动解密取回配置。明文 Token 永不出现在界面、内容与云端 ——
+     用「团队管理密码」把 GitHub 配置加密成保险箱，随内容 JSON 上云分发；
+     组员用同一密码登录时自动解密取回配置。明文 Token 永不出现在界面、内容与云端 ——
      云端只有密文（AES-256-GCM），拿到密文没有团队密码解不开。 */
   function u8ToB64(u8) { let s = ''; for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]); return btoa(s); }
   function b64ToU8(b64) { const s = atob(String(b64 || '')); const u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
