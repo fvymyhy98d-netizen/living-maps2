@@ -315,6 +315,38 @@ W.LMAI = (function () {
     delete all[id];
     try { localStorage.setItem(CHAT_KEY, JSON.stringify(all)); } catch (e) { /* noop */ }
   }
+  /* ---------- ⑨.2 ★ 修复108：可选的「浏览器扩展」桥 ----------
+     装仓里的 ext/ 扩展后：问题经扩展送进 chat.deepseek.com，DeepSeek 的回答再**自动**回到
+     这个对话框 —— 这就是"全自动"，但**必须装一次扩展**（网页本身读不到别的标签页，同源策略）。
+     没装扩展：bridgeSeen 一直是 false → 走原来的「复制 + 打开网页 + 粘回」，功能不受影响。 */
+  const BRIDGE_TAG = 'lm-ds-bridge';
+  let bridgeSeen = false;
+  function bridgeSend(txt, id) {
+    try {
+      window.postMessage({ ch: 'lm-page', type: 'ask', text: txt, pageId: id }, location.origin);
+      return true;
+    } catch (e) { return false; }
+  }
+  function listenBridge() {
+    if (typeof window === 'undefined' || !window.addEventListener) return;
+    if (listenBridge.done) return;
+    listenBridge.done = true;
+    window.addEventListener('message', function (e) {
+      const d = e && e.data;
+      if (!d || d.ch !== BRIDGE_TAG) return;
+      if (d.type === 'hello' || d.type === 'ack') {
+        bridgeSeen = true;
+        if (panel && !panel.hidden) renderPanel();
+        return;
+      }
+      if (d.type === 'reply' && d.text) {
+        chatPush(curId(), { r: 'ds', t: d.text });
+        if (panel && !panel.hidden) renderPanel();
+        else if (window.LMApp && LMApp.toast) LMApp.toast('✅ DeepSeek 的回答已回到对话框');
+      }
+    });
+    try { window.postMessage({ ch: 'lm-page', type: 'ping' }, location.origin); } catch (e) { /* noop */ }
+  }
   function pageById(id) {
     const c = content();
     if (!c || !Array.isArray(c.pages)) return null;
@@ -378,6 +410,8 @@ W.LMAI = (function () {
     if (!panel) return;
     const body = panel.querySelector('.lm-ai-body');
     if (!body) return;
+    const badge = panel.querySelector('.lm-ai-badge');
+    if (badge) badge.textContent = bridgeSeen ? '已装扩展 · 全自动' : '不用 API · 不存 Key';
     const ix = indexNow();
     if (!ix) { body.innerHTML = '<p class="lm-ai-tip">内容还在加载，稍等一下下…</p>'; return; }
     const id = curId();
@@ -442,6 +476,12 @@ W.LMAI = (function () {
       if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，比如「Transformer 和 RNN 有什么区别」。</p>'; return; }
       const txt = promptFor(pageById(id), q);
       chatPush(id, { r: 'me', t: q });
+      /* 装了扩展 → 全自动：送过去、等回答自己回来（不用复制/粘贴） */
+      if (bridgeSeen && bridgeSend(txt, id)) {
+        chatPush(id, { r: 'ds', t: '⏳ 已交给 DeepSeek（浏览器扩展在接管）—— 它会在标签页里自己发出去，回答好了**自动**回到这里，你不用复制粘贴。' });
+        renderPanel();
+        return;
+      }
       const okHint = function () {
         chatPush(id, {
           r: 'ds',
@@ -504,6 +544,7 @@ W.LMAI = (function () {
   }
   function mount() {
     if (fab || typeof document === 'undefined') return;
+    listenBridge();                 /* ★ 修复108：先挂上扩展桥（没装扩展就什么都不发生） */
     fab = document.createElement('button');
     fab.type = 'button';
     fab.className = 'lm-ai-fab';
@@ -546,7 +587,8 @@ W.LMAI = (function () {
     buildIndex: buildIndex, related: related, keywords: keywords, summarize: summarize, ask: ask,
     pageDigest: pageDigest, promptFor: promptFor,
     chatOf: chatOf, chatPush: chatPush, chatClear: chatClear,
-    mount: mount, version: '1.2'
+    listenBridge: listenBridge, bridgeSeen: function () { return bridgeSeen; },
+    mount: mount, version: '1.3'
   };
 })();
   /* Node（单元测试）也能 require 到同一份实现；浏览器里没有 module，自然跳过 */
