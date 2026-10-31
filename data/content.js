@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793455183852,
+      "syncTs": 1793455257170,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -141,20 +141,6 @@ window.SITE_CONTENT = {
           "text": "核心概念"
         },
         {
-          "type": "files",
-          "title": "学习资料与附件",
-          "items": [
-            {
-              "name": "课程大作业要求：三张活地图",
-              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
-            },
-            {
-              "name": "MDN · Web 开发入门（做本站用的技术）",
-              "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
-            }
-          ]
-        },
-        {
           "type": "sources",
           "title": "本页来源",
           "items": [
@@ -170,6 +156,20 @@ window.SITE_CONTENT = {
             }
           ],
           "seq": 2
+        },
+        {
+          "type": "files",
+          "title": "学习资料与附件",
+          "items": [
+            {
+              "name": "课程大作业要求：三张活地图",
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
+            },
+            {
+              "name": "MDN · Web 开发入门（做本站用的技术）",
+              "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
+            }
+          ]
         },
         {
           "type": "entries",
