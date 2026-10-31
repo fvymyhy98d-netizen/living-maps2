@@ -466,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '93';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '94';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -2323,9 +2323,18 @@ console.log('【9.59】修复93：留言实时直达 —— 主题派生 / clean
   T('broker 一定取自配置池（不写死单点），且 topic/URL 不含空格等非法字符',
     ['wss://a', 'wss://b', 'wss://c'].indexOf(k1.url) >= 0 && !/\s/.test(k1.topic + k1.url));
 
-  T('「关机也能补收」的关键：订阅方 clean=false（会话留存）+ 固定 clientId；发布方 clean=true（一次性）',
+  T('「关机也能补收」的关键：MQTT5 + 订阅方 clean=false + 显式申请会话保留；发布方 clean=true（一次性）',
     fbSrc.indexOf('clean: !admin') > 0 && fbSrc.indexOf('reconnectPeriod: admin ? 6000 : 0') > 0
-      && fbSrc.indexOf("{ qos: 1 }") > 0 && fbSrc.indexOf('cl.subscribe(c.topic, { qos: 1 })') > 0);
+      && fbSrc.indexOf("{ qos: 1 }") > 0 && fbSrc.indexOf('cl.subscribe(c.topic, { qos: 1 })') > 0
+      && fbSrc.indexOf('protocolVersion: 5') > 0 && fbSrc.indexOf('sessionExpiryInterval: MQ_KEEP_REQ') > 0);
+
+  T('保留窗口如实显示：申请 21600 秒（6 小时），并优先采用 broker 在 CONNACK 里回的实数',
+    (function () {
+      const mi = fb.mqInfo();
+      return fbSrc.indexOf('var MQ_KEEP_REQ = 21600;') > 0
+        && fbSrc.indexOf('if (p.sessionExpiryInterval != null) MQ.keep = +p.sessionExpiryInterval;') > 0
+        && mi.keep === 21600 && /约 6 小时/.test(mi.keepText);
+    })(), fb.mqInfo().keep + ' / ' + fb.mqInfo().keepText);
 
   T('收到的消息先验货：只认 t==="lmfb1"、必须有 id/text、超长直接丢（公共 broker 上谁都能发，防塞爆）',
     fbSrc.indexOf("o.t === 'lmfb1'") > 0 && fbSrc.indexOf('if (!it || !it.id || !it.text) return;') > 0

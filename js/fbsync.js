@@ -187,7 +187,11 @@ W.LMFB = (function () {
      谁是「组长」：MQTT 本身没有身份。这里的做法是 **只有进入管理员模式的设备才订阅**
      （要输管理密码），访客只发不收 —— 属「软隔离」，防误看而非防破解；
      真正的机密请用下一步的口令加密（README 修复92 的隐私说明）。 */
-  var MQ = { client: null, onItem: null, topic: '', url: '' };
+  var MQ = { client: null, onItem: null, topic: '', url: '', keep: 0 };
+  /* 离线补收窗口：向 broker 申请的会话保留秒数（MQTT5）。
+     实测公共 broker 的实际上限：EMQX 21600 秒（6 小时）、HiveMQ 1800 秒（30 分钟）；
+     broker 会在 CONNACK 里回它真正给的值，我们以那个为准（见 listen 里的 MQ.keep）。 */
+  var MQ_KEEP_REQ = 21600;
   function djb2(s) {
     var h = 5381; s = String(s || '');
     for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
@@ -215,11 +219,14 @@ W.LMFB = (function () {
     var c = mqCfg(), w = win();
     var cid = 'lmfb-' + c.topic.replace(/[^0-9a-z]/gi, '') + '-' + devTag()
       + (admin ? '' : '-' + Math.random().toString(36).slice(2, 7));
+    var o = {
+      protocolVersion: 5, clientId: cid, clean: !admin,
+      connectTimeout: 8000, reconnectPeriod: admin ? 6000 : 0, keepalive: 60
+    };
+    /* 只有「要补收」的订阅方需要显式申请会话保留；发布方 clean=true，发了就完事 */
+    if (admin) o.properties = { sessionExpiryInterval: MQ_KEEP_REQ };
     try {
-      return w.mqtt.connect(c.url, {
-        protocolVersion: 4, clientId: cid, clean: !admin,
-        connectTimeout: 8000, reconnectPeriod: admin ? 6000 : 0, keepalive: 60
-      });
+      return w.mqtt.connect(c.url, o);
     } catch (e) { return null; }
   }
   /* 组长/管理员：订阅并持续接收（clean=false → 离线期间的留言会被 broker 攒着，下次连上补收） */
@@ -229,7 +236,14 @@ W.LMFB = (function () {
     var c = mqCfg(), cl = mqOpen(true);
     if (!cl) return function () {};
     MQ.client = cl; MQ.onItem = onItem; MQ.topic = c.topic; MQ.url = c.url;
-    cl.on('connect', function () { try { cl.subscribe(c.topic, { qos: 1 }); } catch (e) { /* noop */ } });
+    cl.on('connect', function (ck) {
+      /* ★ 修复94：MQTT5 CONNACK 会回 broker 真正给的会话保留秒数 → 记下来，界面如实显示「能补收多久」 */
+      try {
+        var p = (ck && ck.properties) || {};
+        if (p.sessionExpiryInterval != null) MQ.keep = +p.sessionExpiryInterval;
+      } catch (eK) { /* noop */ }
+      try { cl.subscribe(c.topic, { qos: 1 }); } catch (e) { /* noop */ }
+    });
     cl.on('message', function (t, p) {
       if (t !== c.topic) return;
       var it = null;
@@ -265,7 +279,18 @@ W.LMFB = (function () {
       setTimeout(function () { fin(false); }, 9000);
     });
   }
-  function mqInfo() { var c = mqCfg(); return { url: MQ.url || c.url, topic: MQ.topic || c.topic, on: !!MQ.client }; }
+  function mqInfo() {
+    var c = mqCfg();
+    return {
+      url: MQ.url || c.url, topic: MQ.topic || c.topic, on: !!MQ.client,
+      keep: MQ.keep || MQ_KEEP_REQ,                /* 离线补收窗口（秒），优先用 broker 回的 */
+      keepText: (function (s) {
+        if (s >= 3600) return '约 ' + Math.round(s / 3600 * 10) / 10 + ' 小时';
+        if (s >= 60) return '约 ' + Math.round(s / 60) + ' 分钟';
+        return '约 ' + s + ' 秒';
+      })(MQ.keep || MQ_KEEP_REQ)
+    };
+  }
 
   return {
     merge: merge, norm: norm, pack: pack, unpack: unpack, slim: slim,

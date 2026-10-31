@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '93';
+var LM_ASSET_VER = '94';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2277,7 +2277,8 @@ window.LMApp = (function () {
         ? (function () {
           const mi = LMFB.mqInfo();
           return '<p class="fb-hint">📡 实时通道 <code>' + esc(mi.url) + '</code>（主题 <code>' + esc(mi.topic) + '</code>）：'
-            + (mi.on ? '<b>订阅中</b> —— 同学一提交就能到；你关机期间收到的留言也会在打开页面时补收。'
+            + (mi.on ? '<b>订阅中</b> —— 同学一提交就能到；你关机期间收到的留言，只要在 <b>' + esc(mi.keepText)
+              + '</b> 内打开本页就会自动补收（时长由公共 broker 决定，实测 EMQX 6 小时 / HiveMQ 30 分钟）。'
               : '未连上（不影响留言保存；打开本页会自动重连）。')
             + '</p>';
         })()
