@@ -277,6 +277,8 @@
           try { aw.getStates().forEach(function (st) { if (st.lm) out.push({ id: st.lm.id, name: st.lm.name, page: st.lm.page || '', editing: (st.lm.editing == null ? null : st.lm.editing), color: st.lm.color, self: st.lm.id === m0.id }); }); } catch (e6) { /* noop */ }
           return out;
         },
+        /* ★ 修复88：手机切回前台时立刻重播 presence（否则要等 15 秒心跳，别人那边才重新看到「你在编辑」） */
+        wake: function () { try { setAw(); if (window.LMCollab && LMCollab.paintChip) LMCollab.paintChip(); } catch (eWk) { /* noop */ } },
         pushLocal: pushLocal
       };
       try { if (window.LMCollab && LMCollab.paintChip) LMCollab.paintChip(); } catch (e7) { /* noop */ }

@@ -24,6 +24,11 @@ window.LMCollab = (function () {
   var LOCK_TTL = 12000, LOCK_BEAT = 4000, PEER_TTL = 25000;
   var GONE_TTL = 120000; /* ★ 修复73：断线后宽限 2 分钟，还没回来就当它不会再回来，从在线名单移除 */
   var GH_PUSH_MIN = 6000, POLL_ACTIVE = 2000, POLL_IDLE = 8000, POLL_HIDDEN = 60000, POLL_VISITOR = 90000;
+  /* ★ 修复88：**有人在线就提速** —— 除本机外还有设备在线时：推送防抖 6s→2.6s、活动轮询 2s→1.2s、
+     闲置轮询 8s→3.5s；只有自己一台时保持原节奏（省流量 / 省电 / 省 GitHub 写入）。
+     访客（只读）从前台 90s 提到 25s（raw 请求带 ?t= 破缓存，拿到的就是最新版）。
+     这些数值都能在控制台 LMCollab.diag() 里直接看到，方便现场核对。 */
+  var HOT_PUSH_MIN = 2600, HOT_ACTIVE = 1200, HOT_IDLE = 3500, VISITOR_SHOWN = 25000;
   var me = readDevice();
   var lastTs = +(localStorage.getItem(TS_KEY) || 0);
   var peers = {};    /* 设备id -> {name, fp, ts, page} */
@@ -241,6 +246,33 @@ window.LMCollab = (function () {
       if (oldSig[p.id] !== sigOf(p)) pushFeed(by, p.title || p.id);
     });
   }
+  /* ★ 修复88：结构冲突可见化 —— 同一页块数/顺序变了只能「整页后写优先」（块没有稳定 id，
+     无法安全对齐），本机在这页的改动可能被对方版本整片覆盖。旧版是静默覆盖：用户只看到
+     「我刚加的那块自己没了」。检测到就明确提示一次（15 秒去抖），至少让人知道发生了什么。
+     注意：块数一致时走的是块级后写优先，各改各的块不会互相丢，这里不会误报。 */
+  var _structWarnAt = 0;
+  function structConflictWarn(c, by) {
+    try {
+      const base = window.LMApp ? LMApp.state.content : null;
+      if (!base || !Array.isArray(base.pages) || !Array.isArray(c.pages)) return;
+      const now = Date.now();
+      if (now - _structWarnAt < 15000) return;
+      let hit = false;
+      base.pages.forEach(function (bp) {
+        if (!bp || !Array.isArray(bp.blocks)) return;
+        const rp = c.pages.filter(function (x) { return x && x.id === bp.id; })[0];
+        if (!rp || !Array.isArray(rp.blocks)) return;
+        if (bp.blocks.length === rp.blocks.length) return; /* 结构一致 → 块级后写优先，不会整页覆盖 */
+        const maxTs = function (arr) {
+          return arr.reduce(function (m, b) { return Math.max(m, +((b && b._ts) || 0)); }, 0);
+        };
+        if (maxTs(bp.blocks) > maxTs(rp.blocks)) hit = true; /* 本机有更新的改动，却被整页覆盖 */
+      });
+      if (!hit) return;
+      _structWarnAt = now;
+      LMApp.toast('⚠ 与「' + (by || '其他设备') + '」的结构改动冲突：本页已采用对方版本，你在这页新增/删除的块可能被覆盖');
+    } catch (e) { /* 提示失败不影响同步 */ }
+  }
   function doApply(c, ts, by) {
     bump(ts);
     /* 讨论区保护：远端整包覆盖前，把本机还没广播出去的新发言并进去（id 并集 + 墓碑），防止丢评论 */
@@ -256,6 +288,7 @@ window.LMCollab = (function () {
                                       协作模式下对方每次保存不再引发本机整页重绘，这是“开协作就卡”的主因之一 */
     try { same = JSON.stringify(before) === JSON.stringify(c); } catch (e5) { /* noop */ }
     if (same) return;
+    structConflictWarn(c, by); /* ★ 修复88：被整页覆盖前先提醒一句（见函数注释） */
     try { LMApp.applyRemoteContent(c); } catch (e) { return; }
     try { pushFeedFrom(before, c, by); } catch (eF0) { /* noop */ }
     setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
@@ -604,6 +637,22 @@ window.LMCollab = (function () {
   function yPeerCount() {
     try { return (window.LMYCollab && window.LMYCollab.peerCount) ? (+window.LMYCollab.peerCount() || 0) : 0; } catch (e) { return 0; }
   }
+  /* ---------- ★ 修复88：协同节奏（纯函数，test_yjs 直接提取验数字） ---------- */
+  /* 场上是否「不止我这一台」：Yjs awareness 或旧通道设备状态机任一判断出来就算 */
+  function peersHot() {
+    try { return liveCount() > 1 || yPeerCount() > 0; } catch (e) { return false; }
+  }
+  /* GitHub 轮询间隔：隐藏 60s；前台且在活动（30 秒内动过）→ 2s / 有人在线 1.2s；
+     前台但闲置 → 8s / 有人在线 3.5s */
+  function pollGapNow(hidden, act, hot) {
+    if (hidden) return POLL_HIDDEN;
+    if (act) return hot ? HOT_ACTIVE : POLL_ACTIVE;
+    return hot ? HOT_IDLE : POLL_IDLE;
+  }
+  /* 访客只读轮询间隔：前台 25s、后台仍是 90s */
+  function visitorGapNow(hidden) { return hidden ? POLL_VISITOR : VISITOR_SHOWN; }
+  /* 推送最小间隔：有人在线 2.6s（原来是 6s，这是跨网络协同「慢半拍」的最大单项） */
+  function pushWaitMin(hot) { return hot ? HOT_PUSH_MIN : GH_PUSH_MIN; }
   function yChannelLabel() {
     try {
       if (window.LMYCollab && window.LMYCollab.yjs && window.LMYCollab.channel) {
@@ -944,7 +993,7 @@ window.LMCollab = (function () {
     if (GH.lastPullTs > myTs) { ghPull(); return; }
     const now = Date.now();
     if (GH.inFlight) return;
-    const wait = GH_PUSH_MIN - (now - GH.lastPush);
+    const wait = pushWaitMin(peersHot()) - (now - GH.lastPush); /* ★ 修复88：有人在线 → 2.6s 就推，不再死等 6s */
     if (wait > 0) { /* 防抖：连续保存只在安静 6 秒后补推最新版（尾随触发，不会漏推） */
       if (!GH._defer) GH._defer = setTimeout(function () {
         GH._defer = null;
@@ -1004,11 +1053,15 @@ window.LMCollab = (function () {
         GH._wired = 'admin';
         transports.push({ send: function (msg) { if (msg.type === 'commit' && msg.content) ghPush(msg.content); } });
         modeLabel = '本机+云端';
+        /* ★ 修复88：节拍 2s → 600ms。旧版「每 2 秒才检查一次、且要够 2 秒才拉」在定时器抖动下
+           实际常变成 4 秒一次（用户感受就是「在线协同更新很慢」）；现在按 gap 判定，误差 ≤600ms。
+           有人在线时 gap 自动切到 1.2s / 3.5s，没别人时仍是 2s / 8s 省流量 */
         setInterval(function () {
+          const hidden = document.visibilityState === 'hidden';
           const act = Date.now() - (window._lmLastAct || 0) < 30000;
-          const gap = document.visibilityState === 'hidden' ? POLL_HIDDEN : (act ? POLL_ACTIVE : POLL_IDLE);
+          const gap = pollGapNow(hidden, act, peersHot());
           if (!GH.timer || Date.now() - GH.timer >= gap) { GH.timer = Date.now(); ghPull(); }
-        }, 2000);
+        }, 600);
       }
       ghPull();
       return;
@@ -1021,7 +1074,12 @@ window.LMCollab = (function () {
         GH._wired = 'visitor';
         GH.cfg = { owner: h.split('.')[0], repo: p.split('/')[1], branch: 'main', path: 'data/content.js' };
         modeLabel = '云端只读';
-        setInterval(ghPull, POLL_VISITOR);
+        /* ★ 修复88：访客从前台 90 秒才刷一次 → 25 秒（后台仍 90 秒）。raw 请求已带 ?t= 破缓存，
+           所以手机访客看别人改的内容不再「要等一分半」 */
+        setInterval(function () {
+          const gap = visitorGapNow(document.visibilityState === 'hidden');
+          if (!GH.timer || Date.now() - GH.timer >= gap) { GH.timer = Date.now(); ghPull(); }
+        }, 1000);
       }
       ghPull();
     }
@@ -1125,6 +1183,15 @@ window.LMCollab = (function () {
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) return;
       pointerDown = false; pointerAt = 0; flushPending();
+      /* ★ 修复88：手机切回前台立刻补拉一次 + 马上重播自己的 presence（否则要等下一个轮询
+         周期，15 秒后别人那边才重新看到「你在编辑」，看着就像「很久才同步」） */
+      try { if (GH.cfg) { GH.timer = Date.now(); ghPull(); } } catch (eVis) { /* noop */ }
+      try { if (window.LMYCollab && window.LMYCollab.wake) window.LMYCollab.wake(); } catch (eWk) { /* noop */ }
+    });
+    /* ★ 修复88：网络恢复（地铁/电梯出来）立刻补拉，不等下一个周期 */
+    window.addEventListener('online', function () {
+      try { if (GH.cfg) { GH.timer = 0; ghPull(); } } catch (eOn) { /* noop */ }
+      try { hello(); } catch (eOn2) { /* noop */ }
     });
     /* ★ 修复72：挂起包定时分流 —— 不再只等 mouseup / focusout：用户只是「停手不动」时，
        对方的内容也能在 1 秒内自己出现，不必再点一下页面 */
@@ -1205,7 +1272,15 @@ window.LMCollab = (function () {
         Yjs就绪: !!(window.LMYCollab && window.LMYCollab.yjs),
         Yjs同伴: (window.LMYCollab && window.LMYCollab.peerCount) ? window.LMYCollab.peerCount() : 0,
         在线设备: liveCount(),
-        通道: modeLabel
+        通道: modeLabel,
+        /* ★ 修复88：现场可核对当前节奏（有人在线会自动更快） */
+        节奏: (function () {
+          try {
+            const hot = peersHot();
+            const gap = pollGapNow(document.visibilityState === 'hidden', Date.now() - (window._lmLastAct || 0) < 30000, hot);
+            return { 有人在线: hot, 轮询秒: gap / 1000, 推送最小间隔秒: pushWaitMin(hot) / 1000 };
+          } catch (eR2) { return '未知'; }
+        })()
       };
       try { console.log('【协同自检】', o); } catch (eD) { /* noop */ }
       return o;

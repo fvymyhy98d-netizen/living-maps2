@@ -466,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '87';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '88';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -1765,6 +1765,99 @@ T('正文块：行内高亮时一并清掉旧版整段底色 b.style.hl（否则
     } catch (e) { ok52 = false; d52 = '抛出 ' + e.message; }
   }
   T('真跑：高亮带色 · 换色不留半截 == · 同色/∅ 取消 · 渐变写到 @@gradN,@@ 并渲染出 .grad-N · 高亮里的加粗不被吞', ok52, d52);
+})();
+
+/* ---------- 9.53) 修复88：在线协同提速（有人在线自动更快）+ 结构冲突可见化 ---------- */
+console.log('【9.53】修复88：有人在线时轮询/推送自动提速 · 回前台立刻补拉 · 结构冲突不再静默覆盖');
+const cs88 = srcOf('js/collab.js'), ys88 = srcOf('js/ycollab.js');
+T('节奏参数：有人在线 1.2s / 3.5s、独自 2s / 8s、隐藏 60s；推送 2.6s vs 6s；访客前台 25s',
+  cs88.indexOf('var HOT_PUSH_MIN = 2600, HOT_ACTIVE = 1200, HOT_IDLE = 3500, VISITOR_SHOWN = 25000;') > 0
+    && cs88.indexOf('function pollGapNow(hidden, act, hot) {') > 0
+    && cs88.indexOf('function visitorGapNow(hidden) { return hidden ? POLL_VISITOR : VISITOR_SHOWN; }') > 0
+    && cs88.indexOf('function pushWaitMin(hot) { return hot ? HOT_PUSH_MIN : GH_PUSH_MIN; }') > 0);
+T('轮询节拍 2s→600ms（旧版定时器抖动下实际常 4 秒才拉一次），间隔走 pollGapNow',
+  cs88.indexOf('const gap = pollGapNow(hidden, act, peersHot());') > 0
+    && cs88.indexOf('        }, 600);') > 0);
+T('访客只读轮询不再写死 90 秒：前台 25s / 后台 90s，且同样走 gap 判定',
+  cs88.indexOf("const gap = visitorGapNow(document.visibilityState === 'hidden');") > 0
+    && cs88.indexOf('setInterval(ghPull, POLL_VISITOR)') < 0);
+T('切回前台 / 网络恢复立刻补拉 + 立刻重播 presence（手机「回来半天不动」的根因）',
+  cs88.indexOf("try { if (GH.cfg) { GH.timer = Date.now(); ghPull(); } } catch (eVis) { /* noop */ }") > 0
+    && cs88.indexOf("if (window.LMYCollab && window.LMYCollab.wake) window.LMYCollab.wake();") > 0
+    && cs88.indexOf("window.addEventListener('online', function () {") > 0
+    && ys88.indexOf('wake: function () { try { setAw();') > 0);
+T('结构冲突不再静默：块数不一致且本机有更新块（_ts 更大）时提示一次，并挂进 doApply',
+  cs88.indexOf('function structConflictWarn(c, by) {') > 0
+    && cs88.indexOf('structConflictWarn(c, by); /* ★ 修复88') > 0
+    && cs88.indexOf('结构改动冲突：本页已采用对方版本') > 0);
+T('diag 里能直接看到当前节奏（现场核对「有人在线是否真的更快」）',
+  cs88.indexOf('节奏: (function () {') > 0 && cs88.indexOf('推送最小间隔秒: pushWaitMin(hot) / 1000') > 0);
+
+/* 真跑 A：三个节奏纯函数 —— 直接验数字（含隐藏 / 活动 / 有人在线 三维组合） */
+(function () {
+  const src = cs88.replace(/\r\n/g, '\n');
+  const a = src.indexOf('  /* GitHub 轮询间隔：隐藏 60s');
+  const endMark = '  function pushWaitMin(hot) { return hot ? HOT_PUSH_MIN : GH_PUSH_MIN; }';
+  const b = src.indexOf(endMark);
+  const code = (a >= 0 && b > a) ? src.slice(a, b) + endMark : '';
+  let ok = false, detail = '切片不可用';
+  if (code) {
+    try {
+      const consts = 'var GH_PUSH_MIN=6000,POLL_ACTIVE=2000,POLL_IDLE=8000,POLL_HIDDEN=60000,POLL_VISITOR=90000,'
+        + 'HOT_PUSH_MIN=2600,HOT_ACTIVE=1200,HOT_IDLE=3500,VISITOR_SHOWN=25000;\n';
+      const api = new Function(consts + code + '\nreturn { pollGapNow: pollGapNow, visitorGapNow: visitorGapNow, pushWaitMin: pushWaitMin };')();
+      ok = api.pollGapNow(true, false, false) === 60000
+        && api.pollGapNow(true, true, true) === 60000
+        && api.pollGapNow(false, true, true) === 1200
+        && api.pollGapNow(false, true, false) === 2000
+        && api.pollGapNow(false, false, true) === 3500
+        && api.pollGapNow(false, false, false) === 8000
+        && api.visitorGapNow(false) === 25000 && api.visitorGapNow(true) === 90000
+        && api.pushWaitMin(true) === 2600 && api.pushWaitMin(false) === 6000;
+      if (!ok) detail = JSON.stringify({
+        hide: api.pollGapNow(true, true, true), hotAct: api.pollGapNow(false, true, true),
+        soloAct: api.pollGapNow(false, true, false), hotIdle: api.pollGapNow(false, false, true),
+        soloIdle: api.pollGapNow(false, false, false),
+        visitor: [api.visitorGapNow(false), api.visitorGapNow(true)],
+        push: [api.pushWaitMin(true), api.pushWaitMin(false)]
+      });
+    } catch (e) { ok = false; detail = '抛出 ' + e.message; }
+  }
+  T('真跑节奏：隐藏恒 60s · 有人在线 1.2s/3.5s · 独自 2s/8s · 访客 25s/90s · 推送 2.6s/6s', ok, detail);
+})();
+
+/* 真跑 B：structConflictWarn —— 只有「块数不同 + 本机 _ts 更新」才提醒，且 15 秒去抖 */
+(function () {
+  const src = cs88.replace(/\r\n/g, '\n');
+  const a = src.indexOf('  var _structWarnAt = 0;');
+  const b = a >= 0 ? src.indexOf('\n  }\n', a) : -1;
+  const code = (a >= 0 && b > a) ? src.slice(a, b + 4) : '';
+  let ok = false, detail = '切片不可用';
+  if (code) {
+    try {
+      const mkPage = function (n, ts) {
+        const blocks = [];
+        for (let i = 0; i < n; i++) blocks.push({ type: 'paragraph', text: 'b' + i, _ts: ts });
+        return { id: 'p1', blocks: blocks };
+      };
+      /* 同一个实例 = 同一个运行期（_structWarnAt 才有意义，去抖只能在同一实例里验） */
+      const mkRunner = function (localN, localTs) {
+        const toasts = [];
+        const lm = { state: { content: { pages: [mkPage(localN, localTs)] } }, toast: function (m) { toasts.push(m); } };
+        const fn = new Function('window', 'LMApp', code + '\nreturn structConflictWarn;')({ LMApp: lm }, lm);
+        return function (remoteN, remoteTs) { fn({ pages: [mkPage(remoteN, remoteTs)] }, '小李'); return toasts.slice(); };
+      };
+      const hotRun = mkRunner(3, 900);
+      const t1 = hotRun(2, 100);   /* 本机多一块且更新，却被整页覆盖 → 提示 */
+      const t4 = hotRun(2, 100);   /* 同一实例紧接一次 → 15 秒去抖，仍只有 1 条 */
+      const t2 = mkRunner(3, 100)(2, 900);   /* 对方更新 → 正常覆盖，不提示 */
+      const t3 = mkRunner(3, 900)(3, 100);   /* 块数一致 → 块级后写优先，不提示 */
+      ok = t1.length === 1 && t1[0].indexOf('结构改动冲突') > 0 && t1[0].indexOf('小李') > 0
+        && t4.length === 1 && t2.length === 0 && t3.length === 0;
+      if (!ok) detail = JSON.stringify({ t1: t1.length, t2: t2.length, t3: t3.length, t4: t4.length });
+    } catch (e) { ok = false; detail = '抛出 ' + e.message; }
+  }
+  T('真跑冲突提示：块数不同 + 本机更新才提醒（点名对方）· 对方更新/块数一致不提醒 · 15 秒去抖', ok, detail);
 })();
 
 
