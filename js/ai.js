@@ -280,21 +280,41 @@ W.LMAI = (function () {
     idx = buildIndex(c.pages);
     return idx;
   }
-  /* ---------- ⑨.1 ★ 修复106：DeepSeek 接入（两条路，都不把 Key 写进代码） ----------
-     ① 「复制给 DeepSeek 网页」：把本页**结构化正文** + 你的问题拼成提示词，一键复制并打开
-        chat.deepseek.com —— 零 Key、零费用，等效于「先让 DeepSeek 看一眼这个网页再提问」。
-     ② 「用我的 Key 直连」：Key 只存**这台设备的浏览器**（localStorage），请求直连 api.deepseek.com。
-        硬事实：静态网页里没有秘密 —— 写进代码 / 提交到仓库的 Key，任何人 view-source 或打开
-        Network 面板都能看到；所以只做「每台设备自己填」，不做「全班共用一把 Key」。
-        真要共用，必须放在服务端代理（如 Cloudflare Worker 的 Secret）里，前端只调你的代理。 */
-  const AI_KEY = 'lm_ai_key_v1', AI_MODEL = 'lm_ai_model_v1';
-  const AI_BASE = 'https://api.deepseek.com';
-  function aiKey() { try { return localStorage.getItem(AI_KEY) || ''; } catch (e) { return ''; } }
-  function setAiKey(k) {
-    try { if (k) localStorage.setItem(AI_KEY, String(k).trim()); else localStorage.removeItem(AI_KEY); } catch (e) { /* noop */ }
+  /* ---------- ⑨.1 ★ 修复107：和 DeepSeek 对话（**不用 API**） ----------
+     明确结论：本站**不接 API、不存任何 Key**。原因不是保守 —— 静态网页里没有秘密，
+     任何写进前端的 Key 都等于公开（view-source 就能看到），而且你也不想要按量计费的 API。
+     所以走的是「一键接力」：
+       ① 发送：把**当前页的结构化正文**（pageDigest：标题层级 / 表格逐行 / 图表数据 / 来源附件）
+          + 你的问题拼成一条消息，整条复制到剪贴板，并打开 chat.deepseek.com；
+       ② 你在 DeepSeek 输入框按一次 Ctrl/⌘+V 就发出去（网页正文已经"附在前面"）；
+       ③ 回来后点「把 DeepSeek 的回答粘回来」，回答就存进这个对话框（按页保存在本机 localStorage），
+          下次打开还在 —— 看起来就是"在这里和 DeepSeek 聊天"。
+     为什么不能真把官网的回答拉进页面：chat.deepseek.com 有 X-Frame-Options/CSP 禁止被 iframe 嵌；
+     跨域也拿不到别的标签页的输入框与回答（同源策略）；不接 API 就没有合法的机器可读通道。 */
+  const CHAT_KEY = 'lm_ai_chat_v1';
+  function chatAll() {
+    try {
+      const j = JSON.parse(localStorage.getItem(CHAT_KEY) || '{}');
+      return (j && typeof j === 'object') ? j : {};
+    } catch (e) { return {}; }
   }
-  function aiModel() { try { return localStorage.getItem(AI_MODEL) || 'deepseek-chat'; } catch (e) { return 'deepseek-chat'; } }
-  function setAiModel(m) { try { localStorage.setItem(AI_MODEL, (m === 'deepseek-reasoner' ? 'deepseek-reasoner' : 'deepseek-chat')); } catch (e) { /* noop */ } }
+  function chatOf(id) {
+    const a = chatAll()[id];
+    return Array.isArray(a) ? a : [];
+  }
+  function chatPush(id, msg) {
+    if (!id || !msg) return;
+    const all = chatAll();
+    const arr = Array.isArray(all[id]) ? all[id] : [];
+    arr.push({ r: msg.r || 'me', t: String(msg.t || '').slice(0, 4000), ts: Date.now(), src: msg.src || null });
+    all[id] = arr.slice(-12);                       /* 每页最多留 12 条，防 localStorage 膨胀 */
+    try { localStorage.setItem(CHAT_KEY, JSON.stringify(all)); } catch (e) { /* 隐私模式：只在本页内存生效 */ }
+  }
+  function chatClear(id) {
+    const all = chatAll();
+    delete all[id];
+    try { localStorage.setItem(CHAT_KEY, JSON.stringify(all)); } catch (e) { /* noop */ }
+  }
   function pageById(id) {
     const c = content();
     if (!c || !Array.isArray(c.pages)) return null;
@@ -351,34 +371,8 @@ W.LMAI = (function () {
       return ok ? Promise.resolve() : Promise.reject(new Error('copy-fail'));
     } catch (e2) { return Promise.reject(e2); }
   }
-  /* 直连 DeepSeek（OpenAI 兼容 /chat/completions）；失败给出人话原因 */
-  function askDeepSeek(q, p) {
-    const key = aiKey();
-    if (!key) return Promise.reject(new Error('还没填 API Key：点 ⚙ 填一个（只存本机），或者用「📋 复制给 DeepSeek 网页」'));
-    const body = {
-      model: aiModel(),
-      messages: [
-        { role: 'system', content: '你是学习站点里的助教，回答必须基于用户给出的页面内容，简洁、分点、不编造。' },
-        { role: 'user', content: promptFor(p, q) }
-      ],
-      temperature: 0.3, stream: false, max_tokens: 900
-    };
-    return fetch(AI_BASE + '/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-      body: JSON.stringify(body)
-    }).then(function (r) {
-      if (r.status === 401) throw new Error('API Key 无效或已撤销（401）：点 ⚙ 重新填');
-      if (r.status === 402) throw new Error('DeepSeek 账户余额不足（402）：去 platform.deepseek.com 充值后再试');
-      if (r.status === 429) throw new Error('请求太频繁（429）：等一下再问，或在 DeepSeek 后台看用量');
-      if (!r.ok) throw new Error('DeepSeek 返回 HTTP ' + r.status);
-      return r.json();
-    }).then(function (j) {
-      const t = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
-      if (!t) throw new Error('DeepSeek 没有返回内容（响应格式不对）');
-      return String(t).trim();
-    });
-  }
+  /* ★ 修复107：这里原本有一个「带 Key 直连官方接口」的函数 —— 已按要求**整块删除**。
+     现在本站**没有任何 API 调用、不读写任何 Key**，`test_yjs` 断言「ai.js 全文 0 处 fetch」。 */
 
   function renderPanel() {
     if (!panel) return;
@@ -391,7 +385,33 @@ W.LMAI = (function () {
     const kws = keywords(ix, id, 8);
     const rel = related(ix, id, 3);
     const title = ix.docs.filter(function (d) { return d.id === id; }).map(function (d) { return d.label; })[0] || id;
-    let h = '<div class="lm-ai-cur">正在看：<b>' + esc(title) + '</b></div>';
+    /* ① 对话框**放最上面**（用户明确要求：不要让"相关条目 / 生态地图 / 更新记录"这些模块压在上面） */
+    const msgs = chatOf(id);
+    let h = '<div class="lm-ai-chat" role="log" aria-label="与 DeepSeek 的对话">';
+    h += msgs.length
+      ? msgs.map(function (m) {
+        const cls = m.r === 'me' ? 'me' : (m.r === 'local' ? 'local' : 'ds');
+        const who = m.r === 'me' ? '我' : (m.r === 'local' ? '本站速答' : 'DeepSeek');
+        const src = (m.src && m.src.pageId)
+          ? '<a class="lm-ai-src" href="#/p/' + encodeURIComponent(m.src.pageId) + '">出自《' + esc(m.src.title || '') + '》· 相关度 ' + m.src.score + '</a>'
+          : '';
+        return '<div class="lm-ai-msg ' + cls + '"><span class="lm-ai-who">' + who + '</span><p>'
+          + esc(m.t).replace(/\n/g, '<br>') + '</p>' + src + '</div>';
+      }).join('')
+      : '<p class="lm-ai-tip">还没有对话。写个问题 → 点「发给 DeepSeek」：会把<b>这一页正文</b>自动附在问题前面并复制好、打开网页版，你按一次 <b>Ctrl/⌘+V</b> 就发出；回来点「📥 粘回回答」，对话就留在这里。</p>';
+    h += '</div>';
+    h += '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="问点什么…（会自动附上本页正文）" aria-label="和 DeepSeek 对话">'
+      + '<button class="btn btn-primary lm-ai-go" type="button">发给 DeepSeek</button></div>'
+      + '<div class="lm-ai-row">'
+      + '<button class="btn lm-ai-local" type="button" title="不离开本站：只用本站已经写过的内容回答（不联网）">⚡ 本站速答</button>'
+      + '<button class="btn lm-ai-paste" type="button" title="在 DeepSeek 网页里选中回答复制，粘回这里保存进对话">📥 粘回回答</button>'
+      + '<button class="btn lm-ai-clear" type="button" title="清空这一页的对话">🗑 清空</button>'
+      + '</div>'
+      + '<div class="lm-ai-pastebox" hidden><textarea class="lm-ai-pasteta" placeholder="把 DeepSeek 的回答粘到这里（Ctrl/⌘+V），再点「保存到对话」"></textarea>'
+      + '<button class="btn lm-ai-pastesave" type="button">保存到对话</button></div>'
+      + '<div class="lm-ai-ans"></div>';
+    /* ② 其余的辅助卡片放在对话框**下面** */
+    h += '<div class="lm-ai-cur">正在看：<b>' + esc(title) + '</b></div>';
     h += '<h4 class="lm-ai-h">📌 这一页的要点</h4>';
     h += pts.length
       ? '<ol class="lm-ai-list">' + pts.map(function (s) {
@@ -410,95 +430,69 @@ W.LMAI = (function () {
           + '<span class="lm-ai-score">' + Math.round(r.score * 100) + '%</span></a>';
       }).join('') + '</div>'
       : '<p class="lm-ai-tip">—</p>';
-    const hasKey = !!aiKey();
-    h += '<h4 class="lm-ai-h">💬 问一句' + (hasKey ? '（DeepSeek 会读这一页正文）' : '（没填 Key 时只回答本站写过的内容）') + '</h4>'
-      + '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="例如：Transformer 是什么？" aria-label="提问">'
-      + '<button class="btn btn-primary lm-ai-go" type="button">提问</button></div>'
-      + '<div class="lm-ai-row">'
-      + '<button class="btn lm-ai-ai" type="button" title="用 DeepSeek 读这一页并总结（需要 Key）">🤖 DeepSeek 总结本页</button>'
-      + '<button class="btn lm-ai-copy" type="button" title="把本页正文 + 你的问题复制成提示词，并打开 DeepSeek 网页版，粘贴即可提问（不需要 Key）">📋 复制给 DeepSeek 网页</button>'
-      + '<button class="btn lm-ai-set" type="button" title="设置 API Key（只存这台设备）">⚙</button>'
-      + '</div>'
-      + '<div class="lm-ai-keybox" hidden>'
-      + '<input class="lm-ai-key" type="password" placeholder="sk-…（只存这台设备）" autocomplete="off" aria-label="DeepSeek API Key">'
-      + '<button class="btn lm-ai-save" type="button">保存</button>'
-      + '<button class="btn lm-ai-clear" type="button">清除</button>'
-      + '<select class="lm-ai-model" aria-label="模型"><option value="deepseek-chat">deepseek-chat（快 · 便宜）</option><option value="deepseek-reasoner">deepseek-reasoner（推理强 · 慢）</option></select>'
-      + '<p class="lm-ai-tip">Key 只保存在<b>这台设备的浏览器</b>（localStorage），不上传、不同步给别人。<b>别写进仓库、别在群里发同一把</b>：静态网页里任何 Key 都等于公开（view-source 就能看到）。要给全班共用，只能放到服务端代理（Cloudflare Worker 的 Secret）。</p>'
-      + '</div>'
-      + '<div class="lm-ai-ans"></div>';
     body.innerHTML = h;
     const input = body.querySelector('.lm-ai-input');
     const go = body.querySelector('.lm-ai-go');
     const ans = body.querySelector('.lm-ai-ans');
-    const kb = body.querySelector('.lm-ai-keybox');
-    const kIn = body.querySelector('.lm-ai-key');
-    const mdl = body.querySelector('.lm-ai-model');
-    if (kIn) kIn.value = aiKey();
-    if (mdl) mdl.value = aiModel();
-    const setBtn = body.querySelector('.lm-ai-set');
-    if (setBtn) setBtn.addEventListener('click', function () {
-      if (!kb) return;
-      kb.hidden = !kb.hidden;
-      if (!kb.hidden && kIn) kIn.focus();
+    const chatEl = body.querySelector('.lm-ai-chat');
+    if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+    /* 发送 = 「这一页正文 + 你的问题」整条复制 + 打开网页版（不接 API、不存 Key） */
+    const send = function () {
+      const q = String((input && input.value) || '').trim();
+      if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，比如「Transformer 和 RNN 有什么区别」。</p>'; return; }
+      const txt = promptFor(pageById(id), q);
+      chatPush(id, { r: 'me', t: q });
+      const okHint = function () {
+        chatPush(id, {
+          r: 'ds',
+          t: '✅ 已复制「这一页正文 + 你的问题」（约 ' + txt.length + ' 字），DeepSeek 网页在新标签打开了。\n① 在它的输入框按 Ctrl/⌘+V 粘贴并发送；\n② 回来点「📥 粘回回答」，把它的回答存进这个对话。'
+        });
+        renderPanel();
+      };
+      copyText(txt).then(function () {
+        try { window.open('https://chat.deepseek.com/', '_blank', 'noopener'); } catch (e) { /* 弹窗被拦也留提示 */ }
+        okHint();
+      }, function () {
+        chatPush(id, { r: 'ds', t: '浏览器拦了剪贴板：下面是完整的消息，手动全选复制后粘到 DeepSeek。\n\n' + txt });
+        renderPanel();
+      });
+    };
+    /* 本站速答：不联网，只用站里写过的句子（抽取式，绝不编造） */
+    const localAsk = function () {
+      const q = String((input && input.value) || '').trim();
+      if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，再点「⚡ 本站速答」。</p>'; return; }
+      const res = ask(ix, q, 2);
+      if (!res.length) { ans.innerHTML = '<p class="lm-ai-tip">本站没写过相关内容 —— 换个说法，或点「发给 DeepSeek」。</p>'; return; }
+      res.forEach(function (r) {
+        chatPush(id, { r: 'local', t: r.answer, src: { pageId: r.pageId, title: r.title, score: r.score } });
+      });
+      renderPanel();
+    };
+    if (go) go.addEventListener('click', send);
+    if (input) input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+    const localBtn = body.querySelector('.lm-ai-local');
+    if (localBtn) localBtn.addEventListener('click', localAsk);
+    /* 📥 把 DeepSeek 的回答粘回来，存进这个对话 */
+    const pb = body.querySelector('.lm-ai-pastebox');
+    const pta = body.querySelector('.lm-ai-pasteta');
+    const pasteBtn = body.querySelector('.lm-ai-paste');
+    if (pasteBtn) pasteBtn.addEventListener('click', function () {
+      if (!pb) return;
+      pb.hidden = !pb.hidden;
+      if (!pb.hidden && pta) pta.focus();
     });
-    const saveBtn = body.querySelector('.lm-ai-save');
-    if (saveBtn) saveBtn.addEventListener('click', function () {
-      setAiKey(kIn && kIn.value);
-      setAiModel(mdl && mdl.value);
-      if (window.LMApp && LMApp.toast) LMApp.toast(aiKey() ? '✅ Key 已保存到本机（刷新也在，别人看不到）' : '已清除本机 Key');
+    const pasteSave = body.querySelector('.lm-ai-pastesave');
+    if (pasteSave) pasteSave.addEventListener('click', function () {
+      const t = String((pta && pta.value) || '').trim();
+      if (!t) { if (pta) pta.focus(); return; }
+      chatPush(id, { r: 'ds', t: t });
       renderPanel();
     });
     const clrBtn = body.querySelector('.lm-ai-clear');
     if (clrBtn) clrBtn.addEventListener('click', function () {
-      setAiKey('');
-      if (window.LMApp && LMApp.toast) LMApp.toast('已清除本机 Key');
+      chatClear(id);
+      if (window.LMApp && LMApp.toast) LMApp.toast('已清空这一页的对话');
       renderPanel();
-    });
-    if (mdl) mdl.addEventListener('change', function () { setAiModel(mdl.value); });
-    const showAI = function (q) {
-      ans.innerHTML = '<p class="lm-ai-tip">DeepSeek 正在读这一页…（通常 2–8 秒）</p>';
-      askDeepSeek(q, pageById(id)).then(function (txt) {
-        ans.innerHTML = '<div class="lm-ai-a lm-ai-a-ai"><p>' + esc(txt).replace(/\n/g, '<br>') + '</p>'
-          + '<span class="lm-ai-src">由 DeepSeek（' + esc(aiModel()) + '）基于本页生成 · 请自行核对</span></div>';
-      }, function (err) {
-        ans.innerHTML = '<p class="lm-ai-tip">' + esc((err && err.message) || '调用失败') + '</p>';
-      });
-    };
-    const runAsk = function () {
-      const q = String((input && input.value) || '').trim();
-      if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，比如「什么是 RAG」。</p>'; return; }
-      if (aiKey()) { showAI(q); return; }          /* 有 Key → 大模型（会带上本页正文） */
-      const res = ask(ix, q, 3);                   /* 没 Key → 本地抽取式，零联网 */
-      ans.innerHTML = res.length
-        ? res.map(function (r) {
-          return '<div class="lm-ai-a"><p>' + esc(r.answer) + '</p>'
-            + '<a class="lm-ai-src" href="#/p/' + encodeURIComponent(r.pageId) + '">出自《' + esc(r.title) + '》· 相关度 ' + r.score + '</a></div>';
-        }).join('')
-        : '<p class="lm-ai-tip">本站没写过相关内容 —— 换个说法试试；想让 AI 结合通用知识回答，点上面「📋 复制给 DeepSeek 网页」。</p>';
-    };
-    if (go) go.addEventListener('click', runAsk);
-    if (input) input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); runAsk(); } });
-    const aiBtn = body.querySelector('.lm-ai-ai');
-    if (aiBtn) aiBtn.addEventListener('click', function () {
-      if (!aiKey()) {
-        if (kb) kb.hidden = false;
-        if (kIn) kIn.focus();
-        ans.innerHTML = '<p class="lm-ai-tip">先点 ⚙ 填一个 Key（只存本机），或者用「📋 复制给 DeepSeek 网页」——那条不需要 Key。</p>';
-        return;
-      }
-      showAI(String((input && input.value) || '').trim());
-    });
-    const cpBtn = body.querySelector('.lm-ai-copy');
-    if (cpBtn) cpBtn.addEventListener('click', function () {
-      const txt = promptFor(pageById(id), String((input && input.value) || '').trim());
-      copyText(txt).then(function () {
-        ans.innerHTML = '<p class="lm-ai-tip">已复制这一页正文 + 你的问题（约 ' + txt.length + ' 字）。DeepSeek 网页已在新标签打开 —— 在输入框按 <b>Ctrl/⌘+V</b> 粘贴发送即可。</p>';
-        try { window.open('https://chat.deepseek.com/', '_blank', 'noopener'); } catch (e) { /* 弹窗被拦就只给提示 */ }
-      }, function () {
-        ans.innerHTML = '<p class="lm-ai-tip">复制失败（浏览器限制剪贴板）：手动全选下面这段再复制 ——'
-          + '<textarea class="lm-ai-fallback">' + esc(txt) + '</textarea></p>';
-      });
     });
   }
   function toggle(force) {
@@ -514,9 +508,9 @@ W.LMAI = (function () {
     fab.type = 'button';
     fab.className = 'lm-ai-fab';
     fab.id = 'lmAiFab';
-    fab.title = '智能提炼：要点 / 关键词 / 相关条目 / 站内问答（本地运行，离线可用）';
+    fab.title = '和 DeepSeek 对话：自动把这一页正文附在问题前面（不接 API、不存 Key）· 另有要点 / 关键词 / 相关条目';
     fab.setAttribute('aria-expanded', 'false');
-    fab.innerHTML = '✨<span class="lm-ai-fab-t">智能提炼</span>';
+    fab.innerHTML = '✨<span class="lm-ai-fab-t">问 DeepSeek</span>';
     fab.addEventListener('click', function () { toggle(); });
     document.body.appendChild(fab);
 
@@ -525,9 +519,9 @@ W.LMAI = (function () {
     panel.id = 'lmAiPanel';
     panel.hidden = true;
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-label', '智能提炼面板');
-    panel.innerHTML = '<div class="lm-ai-head"><b>✨ 智能提炼</b>'
-      + '<span class="lm-ai-badge">本地 AI · 可选 DeepSeek</span>'
+    panel.setAttribute('aria-label', '和 DeepSeek 对话');
+    panel.innerHTML = '<div class="lm-ai-head"><b>💬 和 DeepSeek 对话</b>'
+      + '<span class="lm-ai-badge">不用 API · 不存 Key</span>'
       + '<button type="button" class="lm-ai-x" aria-label="关闭">×</button></div>'
       + '<div class="lm-ai-body"></div>';
     document.body.appendChild(panel);
@@ -550,9 +544,9 @@ W.LMAI = (function () {
   return {
     plain: plain, blockText: blockText, pageText: pageText, sentences: sentences, tokens: tokens,
     buildIndex: buildIndex, related: related, keywords: keywords, summarize: summarize, ask: ask,
-    pageDigest: pageDigest, promptFor: promptFor, aiKey: aiKey, setAiKey: setAiKey, aiModel: aiModel, setAiModel: setAiModel,
-    askDeepSeek: askDeepSeek,
-    mount: mount, version: '1.1'
+    pageDigest: pageDigest, promptFor: promptFor,
+    chatOf: chatOf, chatPush: chatPush, chatClear: chatClear,
+    mount: mount, version: '1.2'
   };
 })();
   /* Node（单元测试）也能 require 到同一份实现；浏览器里没有 module，自然跳过 */

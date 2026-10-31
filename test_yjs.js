@@ -2219,22 +2219,23 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return hit.length >= 1 && hit[0].answer.length >= 8 && none.length === 0;
     })(), JSON.stringify(ai.ask(ix, 'RAG 是什么', 1).map(function (r) { return r.pageId + '|' + r.answer.slice(0, 24); })));
 
-  T('零成本仍是默认：本地提炼/问答不发一个请求，只有填了 Key 的 DeepSeek 分支才联网（全文仅一处 fetch）',
+  T('零 API：ai.js 全文 **0 处 fetch**、没有 askDeepSeek、不存任何 Key（lm_ai_key_v1 必须 0 处）',
     (function () {
       const s = srcOf('js/ai.js');
-      const oneFetch = (s.match(/fetch\(/g) || []).length === 1;
-      const noXhr = s.indexOf('XMLHttpRequest') < 0 && s.indexOf('api.github.com') < 0;
-      const guarded = s.indexOf('if (!key) return Promise.reject') > 0;
-      const host = s.indexOf("'https://api.deepseek.com'") > 0;
-      return oneFetch && noXhr && guarded && host;
+      return (s.match(/fetch\(/g) || []).length === 0
+        && s.indexOf('XMLHttpRequest') < 0
+        && s.indexOf('askDeepSeek') < 0
+        && s.indexOf('lm_ai_key_v1') < 0
+        && s.indexOf('Authorization') < 0
+        && s.indexOf('api.deepseek.com') < 0
+        && s.indexOf('CHAT_KEY') > 0;
     })(), 'fetch 出现 ' + (srcOf('js/ai.js').match(/fetch\(/g) || []).length + ' 次');
 
-  T('CSP 只新增 api.deepseek.com 一个域名（没放开裸 https: · iframe 仍然 frame-src none）',
+  T('CSP 里不再有 api.deepseek.com（也不放开裸 https: · iframe 仍然 frame-src none）',
     (function () {
       const html = srcOf('index.html');
       const csp = (html.match(/connect-src[^;]*/) || [''])[0];
-      const bare = /(^|\s)https:(\s|$)/.test(csp);   /* 通配 https: 才是「全放开」 */
-      return html.indexOf('https://api.deepseek.com') > 0 && !bare
+      return html.indexOf('api.deepseek.com') < 0 && !/(^|\s)https:(\s|$)/.test(csp)
         && html.indexOf("frame-src 'none'") > 0;
     })(), (srcOf('index.html').match(/connect-src[^;]*/) || [''])[0].slice(0, 80));
 
@@ -2258,19 +2259,49 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       const a = ai.promptFor(p, ''), b = ai.promptFor(p, '什么是 RAG？');
       return a.indexOf('【我的问题】') > 0 && a.indexOf('3-5 条要点') > 0
         && b.indexOf('什么是 RAG？') > b.indexOf('【我的问题】') && b.indexOf('正文。') > 0
-        && b.indexOf('不要编造') > 0;
+        && b.indexOf('不要编造') > 0 && b.indexOf('【页面内容】') < b.indexOf('【我的问题】');
     })());
 
-  T('askDeepSeek 真跑：没填 Key 就**不联网**（返回被拒绝的 Promise，fetch 一次都没被调）',
+  T('对话记录真跑：chatPush/chatOf/chatClear 按页隔离 · 每页最多留 12 条（防 localStorage 膨胀）',
     (function () {
-      let called = 0;
-      const oldF = global.fetch;
-      global.fetch = function () { called++; return Promise.resolve({ ok: true, status: 200, json: function () { return {}; } }); };
-      let p = null;
-      try { p = ai.askDeepSeek('问一句', null); } catch (e) { p = null; }
-      global.fetch = oldF;
-      return called === 0 && !!p && typeof p.then === 'function';
-    })(), 'fetch 调用次数=0 · Key 只存本机（lm_ai_key_v1）');
+      const mem = {};
+      const oldLS = global.localStorage;
+      global.localStorage = {
+        getItem: function (k) { return (k in mem) ? mem[k] : null; },
+        setItem: function (k, v) { mem[k] = String(v); },
+        removeItem: function (k) { delete mem[k]; }
+      };
+      let ok = false;
+      try {
+        ai.chatPush('pA', { r: 'me', t: '问题一' });
+        ai.chatPush('pA', { r: 'ds', t: '回答一' });
+        for (let i = 0; i < 15; i++) ai.chatPush('pA', { r: 'me', t: '追加' + i });
+        const a = ai.chatOf('pA');
+        const b = ai.chatOf('pB');
+        ok = a.length === 12 && b.length === 0 && a[a.length - 1].t === '追加14'
+          && a[0].r === 'me' && typeof a[0].ts === 'number';
+        ai.chatPush('pB', { r: 'local', t: '只属于 pB', src: { pageId: 'home', title: '首页', score: 0.8 } });
+        ok = ok && ai.chatOf('pB').length === 1 && ai.chatOf('pA').length === 12
+          && ai.chatOf('pB')[0].src.pageId === 'home';
+        ai.chatClear('pA');
+        ok = ok && ai.chatOf('pA').length === 0 && ai.chatOf('pB').length === 1;
+      } finally {
+        if (oldLS === undefined) { try { delete global.localStorage; } catch (e) { global.localStorage = undefined; } }
+        else global.localStorage = oldLS;
+      }
+      return ok;
+    })());
+
+  T('界面顺序：对话框在面板**最上面**（.lm-ai-chat 必须排在「这一页的要点 / 相关条目」之前）',
+    (function () {
+      const s = srcOf('js/ai.js');
+      const iChat = s.indexOf('lm-ai-chat');
+      const iPts = s.indexOf('这一页的要点');
+      const iRel = s.indexOf('🔗 相关条目');
+      return iChat > 0 && iPts > iChat && iRel > iChat
+        && s.indexOf('发给 DeepSeek') > 0 && s.indexOf('lm-ai-pastesave') > 0
+        && s.indexOf('lm-ai-local') > 0;
+    })());
 
   T('接入完毕：index.html 引入 js/ai.js（带版本号）· 样式有浮标与面板 · README 把 AI 能力标成已完成',
     (function () {
@@ -2699,10 +2730,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=106 · LM_ASSET_VER=106',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=107 · LM_ASSET_VER=107',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=105/g) || []).length === 0 && /\?v=106/.test(html)
-      && /LM_ASSET_VER = '106'/.test(appJs));
+      && (html.match(/\?v=106/g) || []).length === 0 && /\?v=107/.test(html)
+      && /LM_ASSET_VER = '107'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3055,10 +3086,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 106（?v=106 共 20 处 · v105 无残留 · LM_ASSET_VER=106）',
-    (html.match(/\?v=106/g) || []).length === 20 && (html.match(/\?v=105/g) || []).length === 0
-      && /LM_ASSET_VER = '106'/.test(appJs),
-    'v106=' + (html.match(/\?v=106/g) || []).length + ' v105=' + (html.match(/\?v=105/g) || []).length);
+  T('版本已升到 107（?v=107 共 20 处 · v106 无残留 · LM_ASSET_VER=107）',
+    (html.match(/\?v=107/g) || []).length === 20 && (html.match(/\?v=106/g) || []).length === 0
+      && /LM_ASSET_VER = '107'/.test(appJs),
+    'v107=' + (html.match(/\?v=107/g) || []).length + ' v106=' + (html.match(/\?v=106/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

@@ -1183,14 +1183,20 @@ body.mobile-view .kid-pick{max-height:34vh}
 .lm-ai-a p{font-size:14px;line-height:1.55}
 .lm-ai-src{display:inline-block;margin-top:4px;font-size:12px;color:var(--text2)}
 .lm-ai-tip{font-size:13px;color:var(--text2);margin:6px 0}
-/* ★ 修复106：DeepSeek 两条路 —— 「复制提示词给网页版」（零 Key）与「本机 Key 直连」 */
+/* ★ 修复107：和 DeepSeek 对话（不用 API · 不存 Key）—— 对话框在面板最上面，消息气泡 + 粘回回答 */
+.lm-ai-chat{display:flex;flex-direction:column;gap:8px;max-height:min(38vh,300px);overflow:auto;padding:4px 2px 2px;margin-top:2px}
+.lm-ai-msg{max-width:92%;border-radius:14px;padding:7px 10px;font-size:13.5px;line-height:1.5}
+.lm-ai-msg p{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
+.lm-ai-who{font-size:11px;color:var(--text2)}
+.lm-ai-msg.me{align-self:flex-end;background:rgba(0,113,227,.1);border:1px solid rgba(0,113,227,.18)}
+.lm-ai-msg.ds{align-self:flex-start;background:var(--bg2);border:1px solid var(--line)}
+.lm-ai-msg.local{align-self:flex-start;background:#fff;border:1px dashed var(--line)}
 .lm-ai-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .lm-ai-row .btn{font-size:12px;padding:6px 10px;border-radius:9px}
-.lm-ai-keybox{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;border:1px dashed var(--line);border-radius:10px;padding:8px}
-.lm-ai-keybox[hidden]{display:none}
-.lm-ai-key{flex:1 1 140px;min-width:0;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit;background:#fff;color:var(--text)}
-.lm-ai-model{font-size:12px;border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-family:inherit;background:#fff;color:var(--text)}
-.lm-ai-keybox .lm-ai-tip{flex:1 1 100%;margin:4px 0 0}
+.lm-ai-pastebox{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+.lm-ai-pastebox[hidden]{display:none}
+.lm-ai-pasteta{min-height:76px;resize:vertical;border:1px solid var(--line);border-radius:10px;padding:8px;font-size:13px;font-family:inherit;background:#fff;color:var(--text)}
+.lm-ai-pastesave{align-self:flex-start;font-size:12px;padding:6px 10px;border-radius:9px}
 .lm-ai-a-ai{border-left-color:#4d6bfe}
 .lm-ai-fallback{margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:12px;border:1px solid var(--line);border-radius:8px;padding:6px}
 @media (max-width:640px){
