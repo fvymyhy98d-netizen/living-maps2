@@ -49,7 +49,9 @@ window.LMStore = (function () {
           if (bs.length !== p.blocks.length) dropped++;
           np.blocks = bs;
         } else { np.blocks = []; dropped++; }
-        if (typeof np.title !== 'string') np.title = np.title == null ? '' : String(np.title);
+        /* ★ 修复122：只在「类型不对」时修正，绝不给正常内容补字段 ——
+           否则每次启动内容都会变一丁点（如多出 title:''），和无谓的协同推送/重绘抖动绑在一起 */
+        if (np.title != null && typeof np.title !== 'string') np.title = String(np.title);
         pages.push(np);
       });
       if (!pages.length) return { ok: false, why: '没有可用的页面（pages 里没有有效页对象）' };

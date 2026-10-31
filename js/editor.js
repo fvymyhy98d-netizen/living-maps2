@@ -3765,16 +3765,19 @@ window.LMEditor = (function () {
       function (root) {
         const useSrc = function (src) {
           /* ★ 修复122：内容全存在浏览器 localStorage（约 5MB）里，本地图片按 base64 存 → 体积再涨约 1.37 倍。
-             以前是「插进去看着成功 → 保存静默失败 → 刷新丢图」。现在插入前先按总预算拦下并说明原因。 */
+             以前是「插进去看着成功 → 保存静默失败 → 刷新丢图」。现在插入前先按总预算拦下并说明原因。
+             ★ 替换选中图片时要把旧图体积扣掉，否则「内容已占 3.9MB + 换成小图」会被误拦。 */
+          const tgt = imgBlock();
+          const oldLen = (tgt && tgt.type === 'image' && typeof tgt.src === 'string') ? tgt.src.length : 0;
           let cur = 0;
           try { cur = JSON.stringify(LMApp.state.content || {}).length; } catch (eS0) { cur = 0; }
           const add = String(src || '').length;
-          if (cur + add > 4 * 1024 * 1024) {
-            LMApp.toast('图片太大：本机存储约 5MB，当前内容已占 ' + Math.round(cur / 1024)
+          if (cur - oldLen + add > 4 * 1024 * 1024) {
+            LMApp.toast('图片太大：本机存储约 5MB，当前内容已占 ' + Math.round((cur - oldLen) / 1024)
               + 'KB，这张图再加 ' + Math.round(add / 1024) + 'KB 就存不下了。请先压缩（建议 <500KB）或改用图片链接');
             return;
           }
-          const ib = imgBlock();
+          const ib = tgt;
           if (ib && ib.type === 'image') { ib.src = src; LMApp.commit({ silent: true }); LMApp.toast('图片已更新'); return; }
           insertAt({ type: 'image', src: src, caption: '', widthPct: 68 }, false, '图片已插入：悬停右上角 ⚙ 可加说明');
         };

@@ -2649,7 +2649,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       try { vc = new Function('window', 'return ' + s.slice(i0, end))({ SITE_CONTENT: { site: { title: '内置' } } }); } catch (e) { return false; }
       if (typeof vc !== 'function') return false;
       /* ① 正常内容原样通过 */
-      const ok1 = vc({ pages: [{ id: 'a', title: 'A', blocks: [{ type: 'paragraph', text: 'hi' }] }], site: { t: 1 } });
+      const ok1 = vc({ pages: [{ id: 'a', title: 'A', blocks: [{ type: 'paragraph', text: 'hi' }] }], site: { t: 1 }, config: {} });
       if (!ok1.ok || ok1.content.pages[0].blocks.length !== 1 || ok1.content.pages[0].id !== 'a' || ok1.repaired) return false;
       /* ② blocks 不是数组 → 当空并标 repaired */
       const ok2 = vc({ pages: [{ id: 'b', blocks: 'nope' }], site: {} });
@@ -2663,6 +2663,12 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       /* ⑤ 真没法用 → ok:false 且带原因 */
       if (vc(null).ok || vc({}).ok || vc({ pages: [] }).ok || vc({ pages: [null, 3] }).ok) return false;
       if (!vc({}).why) return false;
+      /* ⑦ 本来就是正常内容 → 校验不许多加任何字段
+         （否则每次启动内容都会变一点，连带产生无谓的协同推送与「已同步」提示）
+         注：根级 config 属必需字段，缺了会被补成 {}（ensureConfig 本来也会补），不算「多改」 */
+      const src7 = { pages: [{ id: 'e', label: 'L', blocks: [{ type: 'paragraph', text: 'x' }] }], site: { s: 1 }, config: {} };
+      const v7 = vc(src7);
+      if (!v7.ok || JSON.stringify(v7.content) !== JSON.stringify(src7)) return false;
       /* ⑥ 缺 site → 用内置 SITE_CONTENT 兜底（不因缺一个字段就判死） */
       const ok6 = vc({ pages: [{ id: 'd', blocks: [] }] });
       return ok6.ok && !!ok6.content.site;
@@ -2713,7 +2719,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && col2.indexOf('if (!v || !v.ok) { warnBadPack(v && v.why); return false; }') > 0
         && col2.indexOf('if (v.repaired) {') > 0
         && col2.indexOf('远端内容缺字段，已按规则补齐后应用') > 0
-        && edt3.indexOf('if (cur + add > 4 * 1024 * 1024) {') > 0
+        && edt3.indexOf('if (cur - oldLen + add > 4 * 1024 * 1024) {') > 0
         && edt3.indexOf('LMStore.validateContent(data)') > 0;
     })());
 
