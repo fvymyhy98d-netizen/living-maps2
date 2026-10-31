@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '117';
+var LM_ASSET_VER = '118';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2131,7 +2131,7 @@ window.LMApp = (function () {
       _fbBusy = false;
       if (r && r.ok && r.changed) {
         try { localStorage.setItem(FB_KEY, JSON.stringify(r.list)); } catch (e) { /* noop */ }
-        if (document.getElementById('fbMount')) mountFeedback();
+        fbRepaint();   /* ★ 修复118：走草稿保护，别把访客正在写的留言冲掉 */
       }
       if (showToast) toast(r && r.ok ? '☁ 反馈已同步到云端' : '⚠ 反馈云端同步失败（内容已存在本机）');
       return !!(r && r.ok);
@@ -2145,7 +2145,7 @@ window.LMApp = (function () {
     if (JSON.stringify(merged) === JSON.stringify(raw)) return 0;
     try { localStorage.setItem(FB_KEY, JSON.stringify(merged)); } catch (e) { return 0; }
     fbPushSoon();
-    if (document.getElementById('fbMount')) mountFeedback();
+    fbRepaint();   /* ★ 修复118：合并回来一条别人的留言也不许打断访客正在写的这一条 */
     /* ★ 修复96：返回「真正新增 / 被更新」的条数 —— 原来返回入参条数，重复拉同一份也会报「收到 N 条」 */
     const old = {};
     raw.forEach(function (x) { old[x.id] = x.updatedAt || x.ts || 0; });
@@ -2381,6 +2381,8 @@ window.LMApp = (function () {
      ★ 修复102：顺手补一次「记账中的重绘」—— 你刚才在打字、我压着没刷的那次，等你不打字了就补上。 */
   setInterval(function () {
     if (document.hidden) return;
+    /* ★ 修复118：留言区攒下的「打字中没敢重绘」在这一拍补上（与讨论区同一套逻辑） */
+    if (_fbDirty && document.getElementById('fbMount') && !fbBusy()) fbRepaint();
     if (!document.getElementById('dcMount')) { _dcDirty = false; return; }
     if (_dcDirty) dcRepaint();
     dcCloudPull();
@@ -2409,6 +2411,7 @@ window.LMApp = (function () {
   /* ★ 修复96：云存档配置区（管理员填一次，随内容同步给所有访客 —— 端点本来就该公开） */
   /* ★ 修复97：云存档测试结果常驻显示（toast 2.6 秒就消失，错误信息必须留在面板上） */
   let fbCloudMsg = '';
+  let _fbShareLink = '';       /* ★ 修复118：提交后「复制给组长」的链接（走事件委托，重绘后按钮照样能用） */
   function cloudMsg(txt) {
     fbCloudMsg = String(txt || '');
     const el = document.getElementById('fbCloudMsg');
@@ -2559,6 +2562,24 @@ window.LMApp = (function () {
       }
     } catch (eC) { /* noop */ }
   }
+  /* ★ 修复118：留言区也要「打字不被冲掉」
+     —— mountFeedback() 是整段 innerHTML 重建。以前只要云端 / MQTT / GitHub 合并回来一条别人的留言
+     （fbMergeIncoming → mountFeedback），访客正在写的正文、称呼、链接就全没了，等于白写。
+     沿用讨论区（修复102）同一套办法：正在输入时只记账（_fbDirty），等他离开输入框后的下一拍再重绘。 */
+  var _fbDirty = false;
+  function fbBusy() {
+    const a = document.activeElement;
+    if (!a || !a.tagName) return false;
+    const host = document.getElementById('fbMount');
+    if (!host || !host.contains(a)) return false;
+    return !!(a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+  }
+  function fbRepaint() {
+    if (!document.getElementById('fbMount')) return;
+    if (fbBusy()) { _fbDirty = true; return; }   /* 打字中：只记账，不动 DOM */
+    _fbDirty = false;
+    mountFeedback();
+  }
   function mountFeedback() {
     const host = document.getElementById('fbMount');
     if (!host) return;
@@ -2576,7 +2597,18 @@ window.LMApp = (function () {
       html = fbFormHtml() + fbPublicHtml(fb, meD.code);
     }
     if (state.admin) html += fbAdminHtml(fb);
+    /* ★ 修复118：重绘前记住「提交后的提示条」和「展开着的折叠面板」，绘完恢复 ——
+       否则一次自动同步回来，访客刚看到的「✅ 已提交 / 📤 复制给组长」就消失了。 */
+    const okOld = document.getElementById('fbOk');
+    const keepOk = (okOld && !okOld.hidden) ? okOld.innerHTML : '';
+    const keepOpen = [];
+    host.querySelectorAll('details').forEach(function (d) { keepOpen.push(!!d.open); });
     host.innerHTML = html;
+    if (keepOk) {
+      const okNew = document.getElementById('fbOk');
+      if (okNew) { okNew.hidden = false; okNew.innerHTML = keepOk; }
+    }
+    host.querySelectorAll('details').forEach(function (d, i) { if (keepOpen[i] != null) d.open = keepOpen[i]; });
   }
   /* ★ 修复95：讨论区独立成页（不再和反馈挤在一页，避免被留言淹没） */
   function mountDiscuss() {
@@ -2626,15 +2658,7 @@ window.LMApp = (function () {
         if (!link) return;
         el.innerHTML = '⚠ 已存在你这台设备，但没能直接送达小组 —— 点'
           + ' <button type="button" class="fb-mini" id="fbShare">📤 复制给组长</button> 发到班级群即可。';
-        const sb = el.querySelector('#fbShare');
-        if (!sb) return;
-        sb.addEventListener('click', function () {
-          const ask = function () { window.prompt('复制这条链接发给组长：', link); };
-          try {
-            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(function () { toast('链接已复制'); }, ask);
-            else ask();
-          } catch (eC) { ask(); }
-        });
+        _fbShareLink = link;   /* ★ 修复118：只存链接，点击交给下面的「事件委托」处理 —— 重绘后按钮依然有效 */
       };
       /* ★ 修复96：先把留言写进「云存档」（提交者浏览器直接写永久存储 → 谁都不用开着网页，也不受 6 小时限制）；
          同时发 MQTT 实时通知；两条都失败才退回「复制给组长」链接。 */
@@ -2680,6 +2704,19 @@ window.LMApp = (function () {
       mountDiscuss();   /* ★ 修复95 */
       toast('回复已发布');
     }
+  });
+  /* ★ 修复118：提交后提示条里的「📤 复制给组长」走事件委托 ——
+     以前是 innerHTML 之后临时 addEventListener，提示条一旦被重绘（任意一次同步）按钮就变成死键。 */
+  document.addEventListener('click', function (e) {
+    const b = (e.target && e.target.closest) ? e.target.closest('#fbShare') : null;
+    if (!b || !_fbShareLink) return;
+    e.preventDefault();
+    const ask = function () { window.prompt('复制这条链接发给组长：', _fbShareLink); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(_fbShareLink).then(function () { toast('链接已复制'); }, ask);
+      } else ask();
+    } catch (eC) { ask(); }
   });
   /* ★ 修复95：管理员一键「✔ 采纳 / ✅ 已修改 / ✖ 保留原判断 / ↺ 待处理」
      —— 对应作业要求「反馈必须得到回应」，状态与三段说明会同步到公开列表 */
@@ -3047,7 +3084,7 @@ window.LMApp = (function () {
        结果数据合进来了、页面还不刷新（要手动切页才看到别人的发言/删除）。
        ★ 修复102：走 dcRepaint()，正在打字时不打断输入。 */
     refreshDiscuss: function () {
-      mountFeedback();
+      fbRepaint();   /* ★ 修复118：留言区也走草稿保护（原来直接 mountFeedback()，会冲掉正在写的留言） */
       dcRepaint();
     },
     historyList: historyList, restoreVersion: restoreVersion,

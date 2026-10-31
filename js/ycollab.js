@@ -212,6 +212,10 @@
     });
   }
   function boot2() {
+    /* ★ 修复118：boot() 里「IDB 3.5 秒超时兜底」和 IDB 同步完成回调都会调 boot2。
+       慢设备上 IDB 超过 3.5 秒时两者都会跑 → 建出两套 MQTT 信令连接 + 两套 PeerConnection，
+       对方会看到两个「我」、在线数与心跳翻倍。这里做成幂等，第二次直接返回。 */
+    if (provider) return;
     try {
       var TCB = window.LMYjsTCB;
       if (!TCB || !TCB.isReady()) { stub('信令库（MQTT）加载失败，已降级：本机互连 + 云端照常'); return; }

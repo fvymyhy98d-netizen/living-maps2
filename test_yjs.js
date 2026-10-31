@@ -2574,6 +2574,68 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && c.indexOf('.lm-ai-hit{background:rgba(255,214,10,.42)') > 0;
     })());
 
+  /* ★ 修复118：五个功能的复查（通信 / 协同 / 问答 / 留言 / 编辑） */
+  T('留言1：自动同步不再吞掉正在写的留言 —— 改走 fbBusy/fbRepaint 草稿保护（与讨论区同一套）',
+    (function () {
+      const s = srcOf('js/app.js');
+      return s.indexOf('function fbBusy()') > 0
+        && s.indexOf('function fbRepaint()') > 0
+        && s.indexOf('function fbRepaint()') < s.indexOf('function mountFeedback()')
+        && s.indexOf("if (fbBusy()) { _fbDirty = true; return; }") > 0
+        && s.indexOf("if (_fbDirty && document.getElementById('fbMount') && !fbBusy()) fbRepaint();") > 0
+        && s.indexOf('fbRepaint();   /* ★ 修复118：走草稿保护') > 0
+        && s.indexOf('fbRepaint();   /* ★ 修复118：合并回来一条别人的留言') > 0
+        && s.indexOf('fbRepaint();   /* ★ 修复118：留言区也走草稿保护') > 0;
+    })());
+
+  T('留言2：重绘后「已提交提示条 / 展开的面板 / 📤复制给组长」都还在（按钮改成事件委托）',
+    (function () {
+      const s = srcOf('js/app.js');
+      return s.indexOf("const keepOk = (okOld && !okOld.hidden) ? okOld.innerHTML : '';") > 0
+        && s.indexOf('keepOpen.push(!!d.open)') > 0
+        && s.indexOf('_fbShareLink = link;') > 0
+        && s.indexOf("closest('#fbShare')") > 0
+        && s.indexOf("sb.addEventListener('click'") < 0;   /* 旧的「重绘即失效」绑定必须消失 */
+    })());
+
+  T('协同1：boot2 幂等 —— IDB 超时与 whenSynced 双触发不再建出第二套信令/Peer（对方只看到一个我）',
+    (function () {
+      const s = srcOf('js/ycollab.js');
+      const i = s.indexOf('function boot2()');
+      return i > 0 && s.slice(i, i + 500).indexOf('if (provider) return;') > 0;
+    })());
+
+  T('通信1：扩展回执不再「假成功」—— content script 没注入时回 ok:false，网页立刻退回复制+打开',
+    (function () {
+      const s = srcOf('ext/bg.js');
+      return s.indexOf('chrome.runtime.lastError') > 0
+        && s.indexOf("reply({ ok: false, why: 'inject-fail' })") > 0;
+    })());
+
+  T('通信2：DeepSeek 侧两个真问题都修了 —— 忙时给回音（不再让网页干等）· 重问同一句也能认出新回答',
+    (function () {
+      const s = srcOf('ext/bridge-ds.js');
+      return s.indexOf("type: 'reply', text: '⚠️ 上一个问题还在处理中") > 0
+        && s.indexOf('function lastAnswerInfo()') > 0
+        && s.indexOf('cur.n > before.n') > 0;
+    })());
+
+  T('问答1：DeepSeek 的回答回到「提问的那一页」，并有 4 分钟超时兜底（不再永远停在 ⏳）',
+    (function () {
+      const s = srcOf('js/ai.js');
+      return s.indexOf('const toId = (pa && pa.id) || curId();') > 0
+        && s.indexOf('function armAskTimer(') > 0 && s.indexOf('function clearAskTimer(') > 0
+        && s.indexOf('armAskTimer(id);') > 0 && s.indexOf('}, 240000);') > 0;
+    })());
+
+  T('编辑1：协同合并让下标位移时，保存不会「改 A 覆盖 B」，也不会写出数组空洞',
+    (function () {
+      const s = srcOf('js/editor.js');
+      return s.indexOf("typeof page.blocks[idx] !== 'object' || page.blocks[idx].type !== type") > 0
+        && s.indexOf("请关掉后重新点开再改") > 0
+        && s.indexOf('if (isNew) page.blocks.push(nb); else page.blocks[idx] = nb;') > 0;
+    })());
+
 
   T('问答升级7：对话框顶部有模式切换键 · 默认「本站速答」· 选择存 localStorage · 样式已加',
     (function () {
@@ -3107,10 +3169,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=117 · LM_ASSET_VER=117',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=118 · LM_ASSET_VER=118',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=116/g) || []).length === 0 && /\?v=117/.test(html)
-      && /LM_ASSET_VER = '117'/.test(appJs));
+      && (html.match(/\?v=117/g) || []).length === 0 && /\?v=118/.test(html)
+      && /LM_ASSET_VER = '118'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3334,14 +3396,14 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
 
   /* ★ 修复101：「停在讨论区不动」也要能看到别人的新帖与删除 */
   T('讨论区定时自动刷新：每 15 秒瞄一眼，不在讨论区页或后台时一次请求都不发（拉取仍按 30 秒节流）',
-    /setInterval\(function \(\) \{\s*if \(document\.hidden\) return;\s*if \(!document\.getElementById\('dcMount'\)\) \{ _dcDirty = false; return; \}\s*if \(_dcDirty\) dcRepaint\(\);\s*dcCloudPull\(\);\s*\}, 15000\);/.test(appJs));
+    /setInterval\(function \(\) \{\s*if \(document\.hidden\) return;[\s\S]{0,180}?if \(!document\.getElementById\('dcMount'\)\) \{ _dcDirty = false; return; \}\s*if \(_dcDirty\) dcRepaint\(\);\s*dcCloudPull\(\);\s*\}, 15000\);/.test(appJs));
 
   T('别人的删除也要立刻消失：res.changed 就重绘（以前只在「补齐新帖」时重绘，删除不刷新）',
     appJs.indexOf('if (changedNow) dcRepaint();') > 0);
 
   T('协作 dcommit 到达后重绘讨论区（refreshDiscuss 以前错接成 mountFeedback，数据合了页面不刷）',
     appJs.indexOf('refreshDiscuss: function () {') > 0
-      && /refreshDiscuss: function \(\) \{\s*mountFeedback\(\);\s*dcRepaint\(\);/.test(appJs));
+      && /refreshDiscuss: function \(\) \{\s*fbRepaint\(\);[^\n]*\s*dcRepaint\(\);/.test(appJs));
 
   /* ★ 修复102：草稿保护 + 云端数据截断 + 保活（防 Supabase 7 天暂停） */
   T('自动刷新不吞草稿：dcBusy() 只认讨论区里的 textarea/input，打字中只记账（_dcDirty）不重绘',
@@ -3353,7 +3415,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
   T('三个重绘入口统一走 dcRepaint（云存档变化 / 15 秒自检补刷 / 协作 dcommit）',
     appJs.indexOf('if (changedNow) dcRepaint();') > 0
       && /if \(_dcDirty\) dcRepaint\(\);/.test(appJs)
-      && /refreshDiscuss: function \(\) \{\s*mountFeedback\(\);\s*dcRepaint\(\);/.test(appJs));
+      && /refreshDiscuss: function \(\) \{\s*fbRepaint\(\);[^\n]*\s*dcRepaint\(\);/.test(appJs));
 
   T('云端来的行一律截断（dcSlim 真跑）：id≤40 / dev≤24 / nick≤40 / text≤2000 / rto≤60，畸形 id 丢',
     (function () {
@@ -3463,10 +3525,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 117（?v=117 共 21 处 · v116 无残留 · LM_ASSET_VER=117）',
-    (html.match(/\?v=117/g) || []).length === 21 && (html.match(/\?v=116/g) || []).length === 0
-      && /LM_ASSET_VER = '117'/.test(appJs),
-    'v117=' + (html.match(/\?v=117/g) || []).length + ' v116=' + (html.match(/\?v=116/g) || []).length);
+  T('版本已升到 118（?v=118 共 21 处 · v117 无残留 · LM_ASSET_VER=118）',
+    (html.match(/\?v=118/g) || []).length === 21 && (html.match(/\?v=117/g) || []).length === 0
+      && /LM_ASSET_VER = '118'/.test(appJs),
+    'v118=' + (html.match(/\?v=118/g) || []).length + ' v117=' + (html.match(/\?v=117/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

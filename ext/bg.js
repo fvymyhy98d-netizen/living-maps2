@@ -15,6 +15,13 @@ chrome.runtime.onMessage.addListener(function (msg, sender, reply) {
         return;
       }
       chrome.tabs.sendMessage(list[0].id, { ch: 'lmds', type: 'ask', text: msg.text }, function () {
+        /* ★ 修复118：DeepSeek 标签页是「装扩展之前」打开的、或刚刷新过 → content script 没注入，
+           这里会报 lastError。以前无条件回 ok:true，网页就一直等一个永远不来的回答；
+           现在回 ok:false，网页立刻退回「复制 + 打开」的兜底流程。 */
+        if (chrome.runtime.lastError) {
+          reply({ ok: false, why: 'inject-fail' });
+          return;
+        }
         reply({ ok: true, tabId: list[0].id });
       });
     });

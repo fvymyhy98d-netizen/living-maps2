@@ -653,6 +653,21 @@ W.LMAI = (function () {
   const BRIDGE_TAG = 'lm-ds-bridge';
   let bridgeSeen = false;
   let pendingAsk = null;            /* 等扩展回执的那一次提问（扩展不可用时用来退回复制） */
+  /* ★ 修复118：扩展接下了问题、但回答一直不回来（DeepSeek 标签页被关 / 掉登录 / 卡在人机验证）时，
+     以前 pendingAsk 会一直挂着、面板停在「⏳ 已交给 DeepSeek」，用户只能干等。现在 4 分钟没回音就明确告知。 */
+  let askTimer = null;
+  function clearAskTimer() { if (askTimer) { clearTimeout(askTimer); askTimer = null; } }
+  function armAskTimer(id) {
+    clearAskTimer();
+    askTimer = setTimeout(function () {
+      askTimer = null;
+      if (!pendingAsk) return;
+      const pa = pendingAsk;
+      pendingAsk = null;
+      chatPush(pa.id || id, { r: 'ds', t: '⚠️ 等了 4 分钟没等到回答：多半是 DeepSeek 那个标签页被关了、掉登录，或者卡在人机验证。\n可以先用 ⚡本站速答，或去那个标签页处理完再问一次。' });
+      if (panel && !panel.hidden) renderPanel();
+    }, 240000);
+  }
   /* ★ 修复110：问答模式 —— 默认「本站速答」（免配置），DeepSeek 作为可切换的备选 */
   const MODE_KEY = 'lm_ai_mode_v1';
   function aiMode() {
@@ -686,6 +701,7 @@ W.LMAI = (function () {
         if (d.ok === false && pendingAsk) {
           const pa = pendingAsk;
           pendingAsk = null;
+          clearAskTimer();          /* ★ 修复118：已经退回复制流程，别让超时计时器再插一条「等了 4 分钟」 */
           copyText(pa.txt).then(function () {
             try { window.open('https://chat.deepseek.com/', '_blank', 'noopener'); } catch (e) { /* noop */ }
             chatPush(pa.id, { r: 'ds', t: '扩展在，但没找到已登录的 DeepSeek 标签页 —— 已自动退回「复制 + 打开」：在输入框按 Ctrl/⌘+V 就能发。\n（让扩展全自动：先开一个 chat.deepseek.com 标签页并保持登录。）' });
@@ -697,11 +713,22 @@ W.LMAI = (function () {
         } else if (panel && !panel.hidden) renderPanel();
         return;
       }
-      if (d.type === 'reply' && d.text) {
+      if (d.type === 'reply') {
+        /* ★ 修复118：回答必须回到「提问的那一页」。以前一律 chatPush(curId()) —— DeepSeek 要想几十秒，
+           用户在等待期间翻到别页，答案就落到那一页的对话框里，原页面永远空着、他还以为没回。
+           顺带：以前 reply 带空文本时 pendingAsk 不会清，后面任何一次 ack 失败都会误触发「退回复制」。 */
+        const pa = pendingAsk;
+        const toId = (pa && pa.id) || curId();
         pendingAsk = null;
-        chatPush(curId(), { r: 'ds', t: d.text });
+        clearAskTimer();
+        chatPush(toId, {
+          r: 'ds',
+          t: d.text ? d.text : '（扩展回了一个空回答 —— DeepSeek 那边可能没渲染完，再问一次试试。）'
+        });
         if (panel && !panel.hidden) renderPanel();
-        else if (window.LMApp && LMApp.toast) LMApp.toast('✅ DeepSeek 的回答已回到对话框');
+        else if (window.LMApp && LMApp.toast) {
+          LMApp.toast(toId === curId() ? '✅ DeepSeek 的回答已回到对话框' : '✅ DeepSeek 的回答已回到你提问的那一页');
+        }
       }
     });
     try { window.postMessage({ ch: 'lm-page', type: 'ping' }, location.origin); } catch (e) { /* noop */ }
@@ -921,6 +948,7 @@ W.LMAI = (function () {
       /* 装了扩展 → 全自动：送过去、等回答自己回来（不用复制/粘贴） */
       if (bridgeSeen && bridgeSend(txt, id)) {
         pendingAsk = { id: id, txt: txt };     /* 存着：扩展没接住就自动退回复制 */
+        armAskTimer(id);                       /* ★ 修复118：扩展接了却一直不回，4 分钟后明说，不让用户干等 */
         chatPush(id, { r: 'ds', t: '⏳ 已交给 DeepSeek（浏览器扩展在接管）—— 它会在标签页里自己发出去，回答好了**自动**回到这里，你不用复制粘贴。' });
         renderPanel();
         return;

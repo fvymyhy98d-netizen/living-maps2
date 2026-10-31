@@ -56,30 +56,38 @@
     return btns.length ? btns[btns.length - 1] : null;
   }
 
-  /* ---------- 读最后一条回答 ---------- */
-  function lastAnswer() {
+  /* ---------- 读最后一条回答（顺带记「现在一共几条」，用来判断是不是新冒出来的一条） ---------- */
+  function lastAnswerInfo() {
     const sels = ['.ds-markdown', '[class*="ds-markdown"]', '[class*="markdown"]'];
     for (let i = 0; i < sels.length; i++) {
       const list = document.querySelectorAll(sels[i]);
       if (list.length) {
         const t = (list[list.length - 1].innerText || '').trim();
-        if (t) return t;
+        if (t) return { text: t, n: list.length };
       }
     }
-    return '';
+    return { text: '', n: 0 };
   }
+  function lastAnswer() { return lastAnswerInfo().text; }
 
   let busy = false;
 
   function ask(text) {
-    if (busy) return log('上一次还没结束，忽略');
+    if (busy) {
+      /* ★ 修复118：以前这里只打一行 log 就返回 —— 网页那边 ack 已经收到 ok:true，
+         于是一直等一个永远不来的回答，面板停在「⏳ 已交给 DeepSeek」直到超时。
+         现在回一条明确说明，让网页的等待立刻结束。 */
+      log('上一次还没结束，忽略');
+      chrome.runtime.sendMessage({ ch: CH, type: 'reply', text: '⚠️ 上一个问题还在处理中 —— 等它答完再问，否则两个答案会串在一起。' });
+      return;
+    }
     const ed = findEditor();
     if (!ed) {
       chrome.runtime.sendMessage({ ch: CH, type: 'reply', text: '⚠️ 活地图桥：没找到 DeepSeek 的输入框（可能未登录或页面改版）。请在 chat.deepseek.com 登录后重试。' });
       return;
     }
     busy = true;
-    const before = lastAnswer();
+    const before = lastAnswerInfo();
     setText(ed, text);
     setTimeout(function () {
       const btn = findSend();
@@ -90,8 +98,11 @@
       let last = '', stable = 0, ticks = 0;
       const timer = setInterval(function () {
         ticks++;
-        const now = lastAnswer();
-        if (now && now !== before) {
+        const cur = lastAnswerInfo();
+        const now = cur.text;
+        /* ★ 修复118：同一个问题问第二遍时，新答案和旧答案文字一模一样 → 旧条件 now !== before
+           永远不成立，只能干等 3 分钟再报「超时」。现在「多了一条回答」也算答出来了。 */
+        if (now && (now !== before.text || cur.n > before.n)) {
           if (now === last) stable++; else { stable = 0; last = now; }
           if (stable >= 2) {
             clearInterval(timer);

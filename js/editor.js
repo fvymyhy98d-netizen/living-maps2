@@ -375,6 +375,13 @@ window.LMEditor = (function () {
     const isNew = idx == null;
     const type = presetType || (page.blocks[idx] && page.blocks[idx].type);
     if (!type || !TYPES[type]) { LMApp.toast('未知的内容块类型'); return; }
+    /* ★ 修复118：表单开着的时候，别的设备可能增删了块（协同合并 = 块级后写优先，下标会整体位移）。
+       保存时若 idx 已经指向另一类块、或已经越界，就不许写 ——
+       否则会「改 A 结果覆盖了 B」；越界赋值还会给数组写出空洞（JSON 后变 null，之后整页渲染报错）。 */
+    if (!isNew && (!page.blocks[idx] || typeof page.blocks[idx] !== 'object' || page.blocks[idx].type !== type)) {
+      LMApp.toast('这一块刚被其他设备改动过（位置变了）—— 请关掉后重新点开再改，免得覆盖到别的块。');
+      return;
+    }
     const base = isNew ? defaultsFor(type) : page.blocks[idx];
     /* ★ 修复82：搭表单期间让 formHTML 知道「正在编辑哪一页的哪个块」——
        条目块的分类清单要据此列出本页下级条目，并标出已被别的分类框占用的 */
