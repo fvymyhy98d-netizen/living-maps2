@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793408467585,
+      "syncTs": 1793409142372,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -160,6 +160,13 @@ window.SITE_CONTENT = {
           "seq": 2
         },
         {
+          "type": "entries",
+          "title": "下级条目",
+          "mode": "card",
+          "cols": 3,
+          "note": ""
+        },
+        {
           "type": "heading",
           "level": 2,
           "text": "核心概念",
@@ -206,13 +213,6 @@ window.SITE_CONTENT = {
             "w": 94.4,
             "ride": 86
           }
-        },
-        {
-          "type": "entries",
-          "title": "下级条目",
-          "mode": "card",
-          "cols": 3,
-          "note": ""
         }
       ],
       "heroAlign": ""
@@ -515,15 +515,7 @@ window.SITE_CONTENT = {
       "title": "",
       "description": "哈哈哈哈哈哈哈",
       "heroAlign": "",
-      "blocks": [
-        {
-          "type": "entries",
-          "title": "下级条目",
-          "mode": "card",
-          "cols": 3,
-          "note": ""
-        }
-      ],
+      "blocks": [],
       "parent": "domain"
     },
     {
