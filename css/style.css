@@ -1220,3 +1220,20 @@ body.mobile-view .kid-pick{max-height:34vh}
 /* ★ 修复91：管理条(#adminBar)在底部居中，手机上和右下角 AI 浮标会叠在一起（浮标 z-index 更高会挡住点击）→ 管理态整体让位 */
 body.admin .lm-ai-fab{bottom:80px}
 body.admin .lm-ai-panel{bottom:136px}
+/* ★ 修复116：手机端可读性 / 触控 / 输入法适配（桌面端完全不受影响） */
+@media (max-width:640px){
+  .lm-ai-panel{padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  .lm-ai-input{font-size:16px}                 /* iOS 聚焦输入框不再自动放大整页 */
+  .lm-ai-x{font-size:22px;min-width:44px;min-height:44px;padding:4px 8px}
+  .lm-ai-mode{padding:9px 10px;min-height:44px}
+  .lm-ai-row .btn,.lm-ai-pastesave{min-height:38px}
+  .lm-ai-cite>summary{min-height:34px;display:flex;align-items:center}
+  .lm-ai-chat{max-height:34vh;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  .lm-ai-fab{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+}
+.lm-ai-panel.lm-kb{max-height:min(56vh,420px)}   /* 键盘弹起时收窄 */
+.lm-ai-panel :focus-visible,.lm-ai-fab:focus-visible{outline:2px solid #0071e3;outline-offset:2px}
+.lm-ai-cite>summary:hover{text-decoration:underline}
+@media (prefers-reduced-motion:reduce){
+  .lm-ai-fab,.lm-ai-mode,.lm-ai-cite>summary::before{transition:none!important}
+}

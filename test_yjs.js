@@ -2528,6 +2528,25 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && c.indexOf('.lm-ai-cite>summary') > 0 && c.indexOf('.lm-ai-quote') > 0;
     })());
 
+  /* ★ 修复116：全站可用性复查（重绘丢状态 / 手机键盘 / 触控尺寸 / 安全区 / 动效偏好） */
+  T('适配1：面板重绘不再丢状态 —— 输入内容/光标/已展开的出处/滚动位置都保留，发送后主动清空',
+    (function () {
+      const s = srcOf('js/ai.js');
+      return s.indexOf('keep.focus') > 0 && s.indexOf('input.setSelectionRange(keep.sel, keep.sel)') > 0
+        && s.indexOf("body.querySelectorAll('details.lm-ai-cite')") > 0
+        && s.indexOf('panel.scrollTop = keep.scroll') > 0
+        && (s.match(/if \(input\) input\.value = ''/g) || []).length >= 2;
+    })());
+
+  T('适配2：手机端（键盘弹起 / iOS 不缩放 / 触控 ≥44px / 安全区 / 减少动效）都有处理',
+    (function () {
+      const s = srcOf('js/ai.js'), c = srcOf('css/style.css'), h = srcOf('index.html');
+      return s.indexOf('window.visualViewport') > 0 && s.indexOf("classList.toggle('lm-kb'") > 0
+        && c.indexOf('.lm-ai-panel.lm-kb') > 0 && c.indexOf('safe-area-inset-bottom') > 0
+        && c.indexOf('.lm-ai-input{font-size:16px}') > 0 && c.indexOf('min-height:44px') > 0
+        && c.indexOf('prefers-reduced-motion') > 0 && h.indexOf('viewport-fit=cover') > 0;
+    })());
+
 
   T('问答升级7：对话框顶部有模式切换键 · 默认「本站速答」· 选择存 localStorage · 样式已加',
     (function () {
@@ -3061,10 +3080,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=115 · LM_ASSET_VER=115',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=116 · LM_ASSET_VER=116',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=114/g) || []).length === 0 && /\?v=115/.test(html)
-      && /LM_ASSET_VER = '115'/.test(appJs));
+      && (html.match(/\?v=115/g) || []).length === 0 && /\?v=116/.test(html)
+      && /LM_ASSET_VER = '116'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3417,10 +3436,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 115（?v=115 共 21 处 · v114 无残留 · LM_ASSET_VER=115）',
-    (html.match(/\?v=115/g) || []).length === 21 && (html.match(/\?v=114/g) || []).length === 0
-      && /LM_ASSET_VER = '115'/.test(appJs),
-    'v115=' + (html.match(/\?v=115/g) || []).length + ' v114=' + (html.match(/\?v=114/g) || []).length);
+  T('版本已升到 116（?v=116 共 21 处 · v115 无残留 · LM_ASSET_VER=116）',
+    (html.match(/\?v=116/g) || []).length === 21 && (html.match(/\?v=115/g) || []).length === 0
+      && /LM_ASSET_VER = '116'/.test(appJs),
+    'v116=' + (html.match(/\?v=116/g) || []).length + ' v115=' + (html.match(/\?v=115/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

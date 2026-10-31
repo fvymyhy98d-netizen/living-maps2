@@ -831,12 +831,33 @@ W.LMAI = (function () {
           + '<span class="lm-ai-score">' + Math.round(r.score * 100) + '%</span></a>';
       }).join('') + '</div>'
       : '<p class="lm-ai-tip">—</p>';
+    /* ★ 修复116：重绘前保存「输入内容 / 焦点 / 已展开的出处 / 提示文字 / 粘贴框 / 滚动位置」，绘完恢复。
+       以前每次切模式、提问、换页，输入框内容和光标都会丢（因为这里是 innerHTML 全量重建）。 */
+    const keepInput = body.querySelector('.lm-ai-input');
+    const keep = {
+      val: keepInput ? String(keepInput.value || '') : '',
+      focus: keepInput && document.activeElement === keepInput,
+      sel: (keepInput && typeof keepInput.selectionStart === 'number') ? keepInput.selectionStart : 0,
+      open: [],
+      ans: (function () { const a = body.querySelector('.lm-ai-ans'); return a ? a.innerHTML : ''; })(),
+      paste: !!body.querySelector('.lm-ai-pastebox:not([hidden])'),
+      scroll: panel.scrollTop || 0
+    };
+    body.querySelectorAll('details.lm-ai-cite').forEach(function (d, i) { keep.open[i] = !!d.open; });
     body.innerHTML = h;
     const input = body.querySelector('.lm-ai-input');
     const go = body.querySelector('.lm-ai-go');
     const ans = body.querySelector('.lm-ai-ans');
     const chatEl = body.querySelector('.lm-ai-chat');
+    if (input && keep.val) input.value = keep.val;
+    if (ans && keep.ans) ans.innerHTML = keep.ans;
+    if (keep.paste) { const pb0 = body.querySelector('.lm-ai-pastebox'); if (pb0) pb0.hidden = false; }
+    body.querySelectorAll('details.lm-ai-cite').forEach(function (d, i) { if (keep.open[i]) d.open = true; });
     if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+    if (input && keep.focus) {
+      try { input.focus({ preventScroll: true }); input.setSelectionRange(keep.sel, keep.sel); } catch (e) { /* 忽略 */ }
+    }
+    panel.scrollTop = keep.scroll;
     /* ★ 修复110：本地问答（默认模式）—— 判断问法 → 组织成一段回答；仍然只用原文，不编造 */
     const runLocal = function (q) {
       /* ★ 修复111：追问（「它 / 这个 / 上面」）→ 把上一问的词一起拿去检索，免得答非所问 */
@@ -849,6 +870,7 @@ W.LMAI = (function () {
         qq = W.LMLM.fixQuery(q, vocab);
       }
       const res = askSmart(ix, expandQuery(qq, prev), 3);
+      if (input) input.value = '';        /* ★ 修复116：发出去就清空（重绘会保留输入内容，所以要主动清） */
       chatPush(id, { r: 'me', t: q });
       if (qq !== q) {
         chatPush(id, { r: 'local', t: '（「' + q + '」里有站内没有的词，已按词表当成「' + qq + '」来查）' });
@@ -880,6 +902,7 @@ W.LMAI = (function () {
       if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，比如「Transformer 和 RNN 有什么区别」。</p>'; return; }
       if (aiMode() === 'local') { runLocal(q); return; }
       const txt = promptFor(pageById(id), q);
+      if (input) input.value = '';        /* ★ 修复116：发出去就清空（配合重绘时的状态保留，不会把你打了一半的字留下） */
       chatPush(id, { r: 'me', t: q });
       /* 装了扩展 → 全自动：送过去、等回答自己回来（不用复制/粘贴） */
       if (bridgeSeen && bridgeSend(txt, id)) {
@@ -971,6 +994,18 @@ W.LMAI = (function () {
       + '<button type="button" class="lm-ai-x" aria-label="关闭">×</button></div>'
       + '<div class="lm-ai-body"></div>';
     document.body.appendChild(panel);
+    /* ★ 修复116：手机上键盘弹出会把 fixed 面板顶出可视区，导致输入框被盖住。
+       用 visualViewport 判断"键盘是否弹起"，弹起时给面板加 .lm-kb 收窄高度。 */
+    if (typeof window !== 'undefined' && window.visualViewport) {
+      const fitKb = function () {
+        if (!panel) return;
+        const vv = window.visualViewport;
+        const opened = (window.innerHeight - vv.height) > 120;
+        panel.classList.toggle('lm-kb', opened);
+      };
+      window.visualViewport.addEventListener('resize', fitKb);
+      window.visualViewport.addEventListener('scroll', fitKb);
+    }
     const x = panel.querySelector('.lm-ai-x');
     if (x) x.addEventListener('click', function () { toggle(false); });
 
