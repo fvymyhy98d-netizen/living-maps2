@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '83';
+var LM_ASSET_VER = '84';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1079,6 +1079,65 @@ window.LMApp = (function () {
   document.addEventListener('visibilitychange', function () { if (document.hidden) freeSessionFallback(); });
 
   /* skipAnim=true：无动画重绘（编辑操作静默更新，像 Word 一样不闪屏） */
+  /* ★ 修复84：管理员模式的浮动格式工具条（#editBar，position:fixed; top:62px）会整条压住
+     面包屑（「领域地图 › 测试」）和页头 —— 用户：「开工具栏时看不到上面那个导航栏」。
+     做法：实测「工具条底边 − 吸顶导航底边」，把同样的高度垫到 #app 的 padding-top 上
+     （CSS 变量 --lm-tb-h），工具条与正文彻底错开；工具条收起（0×0）/ 展开 / 窗口缩放 /
+     切换页签导致换行变高，都会重算。非管理员模式恒为 0，访客视觉一字未动。
+     手机端工具条最高 42vh，整块垫起来会把正文顶出屏幕 → 最多垫 34% 视口高。 */
+  let tbRO = null, tbMO = null, tbObsEl = null, tbRaf = 0, tbWinWired = false;
+  function tbOffsetNow() {
+    const eb = document.getElementById('editBar');
+    const nav = document.getElementById('topnav');
+    if (!state.admin || !eb) return 0;
+    let r = null, rNav = null;
+    try { r = eb.getBoundingClientRect(); } catch (e) { return 0; }
+    if (!r || !r.height || r.height < 2) return 0; /* 收起态（0×0）→ 不用垫 */
+    /* 参照系必须是「吸顶导航的底边」而不是 #app 的 top：getBoundingClientRect 是视口坐标，
+       页面一滚动 #app.top 就变负，用它算出的垫高会暴涨（整页被推走）*/
+    try { rNav = nav ? nav.getBoundingClientRect() : null; } catch (e2) { rNav = null; }
+    const base = (rNav && rNav.bottom) ? rNav.bottom : 0;
+    let h = Math.round(r.bottom + 10 - base); /* +10 = 面包屑与工具条之间的呼吸缝 */
+    if (!(h > 0)) return 0;
+    if (isMobileDevice()) {
+      const cap = Math.round(window.innerHeight * 0.34);
+      if (cap > 0 && h > cap) h = cap;
+    }
+    return h;
+  }
+  function syncTbOffset() {
+    tbRaf = 0;
+    const h = tbOffsetNow();
+    try {
+      const v = h + 'px';
+      if (document.body.style.getPropertyValue('--lm-tb-h') !== v) document.body.style.setProperty('--lm-tb-h', v);
+    } catch (e) { /* noop */ }
+    return h;
+  }
+  function queueTbOffset() {
+    if (tbRaf) return;
+    try { tbRaf = requestAnimationFrame(syncTbOffset); } catch (e) { tbRaf = 0; syncTbOffset(); }
+  }
+  /* 工具条节点可能被编辑器重建（登录 / 退出 / 切页）→ 按节点身份重新挂观察器，避免守着旧节点 */
+  function watchTbOffset() {
+    if (!tbWinWired) { tbWinWired = true; window.addEventListener('resize', queueTbOffset); }
+    const eb = document.getElementById('editBar');
+    if (eb !== tbObsEl) {
+      tbObsEl = eb;
+      if (tbRO) tbRO.disconnect();
+      if (tbMO) tbMO.disconnect();
+      if (window.ResizeObserver && eb) {
+        if (!tbRO) tbRO = new ResizeObserver(queueTbOffset);
+        tbRO.observe(eb); /* 换行变高 / 收起变 0 都会触发 */
+      }
+      if (window.MutationObserver) {
+        if (!tbMO) tbMO = new MutationObserver(queueTbOffset);
+        if (eb) tbMO.observe(eb, { attributes: true, attributeFilter: ['class'] }); /* .open 收起/展开 */
+        try { tbMO.observe(document.body, { attributes: true, attributeFilter: ['class'] }); } catch (e2) { /* noop */ }
+      }
+    }
+    queueTbOffset();
+  }
   function render(skipAnim) {
     if (skipAnim) document.body.classList.add('no-anim');
     state.pageId = currentId();
@@ -1108,6 +1167,7 @@ window.LMApp = (function () {
     if (window.LMEditor && LMEditor.fixFreeOverlaps) { try { LMEditor.fixFreeOverlaps(); } catch (e0) { /* noop */ } }
     assignRefNums();
     if (window.LMEditor) { LMEditor.renderAdminBar(); LMEditor.renderToolbar(); }
+    watchTbOffset(); /* ★ 修复84：工具条（可能刚被创建/重绘）与面包屑错开 */
     /* ★ 撤销基准快照（修复㉗）：hist 初始为空、只在 commit 时入栈 —— 会话里第一次格式操作
        之前的内容从未入栈，那一次的撤销（canUndo=false）静默无效，用户以为撤掉了、接着的
        新格式就把「没撤掉的旧格式」一起叠上来（删除线→撤销→加下划线→删除线复活 = 它）。
@@ -2350,6 +2410,7 @@ window.LMApp = (function () {
     state.admin = sessionStorage.getItem('lm_admin') === '1';
     state.root = state.admin && sessionStorage.getItem('lm_root') === '1';
     if (state.admin) takeAdminSnap(); /* ★ 修复㉜：刷新后恢复的管理模式同样以此刻内容为「放弃修改」基准 */
+    watchTbOffset(); /* ★ 修复84：管理员模式浮动工具条不压面包屑/页头（垫 --lm-tb-h） */
     /* 讨论区 v4：把本机历史发言并入内容 JSON（state.content.discuss），
        之后随协作三通道（本机互连 / 课堂服务器 / GitHub 云端）跨设备同步 */
     try {
@@ -2391,6 +2452,7 @@ window.LMApp = (function () {
     dumpLayout: dumpLayout, /* ★ 修复67：控制台布局体检（打印每块摆放方式/位置/让位量并复制到剪贴板） */
     takeAdminSnap: takeAdminSnap, /* ★ 修复㉜：进入管理模式时拍「退回管理前」基准（不再被上传覆盖） */
     takePushSnap: takePushSnap, snapInfo: snapInfo, /* ★ 修复83：上传成功只重拍「最近上传版」+ 弹窗摘要 */
+    syncTbOffset: syncTbOffset, watchTbOffset: watchTbOffset, /* ★ 修复84：工具条与面包屑错开（--lm-tb-h） */
     unfreeBlock: unfreeBlock,
     applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,

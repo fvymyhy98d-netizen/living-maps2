@@ -277,6 +277,12 @@ button.page-row.new-page:hover{border-color:var(--blue);color:var(--blue);backgr
 .tb-lab{flex:none;font-size:11px;color:var(--muted);padding:0 2px;white-space:nowrap}
 .hl-demo{background:#ffe08a;border-radius:4px;padding:0 3px}
 @media(max-width:760px){#editBar{top:56px}}
+/* ★ 修复84：管理员模式的浮动格式工具条整条压住面包屑（「领域地图 › 测试」）与页头 ——
+   JS 实测「工具条底边比 #app 顶边低多少」写进 --lm-tb-h，这里把同样的高度垫到正文上，
+   工具条与内容彻底错开；收起（工具条 0×0）/ 展开 / 换行变高 / 窗口缩放都会重算，
+   非管理员模式 --lm-tb-h 恒为 0，访客视觉一字未动 */
+body.admin #app{padding-top:var(--lm-tb-h,0px);transition:padding-top .18s ease}
+body.no-anim #app{transition:none}
 
 .popover{position:fixed;z-index:300;background:rgba(255,255,255,.92);backdrop-filter:blur(20px) saturate(180%);
   -webkit-backdrop-filter:blur(20px) saturate(180%);

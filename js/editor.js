@@ -1890,6 +1890,9 @@ window.LMEditor = (function () {
     if (!bar1) return false;
     bar1.classList.toggle('open', !!open);
     if (!open) closePop();
+    /* ★ 修复84：收起/展开立即重算「正文给工具条让出的高度」，不用等下一帧观察器
+       （包在 try 里：单测会把这函数抠出来在无 window 的桩作用域里跑） */
+    try { if (window.LMApp && LMApp.syncTbOffset) LMApp.syncTbOffset(); } catch (eTb) { /* noop */ }
     return true;
   }
   function renderToolbar() {

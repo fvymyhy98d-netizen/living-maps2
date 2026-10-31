@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '83';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '84';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -1497,5 +1497,56 @@ T('css：双基准选项样式（.snap-opt / .snap-badge / 手机端整行按钮
   T('真跑基准摘要：条目/块计数 + 时间戳 · 两份相同 same=true · 没上传过则为空', okB, dB);
 })();
 
+/* ---------- 9.49) 修复84：管理员模式工具条不再压住面包屑 / 页头 ---------- */
+console.log('【9.49】修复84：工具条展开时面包屑被整条压住 → 正文按工具条实测高度垫开（--lm-tb-h）');
+T('app.js：tbOffsetNow 按几何算垫高 + syncTbOffset 写 --lm-tb-h + watchTbOffset 观察工具条',
+  appSrc.indexOf('function tbOffsetNow() {') > 0
+    && appSrc.indexOf("document.body.style.setProperty('--lm-tb-h', v)") > 0
+    && appSrc.indexOf('function watchTbOffset() {') > 0
+    && appSrc.indexOf('new ResizeObserver(queueTbOffset)') > 0
+    && appSrc.indexOf("tbMO.observe(eb, { attributes: true, attributeFilter: ['class'] });") > 0);
+T('app.js：render 尾部与 init 都挂 watchTbOffset（登录/切页/刷新都重新量）+ 导出 syncTbOffset',
+  appSrc.indexOf('watchTbOffset(); /* ★ 修复84：工具条（可能刚被创建/重绘）与面包屑错开 */') > 0
+    && appSrc.indexOf('watchTbOffset(); /* ★ 修复84：管理员模式浮动工具条不压面包屑/页头（垫 --lm-tb-h） */') > 0
+    && appSrc.indexOf('syncTbOffset: syncTbOffset, watchTbOffset: watchTbOffset, /* ★ 修复84') > 0);
+T('css：管理员模式给 #app 垫 padding-top:var(--lm-tb-h)，收起/展开过渡平滑、无动画时关掉过渡',
+  cssSrc.indexOf('body.admin #app{padding-top:var(--lm-tb-h,0px);transition:padding-top .18s ease}') > 0
+    && cssSrc.indexOf('body.no-anim #app{transition:none}') > 0);
+T('editor.js：收起/展开（tbSetOpen）立即重算垫高，不等下一帧观察器',
+  edt2.indexOf('try { if (window.LMApp && LMApp.syncTbOffset) LMApp.syncTbOffset(); } catch (eTb) { /* noop */ }') > 0);
+
+/* 真跑：执行 app.js 的 tbOffsetNow 源码（桩 getBoundingClientRect） */
+(function () {
+  const srcLF = appSrc.replace(/\r\n/g, '\n');
+  const aA = srcLF.indexOf('  function tbOffsetNow() {');
+  const bA = srcLF.indexOf('\n  }\n', aA);
+  const codeA = (aA >= 0 && bA > aA) ? srcLF.slice(aA, bA + 5) : '';
+  let okA = false, dA = '切片不可用';
+  if (codeA) {
+    try {
+      const F = new Function('state', 'isMobileDevice', 'document', 'window', codeA + '\nreturn tbOffsetNow;');
+      const el = function (rect) { return { getBoundingClientRect: function () { return rect; } }; };
+      const mk = function (ebRect, navRect, admin, mobile, vh) {
+        const doc = {
+          getElementById: function (id) {
+            if (id === 'editBar') return ebRect ? el(ebRect) : null;
+            if (id === 'topnav') return navRect ? el(navRect) : null;
+            return null;
+          }
+        };
+        return F({ admin: admin }, function () { return !!mobile; }, doc, { innerHeight: vh || 800 });
+      };
+      const open = mk({ top: 62, bottom: 110, height: 48 }, { top: 0, bottom: 52 }, true, false, 900);
+      const shut = mk({ top: 0, bottom: 0, height: 0 }, { top: 0, bottom: 52 }, true, false, 900);
+      const guest = mk({ top: 62, bottom: 110, height: 48 }, { top: 0, bottom: 52 }, false, false, 900);
+      const tall = mk({ top: 52, bottom: 952, height: 900 }, { top: 0, bottom: 52 }, true, true, 600);
+      const noBar = mk(null, { top: 0, bottom: 52 }, true, false, 900);
+      /* 参照系是吸顶导航底边：页面滚到任何位置结果都一样（不再依赖 #app 的视口坐标） */
+      okA = open() === 68 && shut() === 0 && guest() === 0 && tall() === 204 && noBar() === 0;
+      if (!okA) dA = JSON.stringify({ open: open(), shut: shut(), guest: guest(), tall: tall(), noBar: noBar() });
+    } catch (eA) { okA = false; dA = '抛出 ' + eA.message; }
+  }
+  T('真跑垫高：展开 68（110+10-52）· 收起 0 · 访客 0 · 手机端封顶 34%vh（900→204）· 无工具条 0', okA, dA);
+})();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
