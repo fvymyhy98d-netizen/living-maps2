@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793449317650,
+      "syncTs": 1793455183852,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -136,6 +136,11 @@ window.SITE_CONTENT = {
           "text": "**前置基础：**高等数学（概率与矩阵）→ **核心覆盖：**人工智能导论、机器学习 → **实践应用：**本课程大作业 → **自主拓展：**经典论文与开源项目。\n\n以上为示例，请对照你们专业的培养方案逐条核实，无法确认的先标\"待核实\"。"
         },
         {
+          "type": "heading",
+          "level": 2,
+          "text": "核心概念"
+        },
+        {
           "type": "files",
           "title": "学习资料与附件",
           "items": [
@@ -172,11 +177,6 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "note": ""
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "核心概念"
         },
         {
           "type": "table",
@@ -348,7 +348,7 @@ window.SITE_CONTENT = {
           ],
           "rows": [
             [
-              "系统拆解",
+              "系统拆解是不是",
               "一次回答错误，是模型、提示词还是知识缺失？",
               "先查输入与提示，再怀疑模型（推断）"
             ],
@@ -363,7 +363,7 @@ window.SITE_CONTENT = {
               "长尾知识与实时信息上容易失败"
             ]
           ],
-          "_ts": 1793449317649
+          "_ts": 1793449238076
         },
         {
           "type": "heading",
