@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '97';
+var LM_ASSET_VER = '98';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2396,7 +2396,10 @@ window.LMApp = (function () {
             + '</p>';
         })()
         : '')
-      + fbCloudHtml()
+      /* ★ 修复98：「云存档」是根管理员的运维配置（端点 / anon key / 表名 / 导入），
+         普通管理员不该看到、也不该改 —— 他们只需要批阅反馈（下面的列表 + 四个动作按钮）。
+         数据通道不受影响：cloudCfg() 读的是已公开的 content.config.fbCloud，照常收发。 */
+      + (state.root ? fbCloudHtml() : '')
       + (fb.length
         ? '<div class="fb-list">' + fb.slice().reverse().map(function (it) { return fbItemHtml(it, { admin: true }); }).join('') + '</div>'
           + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbCopy">📋 复制全部反馈（含处理记录）</button></div>'

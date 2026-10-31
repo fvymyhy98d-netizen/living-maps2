@@ -1011,8 +1011,8 @@ window.LMEditor = (function () {
     const canPush = !!(cfg && cfg.owner && cfg.repo && LMStore.ghToken());
     modal('<h3>同步到 GitHub（云端上传）</h3>'
       + '<p class="modal-note">' + (canPush
-        ? '☁️ 云端上传通道已开启（由根管理员统一分发管理）。你的修改将上传到团队仓库，网页 1-2 分钟后自动更新。'
-        : '⏳ 云端上传通道尚未开启：请让根管理员登录本站配置一次，之后本机自动可用。<br>你已做的修改都安全保存在本设备，不会丢失。') + '</p>'
+        ? '☁️ 云端上传通道已开启。你的修改将上传到团队仓库，网页 1-2 分钟后自动更新。'
+        : '⏳ 云端上传通道尚未开启：需要管理员在本站完成一次云端配置后，本机才可用。<br>你已做的修改都安全保存在本设备，不会丢失。') + '</p>'
       + (canPush
         ? '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
           + '<button type="button" class="btn btn-primary" id="ghLitePush">☁️ 确认上传</button></div>'

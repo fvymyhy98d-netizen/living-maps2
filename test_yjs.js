@@ -2631,10 +2631,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=97 · LM_ASSET_VER=97',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=98 · LM_ASSET_VER=98',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=96/g) || []).length === 0 && /\?v=97/.test(html)
-      && /LM_ASSET_VER = '97'/.test(appJs));
+      && (html.match(/\?v=97/g) || []).length === 0 && /\?v=98/.test(html)
+      && /LM_ASSET_VER = '98'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -2653,6 +2653,21 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
   T('管理面板把错误留在页面上：常驻 #fbCloudMsg（toast 2.6 秒就消失）+ 黄色提示条样式',
     appJs.indexOf('id="fbCloudMsg"') > 0 && appJs.indexOf('function cloudMsg') > 0
       && appJs.indexOf('❌ 读取失败：') > 0 && css.indexOf('.fb-cloud-msg') > 0);
+
+  /* —— ★ 修复98：云存档是「根管理员」的运维配置，普通管理员只批阅、看不见也改不了 —— */
+  const edtSrc = srcOf('js/editor.js');
+  T('云存档配置只给根管理员：普通管理员看不到端点 / anon key / 表名 / 导入（数据通道照常，只是不渲染面板）',
+    appJs.indexOf("(state.root ? fbCloudHtml() : '')") > 0
+      && appJs.indexOf('function fbCloudHtml()') > 0
+      && appJs.indexOf('cloudCfg()') > 0);
+
+  T('普通管理员仍可批阅反馈（四个动作按钮 + 三段说明仍在列表项里，不依赖云存档面板）',
+    appJs.indexOf('data-fbact="已采纳"') > 0 && appJs.indexOf('data-fbact="已修改"') > 0
+      && appJs.indexOf('data-fbact="保留原判断"') > 0 && appJs.indexOf('data-fbact="待处理"') > 0);
+
+  T('同步到 GitHub 弹窗不再出现「根管理员」这种内部角色说法（普通管理员只看到通道状态）',
+    edtSrc.indexOf('统一分发') < 0 && edtSrc.indexOf('根管理员统一') < 0
+      && edtSrc.indexOf('云端上传通道已开启') > 0);
 
   T('README 记录修复96（6 小时为何改不了 / 云存档三种接法 / 表格导入）', readme.indexOf('修复96') > 0);
 
