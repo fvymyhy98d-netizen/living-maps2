@@ -1095,3 +1095,19 @@ body.mobile-view .nav-back-t{max-width:76px}
 body.mobile-view .rel-from2{display:none}
 /* 手机端单列列表：行内放不下「来自「母项」」，藏掉避免挤压标题（卡片版式不受影响） */
 body.mobile-view .rel-row .rel-from{display:none}
+/* ★ 修复82：条目块的「分类」清单（勾选本页下级条目 → 决定这个框里摆哪几张卡片）
+   每行左侧是 <label>（点整行即勾选），右侧 ↑↓ 只挪行不动勾选，保存时按勾选顺序写进 only */
+.kid-pick{max-height:40vh;overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);
+  border-radius:12px;padding:5px;margin-top:6px;background:rgba(0,0,0,.02)}
+.kid-opt{display:flex;align-items:center;gap:4px;border-radius:9px;transition:background .15s ease}
+.kid-opt:hover{background:rgba(0,113,227,.08)}
+.kid-lb{display:flex;align-items:center;gap:8px;flex:1;min-width:0;padding:6px 2px 6px 8px;cursor:pointer}
+.kid-lb input{width:16px;height:16px;flex:none;accent-color:var(--blue);cursor:pointer}
+.kid-own{margin-left:auto;font-size:11px;color:var(--text2);white-space:nowrap;flex:none}
+.kid-mv{flex:none;width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:#fff;
+  color:var(--text2);font-size:12px;line-height:1;cursor:pointer;transition:background .15s ease,color .15s ease,border-color .15s ease}
+.kid-mv:hover{background:var(--blue);border-color:transparent;color:#fff}
+body.mobile-view .kid-mv{width:32px;height:32px;font-size:14px}
+body.mobile-view .kid-own{display:none}
+body.mobile-view .kid-pick{max-height:34vh}
+

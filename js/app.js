@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '81';
+var LM_ASSET_VER = '82';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -463,15 +463,16 @@ window.LMApp = (function () {
            在「🗂 条目树」里加一个分支，这里立刻多一张卡片；改名 / 换图标 / 改说明也同步。
            方块本身是普通文档流块（⠿ 拖排序、↑↓ 上下移、拖角调宽、可自由摆放），
            让位引擎（YIELD-V4 锁定段）照常把它当流块处理，不需要任何特判 */
-        const kids = childPages(pageId).slice();
+        const allKids = childPages(pageId).slice();
         const only = Array.isArray(b.only) ? b.only : [];
-        if (only.length) {
-          /* 只显示部分条目并按 only 的顺序（条目树不用它，留给「精选条目」这类玩法） */
-          kids.sort(function (a1, c1) {
-            const ia = only.indexOf(a1.id), ic = only.indexOf(c1.id);
-            return (ia < 0 ? 999 : ia) - (ic < 0 ? 999 : ic);
-          });
-        }
+        /* ★ 修复82：only 非空 = 这个框只装「分类」里勾选的下级条目，并按勾选顺序出卡片；
+           only 为空 = 显示全部（老行为，零迁移）。此前 only 只参与排序、从不过滤 ——
+           于是「同一页放多个分类框」压根做不到，所有子条目只能挤在一个框里往下加。
+           过滤时还要求 parent 仍是本页：条目被挪到别处后旧 id 不该继续留在本框 */
+        const kids = only.length
+          ? only.map(function (id2) { return pageById(id2); })
+              .filter(function (k) { return k && k.parent === pageId; })
+          : allKids;
         const cols = Math.min(Math.max(+b.cols || 3, 1), 4);
         const isList = b.mode === 'list';
         let cards = kids.map(function (k) {
@@ -490,10 +491,18 @@ window.LMApp = (function () {
             + '<span class="entry-go">进入 →</span></a>';
         }).join('');
         if (!kids.length && state.admin) {
-          cards = '<div class="entry-empty">这一页还没有嵌套条目 —— 点右上角 ⚙ 设置，或在「🗂 条目树」里给本页加一个分支</div>';
+          cards = only.length
+            ? '<div class="entry-empty">这个分类框里还没有条目 —— 点本块右上角 ✎ 设置，勾选它要装哪些下级条目（也可以把别的框里的条目移过来）</div>'
+            : '<div class="entry-empty">这一页还没有嵌套条目 —— 点右上角 ⚙ 设置，或在「🗂 条目树」里给本页加一个分支</div>';
         }
+        /* ★ 修复82：分类框里也能新建 —— 建成后自动归到本框（见 editor.js openPageForm 的 onlyBlk）；
+           不设限的框（显示全部）就是老行为：新建的子条目自然会出现 */
         const addTile = state.admin
-          ? '<button type="button" class="entry-card entry-add" data-entryadd="' + esc(pageId) + '" title="给本页新建一个嵌套条目（等于在条目树里加一个分支）：建好后点进卡片就能用原来的编辑器排版">＋ 新建条目</button>'
+          ? '<button type="button" class="entry-card entry-add" data-entryadd="' + esc(pageId) + '" data-entryadd-blk="' + i + '" title="'
+            + (only.length
+              ? '在本分类里新建一个下级条目：建成后自动加入本框'
+              : '给本页新建一个嵌套条目（等于在条目树里加一个分支）：建好后点进卡片就能用原来的编辑器排版')
+            + '">＋ 新建条目</button>'
           : '';
         inner = ((b.title || state.admin)
             ? '<h3 class="block-title"' + edB(i, 'title', 1) + (b.title ? '' : ' data-ph="栏目标题（可留空）"') + '>' + esc(b.title || '') + '</h3>'

@@ -159,7 +159,7 @@ window.LMEditor = (function () {
       case 'files': return { type: type, title: '学习资料与附件', items: [] };
       case 'sources': return { type: type, title: '本页来源', items: [] };
       case 'md': return { type: type, text: '## 这里是小标题\n\n正文支持 **加粗**、*斜体*、__下划线__、~~删除线~~、==高亮==\n\n- 列表一\n- 列表二\n\n| 列A | 列B |\n|---|---|\n| 内容1 | 内容2 |' };
-      case 'entries': return { type: type, title: '相关条目', mode: 'card', cols: 3, note: '' };
+      case 'entries': return { type: type, title: '下级条目', mode: 'card', cols: 3, note: '' };
       case 'related': return { type: type, title: '关联条目', mode: 'card', cols: 3, note: '', links: [] };
       case 'hr': return { type: type };
     }
@@ -185,6 +185,66 @@ window.LMEditor = (function () {
         + '<span class="rel-t">' + LMApp.esc(LMApp.pageTitle(p)) + '</span>'
         + '<span class="rel-from2">' + LMApp.esc(from) + '</span></label>';
     }).join('') + '</div>';
+  }
+  /* ★ 修复82：条目块的「分类」清单 —— 把本页的下级条目勾进这个框（可多选、可调序）。
+     一个都不勾 = 显示全部（老行为，零迁移）；勾了就只显示勾中的，并按勾选顺序出卡片。
+     同一页放多个「▤ 条目」块、每块勾自己那一类，就是「第一类 / 第二类下级条目」分开摆。
+     formCtx：openBlockForm 搭表单期间记录「正在编辑哪一页的哪个块」——
+     既用来列本页子条目，也用来标出「这条已经被别的分类框占用了」。 */
+  let formCtx = null;
+  function kidPickerHTML(sel) {
+    const pgId = (formCtx && formCtx.pageId) || LMApp.state.pageId;
+    const kids = (LMApp.pageChildren ? LMApp.pageChildren(pgId) : []) || [];
+    if (!kids.length) {
+      return '<p class="modal-note">这一页还没有下级条目：先在「🗂 条目树」里给它加分支，或点条目框里的「＋ 新建条目」。</p>';
+    }
+    const chosen = Array.isArray(sel) ? sel : [];
+    const pg = LMApp.pageById(pgId);
+    const owner = {}; /* 条目 id → 占用它的另一个分类框（标题） */
+    ((pg && pg.blocks) || []).forEach(function (b2, bi) {
+      if (!b2 || b2.type !== 'entries') return;
+      if (formCtx && formCtx.idx != null && bi === formCtx.idx) return; /* 自己不算占用 */
+      const arr = Array.isArray(b2.only) ? b2.only : [];
+      if (!arr.length) return; /* 不设限的框 = 显示全部，不算占用 */
+      arr.forEach(function (id2) { if (!owner[id2]) owner[id2] = b2.title || ('条目块 ' + (bi + 1)); });
+    });
+    /* 已勾的按勾选顺序排前面（= 框里的显示顺序），未勾的按条目树顺序跟在后面 */
+    const list = chosen.length
+      ? kids.slice().sort(function (x, y) {
+          const ix = chosen.indexOf(x.id), iy = chosen.indexOf(y.id);
+          return (ix < 0 ? 999 : ix) - (iy < 0 ? 999 : iy);
+        })
+      : kids;
+    return '<div class="kid-pick">' + list.map(function (k) {
+      const on = chosen.indexOf(k.id) >= 0;
+      const ow = owner[k.id];
+      return '<div class="kid-opt">'
+        + '<label class="kid-lb">'
+        + '<input type="checkbox" name="kid" value="' + LMApp.esc(k.id) + '"' + (on ? ' checked' : '') + '>'
+        + '<span class="rel-ico">' + LMApp.esc(k.icon || '📄') + '</span>'
+        + '<span class="rel-t">' + LMApp.esc(LMApp.pageTitle(k)) + '</span>'
+        + (ow ? '<span class="kid-own">已在「' + LMApp.esc(ow) + '」</span>' : '')
+        + '</label>'
+        + '<button type="button" class="kid-mv" data-kidmove="-1" title="上移（同时调整框里的显示顺序）">↑</button>'
+        + '<button type="button" class="kid-mv" data-kidmove="1" title="下移（同时调整框里的显示顺序）">↓</button>'
+        + '</div>';
+    }).join('') + '</div>';
+  }
+  /* 清单里的 ↑↓：直接在 DOM 里挪行 —— 保存时按「勾选项的 DOM 顺序」写进 only */
+  function wireKidPicker(root) {
+    if (!root) return;
+    root.addEventListener('click', function (e) {
+      const mv = e.target.closest ? e.target.closest('[data-kidmove]') : null;
+      if (!mv) return;
+      e.preventDefault();
+      const row = mv.closest('.kid-opt');
+      if (!row || !row.parentNode) return;
+      const up = +mv.getAttribute('data-kidmove') < 0;
+      const sib = up ? row.previousElementSibling : row.nextElementSibling;
+      if (!sib) return;
+      if (up) row.parentNode.insertBefore(row, sib);
+      else row.parentNode.insertBefore(sib, row);
+    });
   }
   /* ---------- 编辑表单 ---------- */
   function formHTML(type, b) {
@@ -236,11 +296,16 @@ window.LMEditor = (function () {
         + field('说明文字（可留空）', F.text('note', b.note, '显示在标题下面的一行小字'))
         + '<p class="modal-note">这里的卡片和「▤ 条目」不同：条目块固定列出<b>本页的子条目</b>，而关联块是<b>你自己挑</b>——所以「领域地图 › 提示工程」可以直连「认知地图 › Transformer」，访客点过去后左上角「‹ 返回」能退回刚才那一屏。</p>';
       case 'entries': return ''
-        + field('栏目标题（可留空）', F.text('title', b.title, '例如：相关条目、下级关键词'))
+        + field('栏目标题', F.text('title', b.title, '例如：第一类下级条目 / 核心概念'))
+        /* ★ 修复82：分类清单。清单每行本身是 <label>（点整行即勾选），外层用 div.field，
+           不能再用 field() 的 <label> —— 嵌套 label 会让「点清单空白处」误勾第一项（修复80 同款坑） */
+        + '<div class="field"><span class="field-label">这个框里放哪些下级条目（可多选，↑↓ 调序）</span>'
+        + kidPickerHTML(b.only)
+        + '<span class="field-hint">一个都不勾 = 显示本页<b>全部</b>下级条目（默认）。要把下级条目分类摆放：同一页插入多个「▤ 条目」块，每块勾自己那一类 —— 保存后卡片只出现在对应的框里；上下箭头决定框内顺序。</span></div>'
         + field('版式', F.select('mode', [['card', '卡片网格'], ['list', '单列列表']], b.mode || 'card'))
         + field('每行几个（卡片版式）', F.select('cols', [[2, '2 个'], [3, '3 个'], [4, '4 个']], b.cols || 3))
         + field('说明文字（可留空）', F.text('note', b.note, '显示在标题下面的一行小字'))
-        + '<p class="modal-note">卡片内容不在这里填：它们就是<b>本页的子条目</b>。去「🛠️ → 🗂 条目树」给本页加分支，这里会自动出现卡片；点卡片进去就是原来的编辑器，表格 / 文本框 / 拖动排序全都在。</p>';
+        + '<p class="modal-note">卡片的内容不在这里填：它们就是<b>本页的下级条目</b>（在「🗂 条目树」里加分支）。点卡片进去就是原来的编辑器，表格 / 文本框 / 拖动排序全都在。</p>';
       case 'hr': return '<p class="modal-note">分隔线：一条水平分割，用于分区（无其他设置）。</p>';
     }
     return '';
@@ -295,6 +360,9 @@ window.LMEditor = (function () {
         b.mode = val('mode') === 'list' ? 'list' : 'card';
         b.cols = Math.min(Math.max(+val('cols') || 3, 1), 4);
         b.note = val('note');
+        /* ★ 修复82：勾选的条目按 DOM 顺序（= 清单里 ↑↓ 排好的顺序）写进 only */
+        b.only = Array.prototype.map.call(form.querySelectorAll('input[name="kid"]:checked'), function (x) { return x.value; });
+        if (!b.only.length) delete b.only; /* 空 = 显示全部（保持老数据形态，不写空数组） */
         break;
       case 'hr': break;
     }
@@ -308,11 +376,17 @@ window.LMEditor = (function () {
     const type = presetType || (page.blocks[idx] && page.blocks[idx].type);
     if (!type || !TYPES[type]) { LMApp.toast('未知的内容块类型'); return; }
     const base = isNew ? defaultsFor(type) : page.blocks[idx];
+    /* ★ 修复82：搭表单期间让 formHTML 知道「正在编辑哪一页的哪个块」——
+       条目块的分类清单要据此列出本页下级条目，并标出已被别的分类框占用的 */
+    formCtx = { pageId: pageId, idx: isNew ? null : idx };
+    let fhtml = '';
+    try { fhtml = formHTML(type, base); } finally { formCtx = null; }
     modal('<form id="blockForm">'
       + '<h3>' + (isNew ? '添加' : '编辑') + '「' + TYPES[type].name + '」内容块</h3>'
-      + formHTML(type, base)
+      + fhtml
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
       + '<button class="btn btn-primary" type="submit">保存</button></div></form>', function (root) {
+      if (type === 'entries') wireKidPicker(root); /* ★ 修复82：分类清单的 ↑↓ 调序 */
       root.querySelector('#blockForm').addEventListener('submit', function (e) {
         e.preventDefault();
         const nb = readForm(type, e.target, base);
@@ -409,7 +483,12 @@ window.LMEditor = (function () {
     }
     /* ★ 修复75：条目块里的「＋ 新建条目」磁贴 —— 等于在条目树里给本页加一个分支 */
     const entryAdd = e.target.closest ? e.target.closest('[data-entryadd]') : null;
-    if (entryAdd) { openPageForm(null, entryAdd.getAttribute('data-entryadd')); return; }
+    if (entryAdd) {
+      /* ★ 修复82：带上块序号 —— 从「分类框」里新建的条目，建成后自动归到那个框 */
+      const eb = entryAdd.getAttribute('data-entryadd-blk');
+      openPageForm(null, entryAdd.getAttribute('data-entryadd'), null, eb == null ? null : +eb);
+      return;
+    }
     /* ★ 修复80：关联块里的「＋ 挑选关联条目」磁贴 —— 直接打开这一块的设置（勾选清单） */
     const relPick = e.target.closest ? e.target.closest('[data-relpick]') : null;
     if (relPick) {
@@ -1307,10 +1386,17 @@ window.LMEditor = (function () {
     const p = LMApp.pageById(pageId);
     if (!p) return;
     p.blocks = p.blocks || [];
-    if (p.blocks.some(function (b) { return b && b.type === 'entries'; })) { LMApp.toast('这一页已经有条目块了'); return; }
-    p.blocks.push({ type: 'entries', title: '下级条目', mode: 'card', cols: 3, note: '' });
-    LMApp.applyEdit('已给「' + LMApp.pageTitle(p) + '」插入条目块');
-    treeModal();
+    /* ★ 修复82：不再限制「一页只能一个条目块」—— 多个条目块 = 多个分类框，
+       每个框在自己的设置里勾选要装哪些下级条目（空 = 全部，老行为不变） */
+    const n = p.blocks.filter(function (b) { return b && b.type === 'entries'; }).length;
+    const at = p.blocks.length;
+    p.blocks.push({
+      type: 'entries', mode: 'card', cols: 3, note: '',
+      title: n ? '下级条目（分类 ' + (n + 1) + '）' : '下级条目'
+    });
+    LMApp.applyEdit('已插入第 ' + (n + 1) + ' 个条目块：在设置里勾选它装哪几条');
+    /* 插完直接把设置表单打开（勾条目 / 改标题），省一次点击 */
+    setTimeout(function () { openBlockForm(pageId, at); }, 60);
   }
   /* 某页的全部后代（删除时一并清掉，避免留下打不开的孤儿页） */
   function descendants(id) {
@@ -1355,7 +1441,7 @@ window.LMEditor = (function () {
       });
   }
   /* 新建 / 编辑一个条目（= 一个页面）：图标 / 导航名 / 大标题 / 说明 / 对齐 */
-  function openPageForm(pageId, parentId, fromTree) {
+  function openPageForm(pageId, parentId, fromTree, onlyBlk) {
     const c = LMApp.state.content;
     const p = pageId ? LMApp.pageById(pageId) : null;
     const isNew = !p;
@@ -1387,10 +1473,25 @@ window.LMEditor = (function () {
           };
           if (parId) np.parent = parId;
           c.pages.push(np);
+          /* ★ 修复82：从某个分类框里点「＋ 新建条目」建的 → 自动归到那个框 */
+          if (onlyBlk != null && par && par.blocks && par.blocks[onlyBlk]
+            && par.blocks[onlyBlk].type === 'entries' && Array.isArray(par.blocks[onlyBlk].only)
+            && par.blocks[onlyBlk].only.length) {
+            par.blocks[onlyBlk].only.push(np.id);
+          }
           /* 上级页若还没有条目块 → 顺手插一个，否则访客在页面上看不到这个新分支 */
           if (par && !(par.blocks || []).some(function (b) { return b && b.type === 'entries'; })) {
             par.blocks = par.blocks || [];
             par.blocks.push({ type: 'entries', title: '下级条目', mode: 'card', cols: 3, note: '' });
+          } else if (par && onlyBlk == null) {
+            /* ★ 修复82：上级页如果全是「分类框」（每个都只装勾中的几条），从条目树新建的条目
+               不归任何框 = 页面上看不见。兜底挂进第一个分类框，至少可见、之后可再勾到别处 */
+            const ebs = (par.blocks || []).filter(function (b) { return b && b.type === 'entries'; });
+            const hasAllKids = ebs.some(function (b) { return !(Array.isArray(b.only) && b.only.length); });
+            if (ebs.length && !hasAllKids) {
+              if (!Array.isArray(ebs[0].only)) ebs[0].only = [];
+              ebs[0].only.push(np.id);
+            }
           }
           closeModal();
           LMApp.applyEdit('已新建条目「' + label + '」');
@@ -1412,6 +1513,7 @@ window.LMEditor = (function () {
       const p = r.page;
       const blocks = p.blocks || [];
       const hasEntries = blocks.some(function (b) { return b && b.type === 'entries'; });
+      const entN = blocks.filter(function (b) { return b && b.type === 'entries'; }).length;
       const warn = (r.kids && !hasEntries)
         ? '<span class="tree-warn" title="这一页有子条目，但页面里还没有「条目块」——访客看不到入口">缺条目块</span>'
         : '';
@@ -1427,7 +1529,9 @@ window.LMEditor = (function () {
         + '<button type="button" data-treeedit="' + LMApp.esc(p.id) + '" title="设置这一条：图标 / 导航名 / 大标题 / 说明 / 对齐">✎</button>'
         + '<button type="button" data-treemv="up" data-tid="' + LMApp.esc(p.id) + '" title="在同级里上移">↑</button>'
         + '<button type="button" data-treemv="down" data-tid="' + LMApp.esc(p.id) + '" title="在同级里下移">↓</button>'
-        + (hasEntries ? '' : '<button type="button" data-treeblock="' + LMApp.esc(p.id) + '" title="给这一页插入「条目块」（访客才能看到下级入口）">▤</button>')
+        + '<button type="button" data-treeblock="' + LMApp.esc(p.id) + '" title="'
+          + (hasEntries ? '再加一个「条目块」当分类框：新框可以勾选要装哪些下级条目（同一页可放多个）' : '给这一页插入「条目块」（访客才能看到下级入口）')
+          + '">▤</button>'
         + '<button type="button" class="danger" data-treedel="' + LMApp.esc(p.id) + '" title="删除这一条（连同它下面的所有子条目）">🗑</button>'
         + '</span></div>';
     }).join('');
@@ -1435,7 +1539,8 @@ window.LMEditor = (function () {
     modal('<h3>🗂 条目树</h3>'
       + '<p class="modal-note">第 1 层＝首页，第 2 层＝导航页（领域 / 生态 / 认知…），<b>第 3 层＝嵌套条目</b>。'
       + '点名字进页面；<b>＋</b> 加一个分支（自动出卡片）；<b>✎</b> 改图标 / 名字 / 说明；<b>↑↓</b> 调顺序；'
-      + '<b>▤</b> 给该页插入条目块；<b>🗑</b> 删除（含子条目）。页面里的「▤ 条目块」跟着这里自动变，不用手动维护。</p>'
+      + '<b>▤</b> 插入条目块（<b>同一页可以插多个</b>，每个框在自己的 ✎ 设置里勾选要装哪几条 —— 这样下级条目就能分类摆放）；<b>🗑</b> 删除（含子条目）。'
+      + '页面里的「▤ 条目块」跟着这里自动变，不用手动维护。</p>'
       + '<div class="tree-root"><span class="tree-ico">🏠</span><b>首页</b>'
       + '<span class="tree-badge">第 1 层</span><span class="tree-badge kids">' + topN + ' 个导航页</span></div>'
       + '<div class="tree-wrap">' + (body || '<p class="muted">还没有任何页面</p>') + '</div>'
@@ -4744,8 +4849,14 @@ window.LMEditor = (function () {
       case 'entriesins': {
         /* ★ 修复75：插入条目块 → 直接打开它的设置（栏目标题 / 版式 / 列数） */
         closePop();
-        const atE = LMApp.insertBlock(defaultsFor('entries'), insertAnchor());
-        if (atE >= 0) { LMApp.toast('已插入条目块：去「🗂 条目树」给本页加分支，卡片会自动出现'); openBlockForm(LMApp.state.pageId, atE); }
+        /* ★ 修复82：同一页可放多个条目块（分类摆放）—— 第 2 个起自动编号 */
+        const pgE = LMApp.pageById(LMApp.state.pageId);
+        const nE = ((pgE && pgE.blocks) || []).filter(function (b3) { return b3 && b3.type === 'entries'; }).length;
+        const atE = LMApp.insertBlock({
+          type: 'entries', mode: 'card', cols: 3, note: '',
+          title: nE ? '下级条目（分类 ' + (nE + 1) + '）' : '下级条目'
+        }, insertAnchor());
+        if (atE >= 0) openBlockForm(LMApp.state.pageId, atE);
         break;
       }
       case 'relins': {

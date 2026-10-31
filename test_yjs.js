@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '81';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '82';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -781,7 +781,7 @@ T('app.js：子页面数据模型（pageById / childPages / pagePath / pageTitle
     && appSrc.indexOf("p.id !== 'updates' && !p.parent; })") > 0);
 T('app.js：entries 块渲染子页面卡片（卡片 / 列表两版式）+ 子页面面包屑 + 导出层级助手',
   appSrc.indexOf("case 'entries': {") > 0
-    && appSrc.indexOf('const kids = childPages(pageId).slice();') > 0
+    && appSrc.indexOf('const allKids = childPages(pageId).slice();') > 0
     && appSrc.indexOf("'<a class=\"entry-card\" href=\"#/p/'") > 0
     && appSrc.indexOf("'<a class=\"entry-row\" href=\"#/p/'") > 0
     && appSrc.indexOf('data-entryadd="') > 0
@@ -790,7 +790,7 @@ T('app.js：entries 块渲染子页面卡片（卡片 / 列表两版式）+ 子�
     && appSrc.indexOf('pageById: pageById, pageChildren: childPages, pagePath: pagePath, pageTitle: pageTitle,') > 0);
 T('editor.js：TYPES/defaultsFor/formHTML/readForm 认 entries + 插入组「▤ 条目」+ 管理条「🗂 条目树」',
   edt2.indexOf("entries: { name: '嵌套条目', icon: '▤' }") > 0
-    && edt2.indexOf("case 'entries': return { type: type, title: '相关条目', mode: 'card', cols: 3, note: '' };") > 0
+    && edt2.indexOf("case 'entries': return { type: type, title: '下级条目', mode: 'card', cols: 3, note: '' };") > 0
     && edt2.indexOf('data-tb="entriesins"') > 0
     && edt2.indexOf("case 'entriesins': {") > 0
     && edt2.indexOf('data-panel="tree"') > 0
@@ -798,7 +798,7 @@ T('editor.js：TYPES/defaultsFor/formHTML/readForm 认 entries + 插入组「▤
     && edt2.indexOf("const entryAdd = e.target.closest ? e.target.closest('[data-entryadd]') : null;") > 0);
 T('editor.js：条目树全操作（加分支/改名/调序/补条目块/级联删除 + 删页清跳转死链）',
   edt2.indexOf('function treeModal() {') > 0
-    && edt2.indexOf('function openPageForm(pageId, parentId, fromTree) {') > 0
+    && edt2.indexOf('function openPageForm(pageId, parentId, fromTree, onlyBlk) {') > 0
     && edt2.indexOf('function movePage(id, dir) {') > 0
     && edt2.indexOf('function addEntriesBlock(pageId) {') > 0
     && edt2.indexOf('function descendants(id) {') > 0
@@ -1299,6 +1299,106 @@ T('全局兜底把真实错误写进控制台（下次「已自动跳过」可�
     } catch (e3) { ok9 = false; detail = '抛出 ' + e3.message; }
   }
   T('真跑上色：文字颜色/渐变不再抛错 · 源码与渲染都干净 · 高亮被保留 · 换色原地改 · 高亮功能回归 · 逐字穷举零抛错', ok9, detail);
+})();
+/* ---------- 9.47) 修复82：下级条目分类摆放（同一页多个条目块 · 勾选子条目 · ↑↓ 调序） ---------- */
+console.log('【9.47】修复82：同一页可放多个「下级条目」框，每框勾选自己那一类（可多选、可调序）');
+T('app.js：only 从「只排序」改成「白名单 + 顺序」，且条目必须仍挂在本页',
+  appSrc.indexOf('const allKids = childPages(pageId).slice();') > 0
+    && appSrc.indexOf('? only.map(function (id2) { return pageById(id2); })') > 0
+    && appSrc.indexOf('.filter(function (k) { return k && k.parent === pageId; })') > 0
+    && appSrc.indexOf(': allKids;') > 0
+    && appSrc.indexOf('kids.sort(function (a1, c1) {') < 0);
+T('app.js：磁贴带块序号（分类框里新建的条目自动归框）+ 分类框空态文案',
+  appSrc.indexOf('data-entryadd-blk="\' + i + \'"') > 0
+    && appSrc.indexOf('这个分类框里还没有条目') > 0
+    && appSrc.indexOf('在本分类里新建一个下级条目') > 0);
+T('editor.js：分类清单组件 + ↑↓ 调序 + 读表单按勾选顺序写 only（全不勾则删掉 only）',
+  edt2.indexOf('function kidPickerHTML(sel) {') > 0
+    && edt2.indexOf('function wireKidPicker(root) {') > 0
+    && edt2.indexOf('已在「') > 0
+    && edt2.indexOf('b.only = Array.prototype.map.call(form.querySelectorAll(\'input[name="kid"]:checked\')') > 0
+    && edt2.indexOf('if (!b.only.length) delete b.only;') > 0);
+T('editor.js：不再限制「一页只能一个条目块」，条目树的 ▤ 在有块时也保留（用来加分类框）',
+  edt2.indexOf("LMApp.toast('这一页已经有条目块了')") < 0
+    && edt2.indexOf('const n = p.blocks.filter(function (b) { return b && b.type === \'entries\'; }).length;') > 0
+    && edt2.indexOf('+ (hasEntries ? \'\' : \'<button type="button" data-treeblock=') < 0
+    && edt2.indexOf('再加一个「条目块」当分类框') > 0);
+T('editor.js：搭表单期间注入 formCtx（列本页子条目 + 标出被别的分类框占用）+ 新建归框',
+  edt2.indexOf('formCtx = { pageId: pageId, idx: isNew ? null : idx };') > 0
+    && edt2.indexOf('try { fhtml = formHTML(type, base); } finally { formCtx = null; }') > 0
+    && edt2.indexOf("if (type === 'entries') wireKidPicker(root);") > 0
+    && edt2.indexOf('function openPageForm(pageId, parentId, fromTree, onlyBlk) {') > 0
+    && edt2.indexOf('par.blocks[onlyBlk].only.push(np.id);') > 0
+    && edt2.indexOf('const hasAllKids = ebs.some(') > 0);
+T('css：分类清单样式（整行可点勾选 + ↑↓ 按钮，手机端加大点击区、隐去「已在」标签）',
+  cssSrc.indexOf('.kid-pick{') > 0 && cssSrc.indexOf('.kid-mv:hover{') > 0
+    && cssSrc.indexOf('body.mobile-view .kid-own{display:none}') > 0
+    && cssSrc.indexOf('body.mobile-view .kid-mv{width:32px;height:32px') > 0);
+
+/* 真跑 A：直接执行 app.js 里那段「kids 计算」源码（白名单过滤 + 顺序） */
+(function () {
+  const aA = appSrc.indexOf('const allKids = childPages(pageId).slice();');
+  const bA = appSrc.indexOf(': allKids;', aA);
+  const codeA = (aA >= 0 && bA > aA) ? appSrc.slice(aA, bA + ': allKids;'.length) : '';
+  const PGS = [
+    { id: 'home' }, { id: 'A', parent: 'home' }, { id: 'B', parent: 'home' },
+    { id: 'k1', parent: 'A' }, { id: 'k2', parent: 'A' }, { id: 'k3', parent: 'A' },
+    { id: 'x1', parent: 'B' }
+  ];
+  const kidsOf = function (pid) {
+    return PGS.filter(function (p) { return p && p.id !== 'home' && (p.parent || '') === (pid || ''); });
+  };
+  const byId = function (id) { return PGS.filter(function (p) { return p.id === id; })[0] || null; };
+  let okA47 = false, dA47 = '切片不可用';
+  if (codeA) {
+    try {
+      const F = new Function('childPages', 'pageById', 'pageId', 'b', codeA + '\nreturn kids;');
+      const ids = function (arr) { return arr.map(function (p) { return p.id; }).join(','); };
+      const all = ids(F(kidsOf, byId, 'A', {}));
+      const cat = ids(F(kidsOf, byId, 'A', { only: ['k3', 'k1'] }));
+      const stale = ids(F(kidsOf, byId, 'A', { only: ['k3', 'x1', 'ghost'] }));
+      const blank = ids(F(kidsOf, byId, 'A', { only: [] }));
+      okA47 = all === 'k1,k2,k3'          /* 不设限 = 全部（老行为不变） */
+        && cat === 'k3,k1'                /* 只有勾中的，且按勾选顺序 */
+        && stale === 'k3'                 /* 别的页的子条目 / 已删除的 id 一律不显示 */
+        && blank === 'k1,k2,k3';
+      if (!okA47) dA47 = JSON.stringify({ all: all, cat: cat, stale: stale, blank: blank });
+    } catch (eA) { okA47 = false; dA47 = '抛出 ' + eA.message; }
+  }
+  T('真跑分类过滤：only 白名单 + 勾选顺序 · 空 only 仍是全部 · 挪走的条目自动消失', okA47, dA47);
+
+  /* 真跑 B：直接执行 editor.js 的 readForm，用桩 form 提交勾选 */
+  const aB = edt2.indexOf('  function readForm(type, form, base) {');
+  const bB = edt2.indexOf('  function openBlockForm(pageId, idx, presetType) {');
+  const codeB = (aB >= 0 && bB > aB) ? edt2.slice(aB, bB) : '';
+  let okB47 = false, dB47 = '切片不可用';
+  if (codeB) {
+    try {
+      const RF = new Function('LMStore', codeB + '\nreturn readForm;')(
+        { deepCopy: function (o) { return JSON.parse(JSON.stringify(o)); } });
+      const mkForm = function (vals, checked) {
+        return {
+          querySelector: function (sel) {
+            const m = /\[name="?([A-Za-z0-9_]+)"?\]/.exec(sel);
+            const v = m ? vals[m[1]] : null;
+            return v == null ? null : { value: v };
+          },
+          querySelectorAll: function () {
+            return checked.map(function (id) { return { value: id }; });
+          }
+        };
+      };
+      const vals = { title: '第一类下级条目', mode: 'card', cols: '3', note: '' };
+      const b1 = RF('entries', mkForm(vals, ['k2', 'k1']), { type: 'entries' });
+      const b2 = RF('entries', mkForm(vals, []), { type: 'entries' });
+      okB47 = b1.title === '第一类下级条目'
+        && JSON.stringify(b1.only) === '["k2","k1"]'   /* DOM 顺序 = 框里卡片的顺序 */
+        && b1.cols === 3 && b1.mode === 'card'
+        && !('only' in b2);                            /* 全不勾 → 回到「显示全部」 */
+      if (!okB47) dB47 = JSON.stringify({ b1: b1, b2: b2 }).slice(0, 260);
+    } catch (eB) { okB47 = false; dB47 = '抛出 ' + eB.message; }
+  }
+  T('真跑读表单：勾选顺序进 only · 全不勾等于显示全部（不写空数组）· 标题/版式/列数照旧', okB47, dB47);
 })();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
