@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '76';
+var LM_ASSET_VER = '77';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -34,7 +34,9 @@ window.LMApp = (function () {
   };
 
   /* ---------- 文档历史：撤销 / 重做（最多 60 步，本次打开页面期间有效） ---------- */
-  const hist = { arr: [], ts: [], ptr: -1 };
+  /* ★ 修复77：历史版本要能看出「这一步大概改了什么」——多存一条与快照并行的操作说明（hist.msg），
+     记录不到时（协同同步 / 自动归位等）再由 histDiffLabel 对相邻快照做差分摘要兜底 */
+  const hist = { arr: [], ts: [], msg: [], ptr: -1 };
   /* 快照比较前剥离协作时间戳 _ts：touchBlock 每次都写 Date.now()，会让「内容其实没变」的
      保存也生成不同快照 —— 撤销时按一次没反应（看着像要按两次）。剥离后比较，一次操作 = 一步撤销。
      用字符串正则剥离（快、无解析）：JSON 里字符串内的引号都带反斜杠转义，不会误伤正文。
@@ -47,17 +49,24 @@ window.LMApp = (function () {
       .replace(/"_ts":[0-9]+/g, '')
       .replace(/\u00A0/g, ' ');
   }
-  function hPush() {
+  function hPush(msg) {
     if (!state.content) return;
     const snap = JSON.stringify(state.content);
     const cur = hist.arr[hist.ptr];
-    if (cur === snap || stripTsSnap(cur) === stripTsSnap(snap)) return;
+    if (cur === snap || stripTsSnap(cur) === stripTsSnap(snap)) {
+      /* 内容没变（同一操作被多次 commit / render 尾兜底）：把后到的说明补给当前这一步，历史里就不空着 */
+      if (msg && hist.msg && hist.ptr >= 0 && !hist.msg[hist.ptr]) hist.msg[hist.ptr] = String(msg);
+      return;
+    }
     hist.arr = hist.arr.slice(0, hist.ptr + 1);
     hist.ts = (hist.ts || []).slice(0, hist.ptr + 1);
+    hist.msg = (hist.msg || []).slice(0, hist.ptr + 1);
     hist.arr.push(snap);
     hist.ts.push(Date.now());
+    hist.msg.push(String(msg || ""));
     if (hist.arr.length > 60) hist.arr.shift();
     if (hist.ts.length > 60) hist.ts.shift();
+    if (hist.msg.length > 60) hist.msg.shift();
     hist.ptr = hist.arr.length - 1;
     if (window.LMEditor && LMEditor.renderToolbar) { try { LMEditor.renderToolbar(); } catch (e) { /* noop */ } }
   }
@@ -823,7 +832,7 @@ window.LMApp = (function () {
         }
       });
       if (healed) {
-        try { LMStore.saveLocal(state.content); hPush(); } catch (eH) { /* noop */ }
+        try { LMStore.saveLocal(state.content); hPush('模块漂出页面，已自动归位'); } catch (eH) { /* noop */ }
         toast('⚠️ 有模块漂出了页面范围，已自动归位到文档流（原并排/自由摆放已解除）');
         setTimeout(function () { adjustFreeLayoutSafe(); }, 60); /* 归位后按新布局重算让位 */
         return; /* 本帧让位几何已失效 */
@@ -1005,7 +1014,7 @@ window.LMApp = (function () {
   function commit(opts) {
     opts = opts || {};
     LMStore.saveLocal(state.content);
-    hPush();
+    hPush(opts.msg); /* ★ 修复77：历史版本里显示这次操作是什么 */
     if (window.LMCollab) { try { LMCollab.publish(state.content); } catch (e) { /* 协同广播失败不影响本地保存 */ } }
     if (opts.rerender === false) { if (!opts.silent) toast(opts.msg || '已保存'); return; }
     const y = window.scrollY;
@@ -1046,7 +1055,7 @@ window.LMApp = (function () {
       const sameShape = pg0 && pg1 && pg0.id === pg1.id && pg0.blocks && pg1.blocks
         && pg0.blocks.length === pg1.blocks.length
         && pg0.blocks.every(function (b, i) { return b.id === pg1.blocks[i].id; });
-      if (!sameShape) { render(); hPush(); return false; } /* 结构变化（插入/删除/调序/换页）：整页兜底（低频） */
+      if (!sameShape) { render(); hPush('其他设备的修改（协同同步）'); return false; } /* 结构变化（插入/删除/调序/换页）：整页兜底（低频） */
       let any = false;
       for (let i = 0; i < pg1.blocks.length; i++) {
         let changed = true;
@@ -1054,9 +1063,9 @@ window.LMApp = (function () {
         if (changed) { if (renderBlockAt(state.pageId, i)) any = true; }
       }
       if (any) { adjustImages(); adjustFreeLayoutSafe(); }
-      hPush(); /* ★ 撤销基准随远端内容同步（与 render 尾 hPush 同效，重复调用无副作用） */
+      hPush('其他设备的修改（协同同步）'); /* ★ 撤销基准随远端内容同步（与 render 尾 hPush 同效，重复调用无副作用） */
       return any;
-    } catch (e) { render(); hPush(); return false; }
+    } catch (e) { render(); hPush('其他设备的修改（协同同步）'); return false; }
   }
   /* ★ 修复㉜「不保存修改」：进入管理模式的瞬间拍下内容快照，之后随时可以一键回到这一版
      （相当于 Word 关闭时选「不保存」）。恢复走统一 commit：写本机 + 记历史 + 协同广播全网收敛。
@@ -1255,18 +1264,115 @@ window.LMApp = (function () {
     }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
     document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
   }
+  /* ★ 修复77：历史版本「这一步改了什么」——块类型 → 中文名（差异摘要用） */
+  const HIST_TYPE_NAMES = {
+    heading: '标题', paragraph: '正文', callout: '提示', image: '图片', table: '表格',
+    chart: '图表', files: '附件', sources: '来源', md: 'Markdown', hr: '分隔线', entries: '条目'
+  };
+  /* ★ 修复77：两个快照的「人话差分」——只描述改到哪、改了什么类型，不做逐字对比（快、够用）。
+     纯函数（不碰 DOM / 不读 state），便于单测：返回形如
+       「认知地图」+1 块（表格）；网站信息 等 3 处
+       「领域地图」正文、表格
+       新增「神经网络」 / 删除「生态地图」
+     没有变化 → 空串 */
+  function histDiffLabel(a, b) {
+    if (!a || !b) return '';
+    const parts = [];
+    /* ① 网站级信息（首页大标题 / 顶部小字 / 点题 / 简介 / 首页特性卡片） */
+    const sa = a.site || {}, sb = b.site || {};
+    const siteChanged = ['title', 'subtitle', 'topic', 'description'].some(function (k) {
+      return String(sa[k] || '') !== String(sb[k] || '');
+    }) || JSON.stringify(sa.homeFeatures || []) !== JSON.stringify(sb.homeFeatures || []);
+    if (siteChanged) parts.push('网站信息');
+    /* ② 逐页比对（新增 / 删除 / 块增减 / 块内容改动 / 页头字段） */
+    const pa = a.pages || [], pb = b.pages || [];
+    const oldById = {};
+    pa.forEach(function (p) { if (p && p.id) oldById[p.id] = p; });
+    const seen = {};
+    pb.forEach(function (p) {
+      if (!p || !p.id) return;
+      seen[p.id] = 1;
+      const nm = '「' + String(p.label || p.title || p.id) + '」';
+      const old = oldById[p.id];
+      if (!old) { parts.push('新增' + nm); return; }
+      const ob = old.blocks || [], nb = p.blocks || [];
+      if (nb.length !== ob.length) {
+        const add = nb.length - ob.length;
+        if (add > 0) {
+          const types = [];
+          nb.slice(ob.length).forEach(function (x) {
+            const t = (x && HIST_TYPE_NAMES[x.type]) || '内容';
+            if (types.indexOf(t) < 0) types.push(t);
+          });
+          parts.push(nm + ' +' + add + ' 块（' + types.join('、') + '）');
+        } else {
+          const types = [];
+          ob.slice(nb.length).forEach(function (x) {
+            const t = (x && HIST_TYPE_NAMES[x.type]) || '内容';
+            if (types.indexOf(t) < 0) types.push(t);
+          });
+          parts.push(nm + ' −' + (-add) + ' 块（' + types.join('、') + '）');
+        }
+        return;
+      }
+      /* 块数量不变：找出内容真的变了的块，按类型汇总 */
+      const types = [];
+      for (let i = 0; i < nb.length; i++) {
+        const x = nb[i], y = ob[i];
+        if (!x || !y || x.type !== y.type) { if (types.indexOf('结构') < 0) types.push('结构'); continue; }
+        let same = true;
+        try { same = stripTsSnap(JSON.stringify(x)) === stripTsSnap(JSON.stringify(y)); } catch (eD) { same = false; }
+        if (!same) {
+          const t = HIST_TYPE_NAMES[x.type] || '内容';
+          if (types.indexOf(t) < 0) types.push(t);
+        }
+      }
+      const headChanged = String(old.label || '') !== String(p.label || '')
+        || String(old.title || '') !== String(p.title || '')
+        || String(old.description || '') !== String(p.description || '')
+        || String(old.icon || '') !== String(p.icon || '');
+      if (headChanged) parts.push(nm + '标题/说明');
+      if (types.length) parts.push(nm + types.join('、'));
+    });
+    pa.forEach(function (p) {
+      if (p && p.id && !seen[p.id]) parts.push('删除「' + String(p.label || p.title || p.id) + '」');
+    });
+    /* ③ 跳转映射 / 留言 */
+    const ja = (a.jumps || []).length, jb = (b.jumps || []).length;
+    if (ja !== jb) parts.push('跳转映射 ' + (jb > ja ? '+' : '−') + Math.abs(jb - ja));
+    const da = (a.discuss || []).length, db = (b.discuss || []).length;
+    if (da !== db) parts.push('留言 ' + (db > da ? '+' : '−') + Math.abs(db - da));
+    if (!parts.length) return '';
+    return parts.slice(0, 2).join('；') + (parts.length > 2 ? ' 等 ' + parts.length + ' 处' : '');
+  }
+  /* ★ 修复77：历史版本面板的每步说明 —— 有操作名就用操作名，再拼上「改到哪」的差分 */
+  function histStepNote(msg, diff) {
+    const m = String(msg || '').trim(), d = String(diff || '').trim();
+    if (m && d) return m + '：' + d;
+    return d || m;
+  }
   /* ---------- 历史版本面板（WPS 式）：列表 + 一键恢复 ----------
      恢复 ≠ 指针回跳：把该快照变成一次「新修改」走完整 commit 链（本地落盘 → 实时广播 → 云端提交），
      其他设备与云端照常收到，且本机可再撤销 —— 与 WPS「恢复到历史版本」语义一致 */
   function historyList() {
+    /* 一次解析成数组：既要算差分（相邻两步），又要取页数/体积，别反复 JSON.parse */
+    const parsed = [];
+    for (let i = 0; i < hist.arr.length; i++) {
+      let c = null;
+      try { c = JSON.parse(hist.arr[i]); } catch (e) { c = null; }
+      parsed.push(c && Array.isArray(c.pages) ? c : null);
+    }
     const out = [];
     for (let i = hist.arr.length - 1; i >= 0; i--) {
-      let c = null;
-      try { c = JSON.parse(hist.arr[i]); } catch (e) { continue; }
-      if (!c || !Array.isArray(c.pages)) continue;
+      const c = parsed[i];
+      if (!c) continue;
       const cur = c.pages.find(function (p) { return p && p.id === state.pageId; }) || c.pages[0] || {};
+      const msg = (hist.msg || [])[i] || '';
+      /* 这一步怎么来的 = 相对上一步（第 i-1 个快照）的差分；最早一步没有「上一步」 */
+      const diff = i > 0 ? histDiffLabel(parsed[i - 1], c) : '';
       out.push({ i: i, ts: (hist.ts || [])[i] || 0, isCur: i === hist.ptr,
-                 pages: c.pages.length, size: hist.arr[i].length, title: cur.title || '' });
+                 pages: c.pages.length, size: hist.arr[i].length, title: cur.title || '',
+                 msg: msg, diff: diff, note: i > 0 ? histStepNote(msg, diff) : '' });
     }
     return out;
   }
@@ -2078,6 +2184,7 @@ window.LMApp = (function () {
     setupResilience();
     hist.arr = [JSON.stringify(state.content)];
     hist.ts = [Date.now()];
+    hist.msg = [''];
     hist.ptr = 0;
     state.admin = sessionStorage.getItem('lm_admin') === '1';
     state.root = state.admin && sessionStorage.getItem('lm_root') === '1';

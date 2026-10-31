@@ -1023,6 +1023,9 @@ body.mobile-view .entry-row .entry-d{display:none}
 body.mobile-view .tree-name{max-width:32%}
 body.mobile-view .tree-acts button{width:26px;height:26px}
 body.mobile-view .tree-wrap{max-height:46vh}
-
-
-
+/* ★ 修复77：历史版本 · 每步「改了什么」说明（灰色副信息，不与时间戳抢注意力） */
+.hist-note{margin-top:3px;font-size:12px;line-height:1.45;color:var(--text2);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  overflow-wrap:anywhere}
+.hist-note.is-cur{color:var(--blue)}
+body.mobile-view .hist-note{font-size:11.5px;-webkit-line-clamp:1}

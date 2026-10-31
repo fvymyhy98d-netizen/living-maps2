@@ -989,13 +989,18 @@ window.LMEditor = (function () {
       return;
     }
     modal('<h3>历史版本（本次会话 · 最多 60 步）</h3>'
-      + '<p class="modal-note">点「恢复此版本」= 把该快照变成一次新修改：会同步给其他设备并提交云端，本机还能再撤销。撤销栈之外更早的版本请用「💾 备份 / 恢复」。</p>'
+      + '<p class="modal-note">点「恢复此版本」= 把该快照变成一次新修改：会同步给其他设备并提交云端，本机还能再撤销。撤销栈之外更早的版本请用「💾 备份 / 恢复」。<br>时间下面的小字 = 这一步大概改了哪里（灰色 = 普通步骤，蓝色 = 当前版本）。</p>'
       + '<div style="max-height:52vh;overflow:auto">'
       + list.map(function (v) {
           const d = v.ts ? new Date(v.ts).toLocaleString('zh-CN') : '（更早）';
-          return '<div style="display:flex;gap:10px;align-items:center;padding:7px 2px;border-bottom:1px solid rgba(0,0,0,.06)">'
-            + '<b style="flex:1;font-size:.92rem">' + LMApp.esc(d) + (v.isCur ? ' <span style="color:#0a84ff;font-size:.8rem">← 当前</span>' : '') + '</b>'
-            + '<span style="color:#86868b;font-size:.8rem">' + v.pages + ' 页 · ' + Math.max(1, Math.round(v.size / 1024)) + 'KB</span>'
+          /* ★ 修复77：时间下面一行灰字 = 这一步大概改了什么（操作名 + 差分摘要） */
+          const note = String(v.note || v.msg || '').trim();
+          return '<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 2px;border-bottom:1px solid rgba(0,0,0,.06)">'
+            + '<div style="flex:1;min-width:0">'
+            + '<b style="font-size:.92rem">' + LMApp.esc(d) + (v.isCur ? ' <span style="color:#0a84ff;font-size:.8rem">← 当前</span>' : '') + '</b>'
+            + (note ? '<div class="hist-note' + (v.isCur ? ' is-cur' : '') + '" title="' + LMApp.esc(note) + '">' + LMApp.esc(note) + '</div>' : '')
+            + '</div>'
+            + '<span style="color:#86868b;font-size:.8rem;white-space:nowrap;padding-top:2px">' + v.pages + ' 页 · ' + Math.max(1, Math.round(v.size / 1024)) + 'KB</span>'
             + (v.isCur ? '' : '<button type="button" class="btn btn-mini" data-restore="' + v.i + '">恢复此版本</button>')
             + '</div>';
         }).join('')

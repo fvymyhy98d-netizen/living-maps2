@@ -344,7 +344,7 @@ T('协同局部刷新：applyRemoteContent 结构一致时逐块 diff 替换（r
     && col.indexOf('LMApp.applyRemoteContent(c)') > 0
     && col.indexOf('LMApp.applyRemoteContent(mergeBlocks(c))') > 0);
 T('撤销基准随远端局部更新同步（applyRemoteContent 尾部 hPush）',
-  appSrc.indexOf('hPush(); /* ★ 撤销基准随远端内容同步') > 0);
+  appSrc.indexOf("hPush('其他设备的修改（协同同步）'); /* ★ 撤销基准随远端内容同步") > 0);
 T('手机排版兜底：free-box 不溢出屏 + 长词/链接自动断行',
   cssSrc.indexOf('body.mobile-view .free-box{max-width:calc(100vw - 16px)}') > 0
     && cssSrc.indexOf('body.mobile-view .free-box .b-p,body.mobile-view .free-box p{overflow-wrap:anywhere;word-break:break-word}') > 0);
@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '76';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '77';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -911,6 +911,75 @@ T('整理布局提示改造（悬空时报数量 + 最大空隙并指向新按�
       && r2.length === 1 && r2[0].gap === 100;
   } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
   T('scanFreeGaps 真跑：只挑自由框、距离=框顶−上方块下缘（100px），首块以列顶为基准；文档流块不参与', ok);
+})();
+/* ---------- 9.42) 修复77：历史版本每步显示「大概改了什么」 ---------- */
+console.log('【9.42】修复77：历史版本时间下面一行灰字 = 操作名 + 对相邻快照的差分摘要');
+T('app.js：hist 增存 hist.msg（与 arr/ts 同步增减）· hPush(msg) 去重时把说明补给当前步 · commit 传 opts.msg',
+  appSrc.indexOf('const hist = { arr: [], ts: [], msg: [], ptr: -1 };') > 0
+    && appSrc.indexOf('function hPush(msg) {') > 0
+    && appSrc.indexOf('hist.msg = (hist.msg || []).slice(0, hist.ptr + 1);') > 0
+    && appSrc.indexOf('if (msg && hist.msg && hist.ptr >= 0 && !hist.msg[hist.ptr]) hist.msg[hist.ptr] = String(msg);') > 0
+    && appSrc.indexOf('if (hist.msg.length > 60) hist.msg.shift();') > 0
+    && appSrc.indexOf('hPush(opts.msg); /* ★ 修复77：历史版本里显示这次操作是什么 */') > 0
+    && appSrc.indexOf("hist.msg = [''];") > 0
+    && appSrc.indexOf("hPush('其他设备的修改（协同同步）')") > 0);
+T('app.js：histDiffLabel / histStepNote 存在，historyList 返回 msg+diff+note；editor 渲染 .hist-note，css 有灰字样式',
+  appSrc.indexOf('function histDiffLabel(a, b) {') > 0
+    && appSrc.indexOf('function histStepNote(msg, diff) {') > 0
+    && appSrc.indexOf('const diff = i > 0 ? histDiffLabel(parsed[i - 1], c) : \'\';') > 0
+    && appSrc.indexOf("msg: msg, diff: diff, note: i > 0 ? histStepNote(msg, diff) : ''") > 0
+    && edt2.indexOf('const note = String(v.note || v.msg || \'\').trim();') > 0
+    && edt2.indexOf("(v.isCur ? ' is-cur' : '')") > 0
+    && cssSrc.indexOf('.hist-note{margin-top:3px;font-size:12px;line-height:1.45;color:var(--text2);') > 0
+    && cssSrc.indexOf('.hist-note.is-cur{color:var(--blue)}') > 0);
+/* 真实执行：把 histDiffLabel / histStepNote / historyList 从源码截出来，用桩 hist + state 跑一遍 */
+(function () {
+  function cut(name) {
+    const a5 = appSrc.indexOf('function ' + name + '(');
+    const z5 = appSrc.indexOf('\n  }', a5);
+    return (a5 >= 0 && z5 > a5) ? appSrc.slice(a5, z5 + 4) : '';
+  }
+  const names = { heading: '标题', paragraph: '正文', callout: '提示', image: '图片', table: '表格',
+    chart: '图表', files: '附件', sources: '来源', md: 'Markdown', hr: '分隔线', entries: '条目' };
+  const code5 = [cut('histDiffLabel'), cut('histStepNote'), cut('historyList')].join('\n')
+    + '\nreturn { diff: histDiffLabel, list: historyList };';
+  const strip = function (s) { return String(s).replace(/"_ts":\d+/g, '"_ts":0'); };
+  const pageWith = function (blocks) { return { id: 'p1', label: '领域地图', title: '领域地图', blocks: blocks }; };
+  const A = { site: { title: 'T' }, pages: [pageWith([{ type: 'paragraph', text: 'a' }])], jumps: [], discuss: [] };
+  const B = { site: { title: 'T' }, pages: [pageWith([{ type: 'paragraph', text: 'a' }, { type: 'table', title: 't' }])], jumps: [], discuss: [] };
+  const C = { site: { title: 'T' }, pages: [pageWith([{ type: 'paragraph', text: 'a2' }])], jumps: [], discuss: [] };
+  const D = { site: { title: 'T2' }, pages: [pageWith([{ type: 'paragraph', text: 'a' }])], jumps: [], discuss: [] };
+  const E = { site: { title: 'T' }, pages: [], jumps: [], discuss: [] };
+  let ok = false;
+  try {
+    const mk = function (histObj) { return new Function('hist', 'state', 'stripTsSnap', 'HIST_TYPE_NAMES', code5); };
+    const runHist = function (s0, s1, msg1) {
+      const h = { arr: [JSON.stringify(s0), JSON.stringify(s1)], ts: [111, 222], msg: ['', msg1 || ''], ptr: 1 };
+      return mk(h)(h, { pageId: 'p1' }, strip, names);
+    };
+    /* ① 块数变化：+1 块（表格），并把操作名拼在前面 */
+    const li = runHist(A, B, '已插入表格').list();
+    const r0 = li[0], r1 = li[1];
+    /* ② 块数不变、文字改了 → 报「正文」 */
+    const dText = runHist(A, C).diff(A, C);
+    /* ③ 网站信息 / 新增页 / 删除页 */
+    const dSite = runHist(A, D).diff(A, D);
+    const dAdd = runHist(A, { site: { title: 'T' }, pages: [pageWith([{ type: 'paragraph', text: 'a' }]), { id: 'p2', label: '神经网络', blocks: [] }] }).diff(A, { site: { title: 'T' }, pages: [pageWith([]), { id: 'p2', label: '神经网络', blocks: [] }] });
+    const dDel = runHist(A, E).diff(A, E);
+    /* ④ 完全相同的两份快照 → 空串（不显示假说明） */
+    const dSame = runHist(A, A).diff(A, A);
+    ok = li.length === 2
+      && r0.isCur === true && r0.msg === '已插入表格'
+      && r0.diff.indexOf('+1 块（表格）') >= 0
+      && r0.note === '已插入表格：「领域地图」 +1 块（表格）'
+      && r1.note === '' && r1.diff === ''
+      && dText.indexOf('「领域地图」正文') >= 0
+      && dSite === '网站信息'
+      && dAdd.indexOf('新增「神经网络」') >= 0
+      && dDel.indexOf('删除「领域地图」') >= 0
+      && dSame === '';
+  } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
+  T('histDiffLabel/historyList 真跑：+1 块（表格）· 正文改动 · 网站信息 · 新增/删除页 · 无变化不出假说明', ok);
 })();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
