@@ -2327,12 +2327,76 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && s.indexOf('warm(ix0)') > 0 && s.indexOf('expandQuery(q, prev)') > 0;
     })());
 
+  /* ★ 修复112：A + D 组合 —— 真训出来的小语言模型只做「重排 + 纠错」，绝不生成答案文字 */
+  const fs2 = require('fs');
+  const lmPath = path.join(DIR, 'data/lm.json');
+  const LMLM = require(path.join(DIR, 'js/lm.js'));
+  const lmPayload = JSON.parse(fs2.readFileSync(lmPath, 'utf8'));
+  LMLM.fromJSON(lmPayload);
+  const goodText = pages.map(function (p) { return ai.pageText(p); })
+    .sort(function (a, b) { return b.length - a.length; })[0].slice(0, 30);
+  const gibberish = '啊哦呃吖吡咕噜噼啪嗒嗝咦';
+
+  T('小模型1：训练脚本 + 产物都在 · data/lm.json < 380KB · 元信息合理（order / chars / grams）',
+    fs2.existsSync(path.join(DIR, 'tools/train_lm.js')) && fs2.existsSync(lmPath)
+      && Buffer.byteLength(fs2.readFileSync(lmPath), 'utf8') < 400 * 1024
+      && lmPayload.order >= 1 && lmPayload.chars > 500 && Object.keys(lmPayload.grams).length >= 1,
+    'order=' + lmPayload.order + ' chars=' + lmPayload.chars + ' bytes=' + Buffer.byteLength(fs2.readFileSync(lmPath), 'utf8'));
+
+  T('小模型2：它真的学到了本站语料 —— 原文句子得分显著高于乱码',
+    LMLM.ready() && LMLM.logp(goodText) > LMLM.logp(gibberish) + 0.5,
+    '原文=' + LMLM.logp(goodText).toFixed(3) + ' 乱码=' + LMLM.logp(gibberish).toFixed(3));
+
+  T('小模型3：重排只改先后 —— 候选集合完全不变（不会凭空多出/改写一句）',
+    (function () {
+      const cands = ai.rankSent(ix, 'RAG 是什么', 6);
+      const before = cands.map(function (c) { return c.s; }).sort().join('|');
+      const after = LMLM.rerank(cands.slice()).map(function (c) { return c.s; }).sort().join('|');
+      return cands.length >= 2 && before === after;
+    })());
+
+  T('小模型4：英文词纠错 —— 站内没有的拼写映射到最近词；中文一律不动',
+    (function () {
+      const vocab = Object.keys(ix.idf).filter(function (t) { return /^[a-z][a-z0-9+#._-]*$/.test(t); });
+      const word = vocab.filter(function (w) { return w.length >= 5; })[0];
+      const typo = word ? (word.slice(0, 1) + word.charAt(2) + word.charAt(1) + word.slice(3)) : '';
+      return !!word && LMLM.fixQuery(typo, vocab) === word
+        && LMLM.fixQuery('紫砂壶怎么养', vocab) === '紫砂壶怎么养';
+    })(), '词汇表英文词 ' + Object.keys(ix.idf).filter(function (t) { return /^[a-z]/.test(t); }).length + ' 个');
+
+  T('小模型5：★ 防瞎编硬闸门 —— askSmart 每条要点都必须是原文子串（模型加不进一个字）',
+    (function () {
+      const all = ix.docs.map(function (d) { return d.text; }).join('\n');
+      let bullets = 0, bad = 0;
+      ix.docs.slice(0, 6).forEach(function (d) {
+        ai.askSmart(ix, d.label + ' 是什么', 3).forEach(function (r) {
+          String(r.answer).split('\n').forEach(function (line) {
+            const m = line.match(/^· (.*)$/);
+            if (m) { bullets++; if (all.indexOf(m[1]) < 0) bad++; }
+          });
+        });
+      });
+      return bullets >= 3 && bad === 0;
+    })());
+
+  T('小模型6：拿不到模型就静默降级（照常答题）· index.html 先 lm.js 再 ai.js',
+    (function () {
+      const keep = global.LMLM;
+      delete global.LMLM;
+      let ok = false;
+      try { ok = ai.askSmart(ix, 'RAG 是什么', 2).length >= 1; } catch (e) { ok = false; }
+      global.LMLM = keep;
+      const html2 = srcOf('index.html');
+      return ok && html2.indexOf('js/lm.js') > 0 && html2.indexOf('js/lm.js') < html2.indexOf('js/ai.js');
+    })());
+
+
   T('问答升级7：对话框顶部有模式切换键 · 默认「本站速答」· 选择存 localStorage · 样式已加',
     (function () {
       const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
       return s.indexOf('lm-ai-modes') > 0 && s.indexOf('data-mode="local"') > 0
         && s.indexOf("localStorage.getItem(MODE_KEY) === 'ds' ? 'ds' : 'local'") > 0
-        && s.indexOf('askSmart(ix, expandQuery(q, prev), 3)') > 0 && c.indexOf('.lm-ai-mode.on') > 0;
+        && s.indexOf('expandQuery(qq, prev)') > 0 && c.indexOf('.lm-ai-mode.on') > 0;
     })());
 
   T('零 API：ai.js 全文 **0 处 fetch**、没有 askDeepSeek、不存任何 Key（lm_ai_key_v1 必须 0 处）',
@@ -2859,10 +2923,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=111 · LM_ASSET_VER=111',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=112 · LM_ASSET_VER=112',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0
-      && (html.match(/\?v=110/g) || []).length === 0 && /\?v=111/.test(html)
-      && /LM_ASSET_VER = '111'/.test(appJs));
+      && (html.match(/\?v=111/g) || []).length === 0 && /\?v=112/.test(html)
+      && /LM_ASSET_VER = '112'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3215,10 +3279,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 111（?v=111 共 20 处 · v110 无残留 · LM_ASSET_VER=111）',
-    (html.match(/\?v=111/g) || []).length === 20 && (html.match(/\?v=110/g) || []).length === 0
-      && /LM_ASSET_VER = '111'/.test(appJs),
-    'v111=' + (html.match(/\?v=111/g) || []).length + ' v110=' + (html.match(/\?v=110/g) || []).length);
+  T('版本已升到 112（?v=112 共 21 处 · v111 无残留 · LM_ASSET_VER=112）',
+    (html.match(/\?v=112/g) || []).length === 21 && (html.match(/\?v=111/g) || []).length === 0
+      && /LM_ASSET_VER = '112'/.test(appJs),
+    'v112=' + (html.match(/\?v=112/g) || []).length + ' v111=' + (html.match(/\?v=111/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

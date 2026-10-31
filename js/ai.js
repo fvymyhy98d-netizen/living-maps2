@@ -465,7 +465,9 @@ W.LMAI = (function () {
         pageId: r.pageId, title: r.title, score: 8 + r.hit, kind: '表格'
       });
     });
-    const ranked = rankSent(index, q, 30).filter(function (x) { return x.cover >= 0.3; });
+    let ranked = rankSent(index, q, 30).filter(function (x) { return x.cover >= 0.3; });
+    /* ★ 修复112：语言模型只做「重排」（±15% 微调），出字仍然 100% 是原文子串 */
+    if (W.LMLM && W.LMLM.ready && W.LMLM.ready()) ranked = W.LMLM.rerank(ranked);
     const byPage = {};
     ranked.forEach(function (x) {
       if (!byPage[x.pageId]) byPage[x.pageId] = [];
@@ -493,6 +495,14 @@ W.LMAI = (function () {
     return res.slice(0, want);
   }
 
+  /* ★ 修复112：语言模型懒加载 —— 只在第一次打开面板时拉 data/lm.json（约 10KB）；
+     拉不到就当没有：纯 BM25 + 模板照常工作，一丁点功能都不少 */
+  let lmTried = false;
+  function ensureLM() {
+    if (lmTried) return;
+    lmTried = true;
+    try { if (W.LMLM && typeof W.LMLM.load === 'function') W.LMLM.load('data/lm.json'); } catch (e) { /* 静默降级 */ }
+  }
   /* ---------- ⑨ 界面：右下角「✨ 智能提炼」浮标 + 面板 ---------- */
   let panel = null, fab = null, idx = null, idxSrc = null;
 
@@ -673,6 +683,7 @@ W.LMAI = (function () {
   function renderPanel() {
     if (!panel) return;
     const body = panel.querySelector('.lm-ai-body');
+    ensureLM();                 /* ★ 修复112：面板一开就懒加载小模型（非阻塞） */
     if (!body) return;
     const badge = panel.querySelector('.lm-ai-badge');
     if (badge) badge.textContent = bridgeSeen ? '已装扩展 · 全自动' : '不用 API · 不存 Key';
@@ -748,8 +759,17 @@ W.LMAI = (function () {
       /* ★ 修复111：追问（「它 / 这个 / 上面」）→ 把上一问的词一起拿去检索，免得答非所问 */
       const prevAsk = chatOf(id).filter(function (m) { return m.r === 'me'; });
       const prev = prevAsk.length ? prevAsk[prevAsk.length - 1].t : '';
-      const res = askSmart(ix, expandQuery(q, prev), 3);
+      /* ★ 修复112：站内词表里没有的英文词 → 先按词表纠错（中文一律不碰），再带上追问上下文 */
+      let qq = q;
+      if (W.LMLM && W.LMLM.ready && W.LMLM.ready()) {
+        const vocab = Object.keys(ix.idf).filter(function (t) { return /^[a-z][a-z0-9+#._-]*$/.test(t); });
+        qq = W.LMLM.fixQuery(q, vocab);
+      }
+      const res = askSmart(ix, expandQuery(qq, prev), 3);
       chatPush(id, { r: 'me', t: q });
+      if (qq !== q) {
+        chatPush(id, { r: 'local', t: '（「' + q + '」里有站内没有的词，已按词表当成「' + qq + '」来查）' });
+      }
       if (!res.length) {
         chatPush(id, { r: 'local', t: '本站没写过相关内容。换个说法再试；想让它用通用知识回答，把上面的模式切到 🐋 DeepSeek。' });
       } else {
