@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793409318173,
+      "syncTs": 1793414814841,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -83,7 +83,7 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "研究边界",
-          "text": "我们聚焦语言模[[j:Jmvthsiw05ei,型的基本原理与使用，暂不展]]开分布式训练与多模态。后续根据课程进度补充。",
+          "text": "我们聚焦语言模型的基本原理与使用，暂不展开分布式训练与多模态。后续根据课程进度补充。",
           "style": {
             "hl": "#ffc9de"
           },
@@ -101,7 +101,7 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "方法与技术路线（示例图表）"
+          "text": "方[[j:Jmvvsveyuhib,法与技术路线（示例图]]表）"
         },
         {
           "type": "chart",
@@ -529,17 +529,17 @@ window.SITE_CONTENT = {
   "discuss": [],
   "jumps": [
     {
-      "id": "Jmvthsiw05ei",
+      "id": "Jmvvsveyuhib",
       "from": {
         "page": "domain",
-        "bi": 1,
-        "text": "型的基本原理与使用，暂不展",
+        "bi": 4,
+        "text": "法与技术路线（示例图",
         "cell": null
       },
       "to": {
         "page": "domain",
-        "bi": 9,
-        "text": "以上为示例，请对照",
+        "bi": 7,
+        "text": "等数学（概率与矩阵",
         "cell": null
       }
     }
