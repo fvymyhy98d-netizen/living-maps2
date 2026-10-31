@@ -549,6 +549,32 @@ textarea.fb-input{resize:vertical;min-height:96px}
 .fb-del{color:#b91c1c;border-color:#fecaca}
 .fb-del:hover{background:#fef2f2}
 .fb-empty{font-size:.9rem;color:var(--text2)}
+/* ★ 修复95：讨论区独立成页（与反馈同宽同风格） */
+#dcMount{max-width:780px;margin:0 auto;padding:0 22px 110px}
+/* ★ 修复95：状态徽章（待处理/已采纳/已修改/保留原判断） */
+.fb-st{padding:1px 9px;border-radius:999px;font-size:.74rem;border:1px solid transparent}
+.fb-st-wait{color:#b45309;background:#fffbeb;border-color:#fde68a}
+.fb-st-ok{color:#1d4ed8;background:#eef4ff;border-color:#c7d8ff}
+.fb-st-done{color:#047857;background:#ecfdf5;border-color:#a7f3d0}
+.fb-st-keep{color:#6b7280;background:#f3f4f6;border-color:#e5e7eb}
+/* ★ 修复95：一键处理（采纳 / 已修改 / 保留原判断 / 待处理） */
+.fb-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.fb-ac:hover{color:#fff;background:var(--blue);border-color:var(--blue)}
+.fb-ops-rec{margin-top:8px}
+.fb-ops-rec .fb-input{font-size:.85rem}
+/* ★ 修复95：处理记录（公开可见：怎样核实 → 改了什么 → 为什么这样处理） */
+.fb-record{margin-top:8px;padding:9px 12px;border-radius:10px;background:#f8fafc;border:1px solid var(--line)}
+.fb-record p{margin:4px 0;font-size:.86rem;line-height:1.6;color:var(--text2)}
+.fb-record b{color:var(--text);font-size:.8rem;margin-right:6px}
+.fb-mine{border-color:#c7d8ff;background:#fbfdff}
+/* ★ 修复96：云存档配置区（折叠面板 + 粘贴导入框） */
+.fb-cloud{margin:12px 0;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:#fcfcfe}
+.fb-cloud summary{cursor:pointer;font-size:.9rem;font-weight:600;color:var(--text)}
+.fb-cloud summary::marker{color:var(--blue)}
+.fb-cloud[open]{background:#fff}
+.fb-cloud .fb-row{margin-top:10px}
+.fb-cloud .fb-field{margin-bottom:8px}
+.fb-imp textarea{min-height:76px;font-family:ui-monospace,Consolas,monospace;font-size:.84rem}
 body.admin .free-box:hover{outline:1.5px dashed rgba(0,113,227,.5);outline-offset:2px}
 /* 选中状态只保留一道边框：清除悬停虚线与内容聚焦框，避免双框叠影 */
 body.admin .free-box.selected{outline:none !important}

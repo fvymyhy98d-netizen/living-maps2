@@ -173,9 +173,10 @@ T('历史版本面板：快照带时间戳（hist.ts 平行数组）+ 列表/恢
   appSrc.indexOf('hist.ts = (hist.ts || []).slice') > 0 && appSrc.indexOf('function historyList') > 0
     && appSrc.indexOf('function restoreVersion') > 0 && appSrc.indexOf('historyList: historyList') > 0
     && edt.indexOf('data-panel="hist"') > 0 && edt.indexOf('function histModal') > 0);
-T('访客互动开关：commentsOff 三通道拦截（留言/发帖/回复）+ 渲染层提示 + 网站信息开关（管理员不受限）',
+T('访客互动开关：commentsOff 三通道拦截（留言/发帖/回复）+ 渲染层提示（反馈页/讨论区各自提示）+ 网站信息开关（管理员不受限）',
   appSrc.indexOf('function commentsOff') > 0 && (appSrc.match(/commentsOff\(\)\) \{ toast/g) || []).length >= 3
-    && appSrc.indexOf('留言与讨论已由管理员暂时关闭') > 0 && edt.indexOf('cOff') > 0);
+    && appSrc.indexOf('反馈已由管理员暂时关闭') > 0 && appSrc.indexOf('讨论区已由管理员暂时关闭') > 0
+    && edt.indexOf('cOff') > 0);
 T('改动动态：合并前后页面签名 diff → 面板「最近动态」流水（复用 _t 时间戳，不加传输内容）',
   col.indexOf('function pushFeedFrom') > 0 && col.indexOf('pushFeedFrom(before, c, by)') > 0
     && col.indexOf('最近动态') > 0);
@@ -466,7 +467,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '94';") > 0
+  /var LM_ASSET_VER = '\d+';/.test(appSrc)
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -2231,10 +2232,11 @@ console.log('【9.58】修复92：反馈跨设备同步 —— 合并/打包真�
   const B = [{ id: 'F-01', ts: 1000, text: '甲（组长改过）', dev: 'DEV1', status: '已处理', updatedAt: 5000 },
     { id: 'F-03', ts: 3000, text: '丙', dev: 'DEV3' }];
   const M = fb.merge(A, B);
+  /* ★ 修复95：状态词表更新（待处理/已采纳/已修改/保留原判断），旧值「已处理」在 norm 里自动迁移为「已修改」 */
   T('合并：同 id 取 updatedAt 新的（组长回复不会被旧的盖掉）· 双方独有条目都保留 · 按时间升序',
-    M.length === 3 && M[0].id === 'F-01' && M[0].text.indexOf('组长改过') >= 0 && M[0].status === '已处理'
+    M.length === 3 && M[0].id === 'F-01' && M[0].text.indexOf('组长改过') >= 0 && M[0].status === '已修改'
       && M[1].id === 'F-02' && M[2].id === 'F-03',
-    JSON.stringify(M.map(function (x) { return x.id + ':' + x.text; })));
+    JSON.stringify(M.map(function (x) { return x.id + ':' + x.text + ':' + x.status; })));
 
   T('合并幂等：再合一次结果不变（多设备反复同步不会越合越乱）',
     JSON.stringify(fb.merge(M, B)) === JSON.stringify(M) && JSON.stringify(fb.merge(M, M)) === JSON.stringify(M));
@@ -2282,9 +2284,9 @@ console.log('【9.58】修复92：反馈跨设备同步 —— 合并/打包真�
         && appJs.indexOf('it.reply = (t.value || \'\').slice(0, 200); it.updatedAt = Date.now();') > 0;
     })());
 
-  T('节流与开关：无 Token 的设备完全不发请求（访客零额度）· 有 Token 才同步 · 20 秒内不重复拉',
+  T('节流与开关：无 Token 的设备不写云端（访客零额度）· 有 Token 才同步 · 60 秒内不重复拉',
     appJs.indexOf('function fbPushSoon()') > 0 && appJs.indexOf('!LMFB.hasCloud() || _fbBusy') > 0
-      && appJs.indexOf('Date.now() - (state._fbPullAt || 0) > 20000') > 0);
+      && appJs.indexOf('if (now - _fbPullAt < 60000) return;') > 0);
 
   T('接入完整性：index.html 引入 js/fbsync.js（带版本号）· README 记录修复92 与「只写数据分支」',
     /js\/fbsync\.js\?v=\d+/.test(html) && readme.indexOf('修复92') > 0
@@ -2340,9 +2342,11 @@ console.log('【9.59】修复93：留言实时直达 —— 主题派生 / clean
     fbSrc.indexOf("o.t === 'lmfb1'") > 0 && fbSrc.indexOf('if (!it || !it.id || !it.text) return;') > 0
       && fbSrc.indexOf('String(it.text).length > 1000') > 0);
 
-  T('app.js 接入：提交即 publish · 管理员模式才订阅 · 三条来路共用一个合并漏斗 · 发不出去才给链接兜底',
-    appJs.indexOf('LMFB.publish(it).then(function (sent)') > 0
-      && appJs.indexOf('if (state.admin && window.LMFB && LMFB.listen)') > 0
+  T('app.js 接入：提交即 publish（修复96 起同时写云存档）· 打开反馈页即订阅（修复95 起访客也收，只读在线新留言）· 三条来路共用一个合并漏斗 · 发不出去才给链接兜底',
+    appJs.indexOf('LMFB.publish(it) : Promise.resolve(false)') > 0
+      && appJs.indexOf('Promise.all([cloudP, mqP])') > 0
+      && appJs.indexOf('LMFB.listen(function (it) {') > 0
+      && appJs.indexOf('}, { visitor: !state.admin });') > 0
       && appJs.indexOf('function fbMergeIncoming(list)') > 0
       && appJs.indexOf('const n = fbMergeIncoming([it]);') > 0
       && appJs.indexOf('const fbFallback = function () {') > 0);
@@ -2363,5 +2367,340 @@ console.log('【9.59】修复93：留言实时直达 —— 主题派生 / clean
 })();
 
 
-console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
-process.exit(fail ? 1 : 0);
+/* ---------- 9.60) 修复95：反馈对所有人可见 + 四段处理记录 + 与讨论区分页 ---------- */
+console.log('【9.60】修复95：反馈公开可见 / 采纳-已修改-保留原判断 / 处理记录四段 / 讨论区独立成页');
+(function () {
+  const fb = require(path.join(DIR, 'js/fbsync.js'));
+  const fbSrc = srcOf('js/fbsync.js');
+  const appJs = srcOf('js/app.js');
+  const html = srcOf('index.html');
+  const css = srcOf('css/style.css');
+  const readme = srcOf('README.md');
+
+  /* —— 状态归一：老师要求的「采纳 / 不采纳但要写理由」 —— */
+  T('状态四值：待处理 / 已采纳 / 已修改 / 保留原判断（旧数据 处理中→已采纳、已处理→已修改 自动迁移）',
+    JSON.stringify(fb.statuses) === JSON.stringify(['待处理', '已采纳', '已修改', '保留原判断'])
+      && fb.fixStatus('处理中') === '已采纳' && fb.fixStatus('已处理') === '已修改'
+      && fb.fixStatus('已采纳') === '已采纳' && fb.fixStatus('保留原判断') === '保留原判断'
+      && fb.fixStatus('乱写') === '待处理' && fb.fixStatus(undefined) === '待处理',
+    JSON.stringify(fb.statuses));
+
+  /* —— 四段记录要能跨设备传 —— */
+  const rec = fb.norm({
+    id: 'F-01', ts: 1, text: 't', status: '已修改',
+    check: '对照了培养方案第 3 页', change: '生态地图补了 2 条来源', why: '老师给的资料优先'
+  });
+  T('规范化保留处理记录三字段（怎样核实 / 改了什么 / 为什么）· 缺省为空串而不是 undefined',
+    rec.check === '对照了培养方案第 3 页' && rec.change === '生态地图补了 2 条来源'
+      && rec.why === '老师给的资料优先' && rec.status === '已修改'
+      && fb.norm({ id: 'F-02', text: 'x' }).check === '',
+    JSON.stringify(rec).slice(0, 90));
+
+  const slimRec = fb.slim(rec);
+  T('瘦身也要带上处理记录（否则别人只看到状态，看不到依据）· 各字段 300 字上限',
+    slimRec.check === rec.check && slimRec.change === rec.change && slimRec.why === rec.why
+      && fb.norm({ id: 'F-03', text: 'x', check: 'a'.repeat(400) }).check.length === 300);
+
+  const oldIt = { id: 'F-05', ts: 10, text: '原文', updatedAt: 100, status: '待处理' };
+  const newIt = { id: 'F-05', ts: 10, text: '原文', updatedAt: 200, status: '已修改',
+    check: '查了官网', change: '改了关系图', why: '原判断缺来源' };
+  const mm = fb.merge([oldIt], [newIt]);
+  T('合并按 updatedAt 取新：处理记录不会因设备先后而丢（「查了官网 / 改了关系图 / 原判断缺来源」都在）',
+    mm.length === 1 && mm[0].status === '已修改' && mm[0].check === '查了官网'
+      && mm[0].why === '原判断缺来源', JSON.stringify(mm[0]));
+
+  /* —— 公开读取：访客没有 Token 也能看到列表 —— */
+  const g0 = { LMStore: globalThis.LMStore, location: globalThis.location };
+  delete globalThis.LMStore; delete globalThis.location;
+  T('没有仓库信息时不硬发请求：publicCtx() 返回 null（本地预览/file:// 不报错、不发请求）',
+    fb.publicCtx() === null);
+
+  globalThis.LMStore = {
+    getGhCfg: function () { return { owner: 'zhangsan', repo: 'living-maps', branch: 'main', dataBranch: 'lm-data' }; },
+    dataRefOf: function () { return 'lm-data'; }
+  };
+  const pc = fb.publicCtx();
+  T('管理员设备：直接用已绑定配置（owner / repo + 数据分支），与写入云端的 ref 一致',
+    !!pc && pc.owner === 'zhangsan' && pc.repo === 'living-maps' && pc.ref === 'lm-data',
+    JSON.stringify(pc));
+
+  delete globalThis.LMStore;
+  globalThis.location = { hostname: 'zhangsan.github.io', pathname: '/living-maps/index.html' };
+  const pv = fb.publicCtx();
+  T('访客设备：从 Pages 网址推导 owner/repo（<owner>.github.io/<repo>/），数据分支默认 lm-data',
+    !!pv && pv.owner === 'zhangsan' && pv.repo === 'living-maps' && pv.ref === 'lm-data',
+    JSON.stringify(pv));
+
+  const pubUrl = fb.publicUrl(pv, 'lm-data');
+  T('公开读取走 raw.githubusercontent.com（公开仓库只读，不需要 Token）· 带时间戳破 CDN 缓存',
+    /^https:\/\/raw\.githubusercontent\.com\/zhangsan\/living-maps\/lm-data\/data\/feedback\.json\?t=\d+$/.test(pubUrl),
+    pubUrl.replace(/\?t=\d+/, '?t=…'));
+  globalThis.location = g0.location;
+  if (g0.LMStore) globalThis.LMStore = g0.LMStore;
+
+  /* —— 分页：反馈页 / 讨论区页 —— */
+  const w0 = {};
+  new Function('window', srcOf('data/content.js'))(w0);
+  const pages = (w0.SITE_CONTENT && w0.SITE_CONTENT.pages) || [];
+  const fbPage = pages.filter(function (p) { return p.id === 'feedback'; })[0];
+  const dcPage = pages.filter(function (p) { return p.id === 'discuss'; })[0];
+  T('新增页面「讨论区」（kind=page，≥2 块内容）· 反馈页文案改为「对所有人公开」',
+    !!dcPage && dcPage.kind === 'page' && dcPage.label === '讨论区' && dcPage.blocks.length >= 2
+      && !!fbPage && fbPage.description.indexOf('公开') > 0,
+    pages.map(function (p) { return p.id; }).join(','));
+
+  T('render 分派：feedback → #fbMount + mountFeedback()；discuss → #dcMount + mountDiscuss()',
+    appJs.indexOf("if (p && p.id === 'feedback')") > 0 && appJs.indexOf('<div id="fbMount"></div>') > 0
+      && appJs.indexOf("if (p && p.id === 'discuss')") > 0 && appJs.indexOf('<div id="dcMount"></div>') > 0
+      && appJs.indexOf('function mountDiscuss()') > 0);
+
+  T('老内容/云端旧内容也能升级：缺 discuss 页时 migrate() 用 DISCUSS_PAGE 自动补在「关于」前面；旧文案「仅管理员可见」被改写',
+    appJs.indexOf('const DISCUSS_PAGE = {') > 0
+      && appJs.indexOf("if (!c.pages.some(function (p) { return p && p.id === 'discuss'; }))") > 0
+      && appJs.indexOf("fbp3.description.indexOf('仅小组管理员可见')") > 0);
+
+  T('讨论区不再混在反馈页：mountFeedback 里不拼 dcHtml()，讨论区的增删改只重渲染 mountDiscuss()',
+    (function () {
+      const iFb = appJs.indexOf('function mountFeedback()');
+      const iDc = appJs.indexOf('function mountDiscuss()');
+      const seg = appJs.slice(iFb, iDc);
+      return seg.indexOf('dcHtml()') < 0 && appJs.indexOf('      : dcHtml();') > 0
+        && appJs.indexOf('mountDiscuss();   /* ★ 修复95') > 0;
+    })());
+
+  /* —— 管理员「点一下」就能采纳 / 保留原判断 —— */
+  T('管理动作：✔ 采纳 / ✅ 已修改 / ✖ 保留原判断 / ↺ 待处理（按钮 + data-fbact 事件委托）· 面板按身份码统计「≥3 名同学」',
+    appJs.indexOf('data-fbact="已采纳"') > 0 && appJs.indexOf('data-fbact="已修改"') > 0
+      && appJs.indexOf('data-fbact="保留原判断"') > 0 && appJs.indexOf('data-fbact="待处理"') > 0
+      && appJs.indexOf("closest('[data-fbact]')") > 0 && appJs.indexOf('个设备身份码') > 0);
+
+  T('处理记录公开显示（核实 / 修改 / 理由 / 回复）；管理员看输入框、访客看只读记录',
+    appJs.indexOf('function fbRecordHtml(it)') > 0
+      && appJs.indexOf("['🔎 我们怎样核实', it.check]") > 0
+      && appJs.indexOf("['💬 为什么这样处理', it.why]") > 0
+      && appJs.indexOf("(isAdmin ? '' : fbRecordHtml(it))") > 0);
+
+  T('三段说明失焦即保存（data-fbcheck / data-fbchange / data-fbwhy，各 300 字），随同步带给所有设备',
+    appJs.indexOf("t.hasAttribute('data-fbcheck')") > 0
+      && appJs.indexOf("const k = t.hasAttribute('data-fbcheck') ? 'check'") > 0
+      && appJs.indexOf("it[k] = (t.value || '').slice(0, 300);") > 0);
+
+  T('一键复制的文本能直接进期末材料：每条含「同学提出 / 我们怎样核实 / 修改了什么 / 为什么这样处理」',
+    appJs.indexOf("'\\n【同学提出】'") > 0 && appJs.indexOf("'\\n【我们怎样核实】'") > 0
+      && appJs.indexOf("'\\n【修改了什么】'") > 0 && appJs.indexOf("'\\n【为什么这样处理】'") > 0);
+
+  /* —— 实时 / 公开三路 —— */
+  T('所有设备都订阅：管理员 clean=false 可补收、访客 clean=true 只收在线（listen 第二参数 visitor）',
+    fbSrc.indexOf('opts.visitor') > 0 && fbSrc.indexOf('if (MQ.admin === asAdmin)') > 0
+      && appJs.indexOf('}, { visitor: !state.admin });') > 0);
+
+  T('访客拉历史只走 raw 公开文件（60 秒节流）；管理员有 Token 时改走 API 合并，访客永不写云端',
+    appJs.indexOf('LMFB.pullPublic().then(function (r)') > 0
+      && appJs.indexOf('if (now - _fbPullAt < 60000) return;') > 0
+      && appJs.indexOf('if (LMFB.hasCloud()) {\r\n      fbSyncNow(false);\r\n    } else {') > 0);
+
+  T('样式补齐：状态徽章四色 / 一键处理按钮 / 处理记录块 / 讨论区独立挂载点',
+    css.indexOf('.fb-st-ok') > 0 && css.indexOf('.fb-st-keep') > 0
+      && css.indexOf('.fb-acts') > 0 && css.indexOf('.fb-record') > 0 && css.indexOf('#dcMount') > 0);
+
+  T('版本号已升（95 起每条修复都涨一版，避免浏览器吃旧缓存）· index.html 无 ?v=94 残留',
+    (html.match(/\?v=94/g) || []).length === 0
+      && /\?v=(9[5-9]|[1-9]\d\d)/.test(html)
+      && /LM_ASSET_VER = '(9[5-9]|[1-9]\d\d)'/.test(appJs));
+
+  T('README 记录修复95（公开可见 / 采纳-保留 / 讨论区分页）', readme.indexOf('修复95') > 0);
+})();
+
+/* ---------- 9.61) 修复96：云存档（让「不开网页」也能收到，突破 6 小时补收窗口） ---------- */
+console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 / 群机器人 / 表格粘贴导入');
+(function () {
+  const fb = require(path.join(DIR, 'js/fbsync.js'));
+  const appJs = srcOf('js/app.js');
+  const html = srcOf('index.html');
+  const css = srcOf('css/style.css');
+  const readme = srcOf('README.md');
+  const g0 = globalThis.LMApp;
+
+  T('云存档接口齐全：cloudCfg / cloudInfo / cloudSave / cloudList / parseImport',
+    typeof fb.cloudCfg === 'function' && typeof fb.cloudInfo === 'function'
+      && typeof fb.cloudSave === 'function' && typeof fb.cloudList === 'function'
+      && typeof fb.parseImport === 'function');
+
+  /* —— 配置归一：不合法就当作「没配」（绝不能因为填错就把留言发不出去） —— */
+  function setCfg(c) { globalThis.LMApp = { state: { content: { config: { fbCloud: c } } } }; }
+  delete globalThis.LMApp;
+  T('未配置 / 非法配置一律返回 null（http 明文、supabase 缺 key、未知类型都拒绝）',
+    fb.cloudCfg() === null
+      && (setCfg({ kind: 'worker', url: 'http://x.dev' }), fb.cloudCfg() === null)
+      && (setCfg({ kind: 'supabase', url: 'https://a.supabase.co' }), fb.cloudCfg() === null)
+      && (setCfg({ kind: 'other', url: 'https://a.supabase.co' }), fb.cloudCfg() === null));
+
+  setCfg({ kind: 'supabase', url: 'https://abc.supabase.co/', key: 'anon-key', table: 'lm_feedback' });
+  const c1 = fb.cloudCfg();
+  T('合法的 Supabase 配置：去掉尾部斜杠、默认表名、只对界面暴露 host（不显示 key）',
+    !!c1 && c1.url === 'https://abc.supabase.co' && c1.table === 'lm_feedback'
+      && fb.cloudInfo().on === true && fb.cloudInfo().host === 'abc.supabase.co'
+      && fb.cloudInfo().text.indexOf('anon-key') < 0,
+    JSON.stringify(fb.cloudInfo()));
+
+  /* —— 真跑：写一条 / 读全部（桩 fetch，检查 URL、头、body） —— */
+  const calls = [];
+  function stubFetch(ok, body) {
+    globalThis.fetch = function (u, o) {
+      calls.push({ u: u, o: o || {} });
+      return Promise.resolve({
+        ok: ok, status: ok ? 200 : 401,
+        json: function () { return Promise.resolve(body || []); }
+      });
+    };
+  }
+  const item = { id: 'F-77', ts: 1000, text: '建议补来源', type: '提建议', name: '小明', dev: 'D1', status: '待处理' };
+
+  /* —— 粘贴导入（纯函数，同步验）：云文档导出 → 直接进反馈列表 —— */
+  const tsv = '时间\t称呼\t类型\t内容\n2026-10-30 14:20\t小明\t提建议\t建议给生态地图补一条公开来源\n2026-10-30 15:05\t小红\t提出问题\t认知地图那一步为什么这样判？';
+  const imp1 = fb.parseImport(tsv);
+  T('粘贴导入真跑（飞书 / Excel 的制表符）：自动识别分隔符 + 中文表头 → 2 条，时间/称呼/类型都对上',
+    imp1.length === 2 && imp1[0].name === '小明' && imp1[0].type === '提建议'
+      && /补一条公开来源/.test(imp1[0].text) && imp1[1].name === '小红'
+      && new Date(imp1[0].ts).getFullYear() === 2026,
+    JSON.stringify(imp1.map(function (x) { return x.id + ':' + x.name; })));
+
+  const csv = 'id,name,text\nF-91,小李,"第一，来源不清；第二，时间太旧"\nF-92,小张,"简单，但缺少反例"';
+  const imp2 = fb.parseImport(csv);
+  T('CSV 引号内的逗号/分号不会被切断（"第一，来源不清；第二…" 保持完整）· 英文表头也认',
+    imp2.length === 2 && imp2[0].id === 'F-91'
+      && imp2[0].text === '第一，来源不清；第二，时间太旧' && imp2[1].id === 'F-92',
+    JSON.stringify(imp2.map(function (x) { return x.text; })));
+
+  const imp3 = fb.parseImport('[{"id":"F-93","ts":1700000000000,"text":"JSON 也能直接粘","name":"小周"}]');
+  T('直接粘 JSON 数组也支持（从 Supabase / Worker 导出、或别处拷来的数据）',
+    imp3.length === 1 && imp3[0].id === 'F-93' && imp3[0].name === '小周');
+
+  T('导入健壮性：空串 / 只有表头 / 乱码 → 空数组，不抛异常；与已有条目按 id 去重（同内容两次导入同 id）',
+    fb.parseImport('').length === 0 && fb.parseImport('时间,内容').length === 0
+      && fb.parseImport('这不是表格也不是 JSON').length === 0
+      && fb.parseImport(tsv)[0].id === imp1[0].id);
+
+  const impNoHead = fb.parseImport('2026/10/30 09:00\t小王\t提建议\t没有表头时按常见列序兜底\n2026/10/30 10:00\t小李\t提出问题\t第二行也要能进来');
+  T('没表头也能救：按「时间 / 称呼 / 类型 / 内容」兜底；旧状态词「已处理」导入后自动迁移为「已修改」',
+    impNoHead.length === 2 && impNoHead[0].name === '小王'
+      && impNoHead[1].name === '小李'
+      && fb.norm({ id: 'F-95', ts: 1, text: 'x', status: '已处理' }).status === '已修改');
+
+  T('导入条目带 dev:"import" 便于区分来源 · 超长正文截到 800 字（防止把页面撑爆）',
+    imp1[0].dev === 'import' && fb.parseImport('内容\n' + 'a'.repeat(900))[0].text.length === 800);
+
+  /* —— 接入守护：为什么它能保证「不开网页也收得到」 —— */
+  T('提交时「先写云存档、再发 MQTT」，两条都失败才给链接兜底（Promise.all 后分三种提示）',
+    appJs.indexOf('const cloudP = (window.LMFB && LMFB.cloudSave) ? LMFB.cloudSave(it) : Promise.resolve(false);') > 0
+      && appJs.indexOf('Promise.all([cloudP, mqP])') > 0
+      && appJs.indexOf('并已存进云存档：小组下次打开反馈页会自动收取（不受 6 小时补收窗口限制）') > 0);
+
+  T('打开反馈页会拉云存档（管理员设备也拉：他可能没绑 Token 或换了浏览器）',
+    appJs.indexOf('if (LMFB.cloudCfg && LMFB.cloudCfg()) {') > 0
+      && appJs.indexOf('☁ 从云存档收到 ') > 0);
+
+  T('管理面板可配：类型 / URL / key / 表名 + 保存 + 测试拉取 + 表格粘贴导入',
+    appJs.indexOf("id=\"fbCloudKind\"") > 0 && appJs.indexOf("id=\"fbCloudUrl\"") > 0
+      && appJs.indexOf("id=\"fbCloudKey\"") > 0 && appJs.indexOf("id=\"fbCloudTable\"") > 0
+      && appJs.indexOf("id=\"fbCloudSave\"") > 0 && appJs.indexOf("id=\"fbCloudTest\"") > 0
+      && appJs.indexOf("id=\"fbImportGo\"") > 0);
+
+  T('配置写进内容（state.content.config.fbCloud）→ 随「同步到 GitHub」公开给所有访客，端点不需要私密',
+    appJs.indexOf('state.content.config.fbCloud = {') > 0
+      && appJs.indexOf("kind: v('fbCloudKind')") > 0
+      && appJs.indexOf('applyEdit(\'云存档设置已保存\')') > 0);
+
+  T('ensureConfig 给默认值（缺省关闭），老内容不会因为少这个字段报错',
+    appJs.indexOf("c.config.fbCloud = { kind: '', url: '', key: '', table: 'lm_feedback' };") > 0);
+
+  const cspMeta = (html.match(/Content-Security-Policy"[^>]*content="([^"]+)"/) || [])[1] || '';
+  T('CSP 只加白名单域名（Supabase / workers.dev / 飞书 / 钉钉 / 企业微信），没有放开通配 https:',
+    cspMeta.indexOf('https://*.supabase.co') > 0 && cspMeta.indexOf('https://*.workers.dev') > 0
+      && cspMeta.indexOf('https://open.feishu.cn') > 0 && cspMeta.indexOf('https://oapi.dingtalk.com') > 0
+      && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
+      && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
+
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=96 · LM_ASSET_VER=96',
+    css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
+      && (html.match(/\?v=95/g) || []).length === 0 && /\?v=96/.test(html)
+      && /LM_ASSET_VER = '96'/.test(appJs));
+
+  T('README 记录修复96（6 小时为何改不了 / 云存档三种接法 / 表格导入）', readme.indexOf('修复96') > 0);
+
+  stubFetch(true);
+  fb.cloudSave(item).then(function (ok1) {
+    const c = calls[0] || {};
+    T('Supabase 写入真跑：POST /rest/v1/<表> · 带 apikey + Bearer · Prefer:return=minimal · body 是瘦身后的条目',
+      ok1 === true && /\/rest\/v1\/lm_feedback$/.test(c.u || '')
+        && (c.o.headers || {}).apikey === 'anon-key'
+        && String((c.o.headers || {}).Authorization) === 'Bearer anon-key'
+        && (c.o.headers || {}).Prefer === 'return=minimal'
+        && JSON.parse(c.o.body || '{}').id === 'F-77',
+      (c.u || '') + ' ' + (c.o.method || ''));
+
+    calls.length = 0;
+    return fb.cloudList();
+  }).then(function (r1) {
+    const c = calls[0] || {};
+    T('Supabase 读取真跑：GET 带 select=* & order=ts.asc & limit，返回数组直接可用',
+      r1.ok === true && Array.isArray(r1.list)
+        && /select=\*/.test(c.u || '') && /order=ts\.asc/.test(c.u || '') && /limit=1000/.test(c.u || ''),
+      (c.u || '').slice(0, 90));
+
+    /* worker 预设 */
+    setCfg({ kind: 'worker', url: 'https://lm-fb.me.workers.dev/fb' });
+    calls.length = 0;
+    stubFetch(true);
+    return fb.cloudSave(item);
+  }).then(function (ok2) {
+    const c = calls[0] || {};
+    T('自建 Worker 写入真跑：POST 端点，body 为 { t:"lmfb1", it }（与 MQTT 同一信封，Worker 直接存）',
+      ok2 === true && c.u === 'https://lm-fb.me.workers.dev/fb' && c.o.method === 'POST'
+        && JSON.parse(c.o.body || '{}').t === 'lmfb1'
+        && JSON.parse(c.o.body || '{}').it.id === 'F-77');
+
+    /* 群机器人：飞书 body 用 msg_type + content(JSON 字符串)，且是 no-cors 一次性通知 */
+    setCfg({ kind: 'webhook', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx' });
+    calls.length = 0;
+    stubFetch(true);
+    return fb.cloudSave(item);
+  }).then(function () {
+    const c = calls[0] || {};
+    const body = JSON.parse(c.o.body || '{}');
+    T('群机器人真跑：飞书 msg_type + content(JSON) · mode:no-cors（拿不到回执也算发过）· 正文含编号与内容摘要',
+      c.o.mode === 'no-cors' && body.msg_type === 'text'
+        && String(body.content).indexOf('新反馈') > 0
+        && String(body.content).indexOf('F-77') > 0,
+      String(c.o.body || '').slice(0, 80));
+
+    /* 钉钉 / 企业微信：msgtype + text.content */
+    setCfg({ kind: 'webhook', url: 'https://oapi.dingtalk.com/robot/send?access_token=x' });
+    calls.length = 0;
+    stubFetch(true);
+    return fb.cloudSave(item);
+  }).then(function () {
+    const c = calls[0] || {};
+    const body = JSON.parse(c.o.body || '{}');
+    T('钉钉同样格式真跑：msgtype:"text" + text.content（一份代码同时兼容飞书 / 钉钉 / 企业微信）',
+      body.msgtype === 'text' && String((body.text || {}).content).indexOf('新反馈') > 0);
+
+    /* webhook 不能读回 */
+    return fb.cloudList();
+  }).then(function (r2) {
+    T('群机器人只提醒、不读回：cloudList 明确返回 ok:false + 原因（界面据此提示，不误导）',
+      r2.ok === false && String(r2.why).indexOf('不能读回') >= 0);
+
+    if (g0) globalThis.LMApp = g0; else delete globalThis.LMApp;
+  }).catch(function (e) {
+    T('云存档链路无异常抛出', false, String(e && e.message || e));
+  }).then(function () { finishAll(); });
+})();
+
+/* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
+function finishAll() {
+  console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
+  process.exit(fail ? 1 : 0);
+}
+setTimeout(finishAll, 15000);   /* 兜底：万一某个 Promise 卡住，也要把结果打出来 */
+

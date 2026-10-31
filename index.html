@@ -5,15 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <!-- 安全加固：内容安全策略（CSP）。脚本只许本站文件（Yjs 三件套已本地化到 lib/，零 CDN 依赖）；
      样式允许内联（编辑器大量使用 style 属性）；图片允许任意来源（用户可贴外链图）+ data:（粘贴 base64）；
-     网络请求只许本站、GitHub API（云协同提交/轮询）、raw.githubusercontent（访客云端只读轮询）
-     和 wss: 与 CloudBase 网关（腾讯云信令，只传握手不传内容）；
+     网络请求只许本站、GitHub API（云协同提交/轮询）、raw.githubusercontent（访客云端只读轮询）、
+     wss: 与 CloudBase 网关（腾讯云信令，只传握手不传内容）、以及「云存档」白名单
+     （★ 修复96：Supabase / 自建 Worker / 飞书·钉钉·企业微信群机器人 —— 只加域名，不加通配 https:）；
      禁止插件/iframe/表单外提交/基址劫持。注意：Live Server 的自动刷新脚本会被拦截（属正常），手动 Ctrl+Shift+R 即可 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src * data: blob:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com wss:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src * data: blob:; connect-src 'self' https://api.github.com https://raw.githubusercontent.com https://*.supabase.co https://*.workers.dev https://open.feishu.cn https://oapi.dingtalk.com https://qyapi.weixin.qq.com wss:; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <title>三张活地图 · 人工智能前沿与创新</title>
 <meta name="description" content="课程大作业：三张活地图 —— 领域、生态、认知，持续更新的思考外脑。">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=94">
+<link rel="stylesheet" href="css/style.css?v=96">
 </head>
 <body>
 
@@ -47,26 +48,26 @@
 <div id="toast" class="toast" hidden></div>
 
 <!-- 脚本：按依赖顺序加载 -->
-<script src="data/content.js?v=94"></script>
-<script src="js/charts.js?v=94"></script>
-<script src="js/store.js?v=94"></script>
-<script src="js/md.js?v=94"></script>
-<script src="data/sensitive-words.js?v=94"></script>
-<script src="js/community.js?v=94"></script>
-<script src="js/editor.js?v=94"></script>
-<script src="js/fbsync.js?v=94"></script><!-- ★ 修复92：反馈跨设备同步（只写数据分支，不触发构建） -->
-<script src="js/app.js?v=94"></script>
-<script src="js/ai.js?v=94"></script><!-- ★ 修复91：本地 AI 能力（要点/关键词/相关条目/站内问答，离线可用、零额度） -->
-<script src="js/cloud-config.js?v=94"></script>
-<script src="js/collab.js?v=94"></script>
+<script src="data/content.js?v=96"></script>
+<script src="js/charts.js?v=96"></script>
+<script src="js/store.js?v=96"></script>
+<script src="js/md.js?v=96"></script>
+<script src="data/sensitive-words.js?v=96"></script>
+<script src="js/community.js?v=96"></script>
+<script src="js/editor.js?v=96"></script>
+<script src="js/fbsync.js?v=96"></script><!-- ★ 修复92：反馈跨设备同步（只写数据分支，不触发构建） -->
+<script src="js/app.js?v=96"></script>
+<script src="js/ai.js?v=96"></script><!-- ★ 修复91：本地 AI 能力（要点/关键词/相关条目/站内问答，离线可用、零额度） -->
+<script src="js/cloud-config.js?v=96"></script>
+<script src="js/collab.js?v=96"></script>
 <!-- Yjs 套件：本地 lib/（build-libs.js 从 npm 包打包生成，零 CDN 依赖），必须先于 ycollab.js 加载。
      y-webrtc.js 已弃用但文件保留（lib 完整性守护），运行时不再使用 -->
-<script src="lib/yjs.js?v=94"></script>
-<script src="lib/y-protocols.js?v=94"></script>
-<script src="lib/mqtt.js?v=94"></script><!-- MQTT 信令（EMQX 公共 Broker，免费匿名） -->
-<script src="lib/y-indexeddb.js?v=94"></script>
-<script src="js/yjs-config.js?v=94"></script>
-<script src="js/yjstcb.js?v=94"></script>
-<script src="js/ycollab.js?v=94"></script>
+<script src="lib/yjs.js?v=96"></script>
+<script src="lib/y-protocols.js?v=96"></script>
+<script src="lib/mqtt.js?v=96"></script><!-- MQTT 信令（EMQX 公共 Broker，免费匿名） -->
+<script src="lib/y-indexeddb.js?v=96"></script>
+<script src="js/yjs-config.js?v=96"></script>
+<script src="js/yjstcb.js?v=96"></script>
+<script src="js/ycollab.js?v=96"></script>
 </body>
 </html>

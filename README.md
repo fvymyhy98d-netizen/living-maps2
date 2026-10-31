@@ -16,7 +16,7 @@ living-maps/
 │   ├── app.js          渲染、路由、动画、管理员登录
 │   ├── editor.js       管理模式（编辑内容 / 页面管理 / GitHub 同步）
 │   ├── ai.js           ★ 本地 AI 能力（要点提炼 / 关键词 / 相关条目 / 站内问答，离线零额度）
-│   ├── fbsync.js       ★ 反馈跨设备同步（数据分支合并 / 墓碑 / 「发给组长」链接接力）
+│   ├── fbsync.js       ★ 反馈跨设备同步（数据分支合并 / 墓碑 / 公开 raw 读取 / MQTT 直达 / 处理记录 / 云存档 Supabase·Worker·群机器人 + 表格粘贴导入）
 │   ├── md.js           轻量 Markdown 引擎（行内标记 + 块级渲染）
 │   ├── charts.js       图表（柱状图 / 折线图 / 饼图，纯 SVG）
 │   └── store.js        数据保存（浏览器本地 / GitHub 云端）
@@ -420,6 +420,26 @@ living-maps/
 - **回归（修复93）**：`node --check js/app.js / js/fbsync.js` 通过；`test_yjs.js` **286/286**（新增 9.59 节 9 条：接口齐全、**主题派生真跑**（同房间同口令→同主题同 broker；换房间→不同主题）、broker 取自配置池且无非法字符、`clean: !admin` + QoS1 + `subscribe(qos:1)` 守护、收消息验货（`t==="lmfb1"` / 必填 / >1000 丢弃）、app.js 接入（提交即 publish / 管理员才订阅 / 三条来路共用 `fbMergeIncoming` 漏斗 / 发不出去才给链接）、**提示条被重渲染冲掉的老 bug 已修**、无新增依赖且 CSP 未变）；另外用**真实生产代码**跑端到端（`LMFB.publish` → 组长断开 → 组长重连 `LMFB.listen` → **补收 2/2**）；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
 - **修复94（「关机期间能补收多久」不靠猜：直接问 broker；并从 MQTT 3.1.1 升到 MQTT 5 显式申请 6 小时）**：用 MQTT5 连接向三个公共 broker 请求会话保留上限，读它们 CONNACK 里**实际准许**的值 —— `broker-cn.emqx.io` = **21600 秒（6 小时）**、`broker.emqx.io` = **21600 秒（6 小时）**、`broker.hivemq.com` = **1800 秒（30 分钟）**。据此把通道从 `protocolVersion: 4`（3.1.1 的会话过期由 broker 全局配置决定，等于在猜）改成 **`protocolVersion: 5` + 订阅方显式 `properties.sessionExpiryInterval = 21600`**，并在 `connect` 回调里把 broker 回的实数记进 `MQ.keep`，管理面板如实显示「只要在 **约 6 小时** 内打开本页就会自动补收」。发布方仍 `clean=true`（发完即走、不占会话）。**边界（要说清楚）**：① 补收窗口＝**约 6 小时**（EMQX 公共节点）；万一连到 HiveMQ 备节点则只有 30 分钟，界面显示的是**实际值**不是硬编码文案；② 队列受 broker 默认上限（EMQX `max_mqueue_len` 默认 1000 条）约束，班级场景远够；③ **超过窗口的留言不再补收** —— 所以「绑 Token → 落 `data/feedback.json`（数据分支，永久）」仍是最终依据，broker 只是「送达 / 补收」通道；④ 保留时长是公共 broker 免费给的，随时可能调整，这也是为什么读数而不是写死。资源版本随发版升至 `?v=94` / `LM_ASSET_VER='94'`。
 - **回归（修复94）**：三个 broker 的 CONNACK 保留值已实测记录；**真实生产代码**在 MQTT5 下再跑端到端（组长订阅 → 断开 → 访客发 2 条 → 重连 → **补收 2/2**，日志里 `broker 回保留=21600s`）；`test_yjs.js` **287/287**（9.59 节新增「保留窗口如实显示」：`mqInfo().keep === 21600`、`keepText === "约 6 小时"`、源码优先采用 CONNACK 回值、`MQ_KEEP_REQ` 常量在位）；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` A–G、`test_collab.js` 9/9、`test_comments.js` 9/9。
+- **修复95（三件事：反馈改成「像讨论区一样所有人都看得见」· 管理员一键「采纳 / 已修改 / 保留原判断」并按老师要求留四段记录 · 反馈与讨论区拆成两个页面）**：**依据是作业原文**（十一、同学互评 第 4 条）：「每组保留记录：**同学提出了什么 → 我们怎样核实 → 修改了什么 → 为什么调整或保留原判断**。**不采纳建议时，也应说明理由**。」另需「每组应获得**至少 3 名非本组同学的独立反馈**」。
+  **① 公开可见**：反馈页新增「📋 大家的反馈与处理（N）」——所有访客都能看到每条留言、状态、小组回复和上面那三段记录。读取有两条路：管理员设备有 Token → 走 API 读写数据分支（多设备合并）；**访客没有 Token → 直接读公开仓库的 `raw.githubusercontent.com/<owner>/<repo>/lm-data/data/feedback.json`**（GitHub Pages 的仓库本来就是公开的，raw 只读、**不需要任何 Token**），owner/repo 从网址自动推导（`<owner>.github.io/<repo>/`），数据分支读不到再退回 `main`；打开反馈页拉一次 + **60 秒节流**。
+  **② 实时也开放**：MQTT 订阅从「只有管理员」改成「所有人」——访客用 `clean:true` + 随机 clientId（**只收在线期间的新留言**，不在 broker 上留会话、不补收历史，历史由 raw 拉），管理员仍 `clean:false`（关机期间的补收照旧，约 6 小时）；三种来路共用一个 `fbMergeIncoming()` 漏斗，按 `id` + `updatedAt` 去重。
+  **③ 一键处理**：每条反馈下四个按钮 `✔ 采纳 / ✅ 已修改 / ✖ 保留原判断 / ↺ 待处理` + 三个输入框（① 我们怎样核实 / ② 修改了什么 / ③ 为什么调整或保留原判断）+ 回复；**失焦即保存**，随同步带给所有设备；访客看到的是只读的「处理记录」块（`fbRecordHtml`）。面板顶部还按**设备身份码去重**统计「共 N 条 · 来自 M 个身份码」，并提示距「至少 3 名非本组同学」还差几位 —— 这条要求可以直接自检。
+  **④ 状态词表更新**：`待处理 / 已采纳 / 已修改 / 保留原判断`；旧数据 **`处理中 → 已采纳`、`已处理 → 已修改`** 自动迁移（`fixStatus()` 纯函数，测试真跑）。
+  **⑤ 导出格式**：「📋 复制全部反馈」现在按「同学提出 / 我们怎样核实 / 修改了什么 / 为什么这样处理」四段导出，可直接贴进期末材料。
+  **⑥ 拆页**：新增 `discuss` 页面（`kind: "page"`，图标 🗣️），`render()` 里 `feedback → #fbMount + mountFeedback()`、`discuss → #dcMount + mountDiscuss()`；讨论区的发帖 / 楼中楼回复 / 改昵称 / 删除 / 屏蔽**只重渲染 `mountDiscuss()`**，不再整页重画。反馈页不再拼 `dcHtml()`，讨论区也不会被留言淹没。
+  **⑦ 隐私口径变更（重要）**：反馈现在**对所有人公开**（这是需求，也是作业"互相看得见、可核查"的要求），页面旧文案「仅小组管理员可见」已删除；**不要在反馈里写个人信息、内部资料或受限内容**。要真保密仍需「口令加密（AES-GCM）」那一步（尚未做）。资源版本随发版升至 `?v=95` / `LM_ASSET_VER='95'`。
+- **回归（修复95）**：`node --check js/app.js / js/fbsync.js` 通过；`test_yjs.js` **308/308**（新增 9.60 节 21 条：**8 条真跑** —— 状态四值 + 旧值迁移（`处理中→已采纳`、`已处理→已修改`、脏值→`待处理`）、`norm`/`slim` 携带三段记录且各截 300 字、`merge` 取 updatedAt 新的以保住处理记录、`publicCtx()` 三种情形（无仓库→`null` 不发请求 / 管理员用已绑定配置 / **访客从 `<owner>.github.io/<repo>/` 推导**）+ raw URL 拼接；**13 条源码守护** —— 新增 `discuss` 页 + `DISCUSS_PAGE` 自动补页与旧文案改写、`render` 分派、`mountFeedback` 里不含 `dcHtml()`、四个 `data-fbact` 动作按钮、处理记录公开渲染、三段说明失焦保存、导出四段、访客 `visitor:true` 订阅、60 秒节流 + 访客永不写云端、CSS 四色徽章 / 处理按钮 / 记录块 / `#dcMount`、版本 95、README 记录），并同步更新 3 条旧断言（合并的状态期望值随词表迁移、拉取节流改 60 秒/`_fbPullAt`、「管理员才订阅」改为「所有人订阅」）；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。**CSP 无需改动**：`connect-src` 里早有 `https://raw.githubusercontent.com`（修复89 给访客读内容用的），9.59 那条「CSP 未变」的断言仍然通过。
+- **修复96（「6 小时补收窗口改不了，能不能做到不开网页也收到？」—— 能：把「写」挪到提交者的浏览器里，用云存档当永久收件箱）**：先讲清边界 —— **6 小时是公共 broker 给的会话保留上限（EMQX CONNACK 实测 21600s），改不了**；而且「谁都没开网页」时**根本没人去收**，所以只靠 MQTT 永远有窗口。真正的解法是让**「发送」这个动作本身**就把数据写进一个永久存储：同学点发送 → 他的浏览器直接 `POST` 到云存档 → 谁都不用在线；下次任何设备打开反馈页都会自动拉回来。
+  **① 三种接法（管理面板里填，随内容同步给访客 —— 端点本来就该公开）**：
+  · **Supabase（推荐，免费、可读回）**：新建项目 → 建一张表 → 开 RLS「匿名只能 insert、所有人可 select」→ 把 `项目 URL + anon key` 填进面板。anon key 设计上就是给浏览器用的公开 key，权限由 RLS 管。
+  · **自建 Cloudflare Worker（免费、可读回，约 40 行）**：`POST` 收 JSON、`GET` 返回数组的极简端点（README 三·补13 有完整代码）。
+  · **飞书 / 钉钉 / 企业微信「群机器人」Webhook（最省事，只提醒不读回）**：同学一提交，手机立刻收到一条消息（永久留在群里，可再归档进多维表格）。
+  **② 不受 6 小时限制的原因**：写入发生在**访客的浏览器**（不依赖任何管理员设备在线），存储是数据库/表格（永久）；MQTT 从此只负责「秒级提醒」，它的补收窗口只影响「实时弹窗」，不影响「收得到」。
+  **③ 云文档（飞书多维表格 / 腾讯文档 / 金山 / Excel）**：这些平台的**写入**都要鉴权（不能把密钥放公开站），所以走两条路 ——（a）**群机器人通知**把内容推到飞书群；（b）**粘贴导入**：在飞书多维表格里框选复制（带表头）、或导出 CSV，粘进管理面板的「粘贴导入」框，`parseImport()` 会自动识别 `时间/称呼/类型/内容/状态/回复/核实/修改/理由` 等中英文表头（也支持 JSON 数组），**按 id 去重**，重复导入不会翻倍。
+  **④ 兜底顺序（四层，越靠前越强）**：云存档（永久，任何人不用在线）→ MQTT 实时提醒（秒级，管理员可补收约 6 小时）→ GitHub 数据分支（永久，需绑 Token 的设备打开过）→ 「📤 复制给组长」链接（永久，断网/被墙时用）。
+  **⑤ 隐私提醒**：云存档是**公开可写**的（否则访客写不进去），配合页面里的 `gate()` 限流/敏感词 + 表上的 RLS（只许 insert、不许 update/delete）已够班级场景；被恶意刷时可直接在 Supabase 控制台删行，或在 Worker 里加 IP 限流。
+  资源版本随发版升至 `?v=96` / `LM_ASSET_VER='96'`；CSP 只**新增白名单域名**（`*.supabase.co`、`*.workers.dev`、飞书/钉钉/企业微信），没有放开 `https:`。
+- **回归（修复96）**：`node --check js/app.js / js/fbsync.js` 通过；`test_yjs.js` **331/331**（新增 9.61 节 23 条：**14 条真跑** —— 配置归一（http 明文 / 缺 key / 未知类型一律拒绝）、合法配置去尾斜杠且界面不泄露 key、Supabase 写入（URL `/rest/v1/<表>` + `apikey`/`Bearer`/`Prefer` 头 + 瘦身 body）、Supabase 读取（`select=*&order=ts.asc&limit=1000`）、Worker 写入（`{t:"lmfb1",it}`）、飞书 `msg_type+content`、钉钉 `msgtype+text.content`、webhook 明确「不能读回」、**粘贴导入 6 条**（TSV 中文表头、CSV 引号内逗号、JSON 数组、空/乱码容错 + 同内容同 id、无表头按位置兜底 + 旧状态迁移、`dev:"import"` + 800 字截断）；**9 条源码守护** —— 接口齐全、提交时 `Promise.all([cloudP, mqP])` 三分支提示、打开页拉云存档、面板四个控件 + 保存/测试/导入、配置写进内容、`ensureConfig` 默认值、CSP 只加白名单、版本 96、README 记录）；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
 
 
 
@@ -535,7 +555,122 @@ living-maps/
 > ▸ **首屏快照的新鲜度**：新访客首屏读 `main:data/content.js`（最多 30 分钟前的快照），打开后 1 秒内就会从数据分支拉到最新，**不会丢数据**；想让首屏也最新，点一次 **☁ 同步到 GitHub**（手动同步会顺带刷新 `main` 快照）。
 
 
-## 四、部署到 GitHub Pages（约 10 分钟）
+## 三·补13、反馈「不开网页也能收到」：云存档（2026-10-31 · 修复96）
+
+### 1) 先把边界说清楚：6 小时改不了
+公共 MQTT broker（`broker.emqx.io`）给每个会话的**离线保留上限是 6 小时**（CONNACK 里 `sessionExpiryInterval=21600`），这是它白送的额度，**没有参数能改**；换到 HiveMQ 公共 broker 反而只有 30 分钟。更要紧的是：**谁都没开网页的时候，根本没人去收**——所以「只靠 MQTT」永远存在一个窗口。
+
+真正的解法不是「把窗口拉长」，而是**换掉「谁去收」这件事**：让同学点「发送」的**那一刻**，**他自己的浏览器**就把这条留言写进一个永久存储。这样：
+- 不需要任何管理员设备在线；
+- 不存在 6 小时窗口（存储是数据库/表格，永久）；
+- 谁下次打开反馈页，都会自动把它拉回来。
+
+这就是「云存档」。MQTT 从此只负责**秒级提醒**（弹「📥 收到新反馈」），它的补收窗口只影响「实时性」，不影响「收得到」。
+
+### 2) 四种接法怎么选
+
+| 接法 | 是否需注册 | 不开网页能否收到 | 能否**读回网页** | 说明 |
+|---|---|---|---|---|
+| **Supabase**（推荐） | 免费注册（邮箱） | ✅ 永久 | ✅ 直接查表 | anon key 本来就是浏览器用的公开 key，权限交给 RLS |
+| **自建 Cloudflare Worker** | 免费注册（邮箱） | ✅ 永久 | ✅ GET 返回数组 | 约 40 行代码，想怎么存都行（KV / D1 / R2） |
+| **飞书 / 钉钉 / 企业微信 群机器人** | 不用注册（群里有机器人即可） | ✅ 永久留在群里 | ❌ 只提醒 | 最省事：提交即推送手机，再归档进多维表格 |
+| **云文档 + 粘贴导入** | 用现有飞书/腾讯文档 | ✅（数据在文档里） | ✅（粘进来） | 写入要鉴权，不能放公开站；所以人工粘贴/导出 |
+
+**为什么云文档不能「网页自动写进去」**：飞书多维表格、腾讯文档、金山文档的写入接口都要 `app_secret` / `access_token`。把密钥放进公开的 GitHub Pages，等于把文档交给全网。能「零密钥写入」的只有三类：①专门给浏览器用的匿名 key（Supabase anon + RLS）、②表单（人工填）、③群机器人 Webhook（URL 本身即密钥，被刷可随时重置）。
+
+### 3) Supabase 五步（约 5 分钟）
+1. <https://supabase.com> 注册 → New project（区域选 Singapore / Tokyo 都行，免费额度 500MB 够用到毕业）。
+2. 打开 **SQL Editor**，粘贴建表 + 授权：
+   ```sql
+   create table if not exists lm_feedback (
+     id          text primary key,
+     ts          bigint,
+     type        text,
+     name        text,
+     text        text,
+     url         text,
+     dev         text,
+     status      text,
+     reply       text,
+     "check"     text,     -- 「我们怎样核实」（check 是 SQL 关键字，必须加双引号）
+     "change"    text,     -- 「修改了什么」
+     "why"       text,     -- 「为什么这样处理 / 为什么保留原判断」
+     updatedAt   bigint,
+     del         smallint  -- 删除墓碑（正常留言为空；预留着，免得将来报「找不到列」）
+   );
+   alter table lm_feedback enable row level security;
+   -- 任何人可读（反馈本来就是公开的）
+   create policy "public read" on lm_feedback for select using (true);
+   -- 任何人可插入（访客没有 token，靠这一条）
+   create policy "public insert" on lm_feedback for insert with check (true);
+   -- 不允许改 / 删（防止有人恶意篡改别人的留言）
+   revoke update, delete on lm_feedback from anon;
+   ```
+   > 列名说明：页面提交的字段就是 `check / change / why`，SQL 里用双引号建同名列 → **不需要任何字段映射**，建完就能写。若你更想用 `check_note / change_note / why_note`，也能用：读回来时 `norm()` 会自动认这两个别名，但**写入**那一侧需要改 `cloudSave()` 的字段名（或在 Worker / 数据库视图里做一次映射）。
+3. **Project Settings → API**，复制 `Project URL` 和 `anon public` key。
+4. 打开本站 → 管理员模式 → 反馈页 → 展开「☁ 云存档」→ 类型选 *Supabase*、填 URL / anon key / 表名（`lm_feedback`）→ **保存云存档设置**。
+5. 点顶部 **☁️ 同步到 GitHub**（让所有访客都拿到这个端点）→ 再点「测试 / 立即拉取」应显示「云存档可读：共 N 条」。
+
+> 备注：Supabase 的 `select=*` 会把整行 JSON 原样返回，字段名与页面一致（`check` 等），所以「写得进、读得回」一次到位。如果写入报 `PGRST204 Could not find the 'xxx' column`，说明表少了列（建表时漏了，或 `"check"` 没加双引号）—— 删表按上面重新建一次即可。若重复执行这段 SQL 报 `policy "public read" already exists`，说明策略已在，忽略即可（或先 `drop policy` 再建）。
+>
+> 三个必须记牢的点：① 面板里只填 **Project URL + `anon public`**（那个很长的 `eyJ…`），**绝不要**填 `service_role`（它是管理员密钥，泄露等于把整库交出去）；② `anon key` 写进 `data/content.js` 是**可接受**的（权限由 RLS 管，本来就设计成公开）；③ 任何大模型的 API Key **都不能**放进这个站（前端代码全公开）。
+
+### 4) Cloudflare Worker 模板（约 40 行，免费）
+在 <https://workers.cloudflare.com> 新建 Worker，粘贴下面代码（用 **KV** 存，命名空间变量名 `LM_FB`）：
+
+```js
+// LM 反馈云存档：POST 收 { t:'lmfb1', it } / GET 返回数组
+export default {
+  async fetch(req, env) {
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
+    };
+    if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
+    const KEY = 'fb:items';
+    const load = async () => JSON.parse((await env.LM_FB.get(KEY)) || '[]');
+    if (req.method === 'GET') {
+      return new Response(JSON.stringify(await load()), {
+        headers: { ...cors, 'Content-Type': 'application/json' }
+      });
+    }
+    if (req.method !== 'POST') return new Response('no', { status: 405, headers: cors });
+    let b;
+    try { b = await req.json(); } catch { return new Response('bad json', { status: 400, headers: cors }); }
+    const it = b && b.t === 'lmfb1' ? b.it : null;
+    if (!it || !it.id || !it.text) return new Response('bad item', { status: 400, headers: cors });
+    const list = await load();
+    const i = list.findIndex(x => x.id === it.id);
+    if (i >= 0) list[i] = { ...list[i], ...it }; else list.push(it);
+    await env.LM_FB.put(KEY, JSON.stringify(list.slice(-2000)));
+    return new Response('{"ok":true}', { headers: { ...cors, 'Content-Type': 'application/json' } });
+  }
+};
+```
+> 字段说明：页面发的是「瘦身条目」，字段原样是 `check / change / why`，Worker 直接存 JSON 所以**不用改列名**（这是它比 Supabase 省事的地方）。要加限流就在 `POST` 前按 `req.headers.get('cf-connecting-ip')` 记个计数器。
+
+### 5) 飞书 / 钉钉 / 企业微信群机器人（30 秒）
+- **飞书**：群设置 → 群机器人 → 添加「自定义机器人」→ 复制 Webhook（`https://open.feishu.cn/open-apis/bot/v2/hook/...`）。
+- **钉钉**：群设置 → 智能群助手 → 添加机器人 → 自定义 → 复制 Webhook（`https://oapi.dingtalk.com/robot/send?access_token=...`）。
+- **企业微信**：群 → 添加群机器人 → 复制 Webhook（`https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=...`）。
+把网址填进「☁ 云存档 → 类型：群机器人」并保存。之后**每位同学提交，你手机飞书/钉钉立刻弹一条**（含编号、称呼、正文摘要）。注意：这条通道**只能提醒、不能读回**（面板会明确显示），所以建议**同时**配 Supabase 或 Worker 当「可读回」的那一份。
+
+### 6) 云文档（飞书多维表格 / 腾讯文档 / Excel）怎么参与
+1. 在飞书多维表格建 4 列：`时间 / 称呼 / 类型 / 内容`（也可以再加上 `状态 / 回复 / 核实 / 修改 / 理由`）。
+2. 群机器人把每条留言推到群里 → 你们直接往表里贴；或者干脆让同学走「飞书表单」填（数据直接进表，永久、可导出）。
+3. 处理时：在多维表格里**框选（带表头）复制** → 打开本站反馈页 → 「粘贴导入」→ 导入到反馈列表 → 就能用四态按钮一键「采纳 / 已修改 / 保留原判断 / 待处理」+ 写三段记录 → 最后「📋 复制全部反馈」导出四段式材料。
+   `parseImport()` 认的表头：`时间/日期/提交时间`、`称呼/姓名/填写人`、`类型`、`内容/反馈/建议`、`状态`、`回复`、`核实`、`修改`、`理由`（中英文都行），也支持直接粘 JSON 数组；**按 id 去重**，重复导入不会翻倍。
+
+### 7) 验收（四步，两分钟）
+1. 管理员设备配好 Supabase（或 Worker）→ 保存 → 同步到 GitHub。
+2. 手机无痕窗口打开 `?v=96` → 反馈页发一条 → 提示应是「✅ 已提交…并已存进云存档」。
+3. **关掉所有本站页面**（模拟谁都不在线）→ 等 1 分钟 → 用电脑打开反馈页 → 应弹「☁ 从云存档收到 N 条反馈」，列表里能看到那条。
+4. 处理它：点「✔ 采纳」+ 填三段 + 回复 → 「📋 复制全部反馈」→ 四段式文本里应包含这条。
+
+> 如果第 3 步没收到：先点面板里的「测试 / 立即拉取」看是「HTTP 401/403」（key 或 RLS 配错）还是「网络失败（CSP / 域名白名单）」（域名不在 `connect-src` 里）。README 里的 CSP 已包含 `*.supabase.co`、`*.workers.dev`、飞书/钉钉/企业微信；用别的域名要自己加白。
+
+
 
 1. 注册/登录 GitHub → 右上角 **+** → **New repository** → 起名如 `living-maps` → Public → Create
 2. 仓库页点 **uploading an existing file**，把 `living-maps` 文件夹里**所有文件**拖进去 → **Commit changes**
@@ -565,10 +700,10 @@ living-maps/
 ## 七、和作业要求的对应关系
 
 - ✅ 三张地图：领域 / 生态 / 认知三个页面（可自由增加页面）
-- ✅ 六栏结构对齐课程要求：首页 / 领域地图 / 生态地图 / 认知地图 / 更新记录 / **反馈与建议**（访客可直接匿名留言，管理员在页内查看处理；老内容自动升级为新版）
+- ✅ 六（七）栏结构对齐课程要求：首页 / 领域地图 / 生态地图 / 认知地图 / 更新记录 / **反馈与建议** / **讨论区**（修复95 起两者拆成独立页面：反馈页收正式意见并公开处理记录，讨论区自由聊天，互不淹没；访客都可匿名参与，管理员在页内处理；老内容自动升级为新版）
 - ✅ 首页入口：开始探索 + 查看更新记录 + 反馈与建议
 - ✅ Word 式排版细节：⇤/⇥ 延伸与贴左/贴右都以**内容块边缘**为对齐线（表格、正文严丝合缝）；选中文字后可**连续点工具栏按钮**（B / I / U / 颜色…）选区不丢；⤒ 贴平到上一模块底部（下沿附近自动向下贴平，零缝隙）
-- ✅ **已获得并回应非本组同学的反馈**（提交自检清单第 12 条）：同学在自己手机上提交 → **MQTT 隔空直达**组长设备（组长当时没开机也不会丢，**6 小时内**打开自动补收（实测补收 2/2，保留时长由 broker 回执决定））→ 有 Token 时写入数据分支 `data/feedback.json`（**0 次 Pages 构建**）→ 多台管理员设备按 `id` + `updatedAt` 合并；改状态 / 写回复 / 删除都同步（删除写墓碑防回流）。连 broker 都发不出去时才用「📤 复制给组长」链接兜底（详见修复92 / 修复93）。
+- ✅ **已获得并回应非本组同学的反馈**（提交自检清单第 12 条 + 十一、同学互评 第 4 条「反馈必须得到回应：同学提出了什么 → 我们怎样核实 → 修改了什么 → 为什么调整或保留原判断；不采纳建议时，也应说明理由」）：同学在手机上提交 → **MQTT 隔空直达**（组长当时没开机也不会丢，**6 小时内**打开自动补收，实测补收 2/2，保留时长由 broker 回执决定）→ 有 Token 时写入数据分支 `data/feedback.json`（**0 次 Pages 构建**）→ 多台管理员设备按 `id` + `updatedAt` 合并。**修复95 起**：① 反馈**对所有人公开**（访客无 Token 也能从公开仓库 raw 读到全部留言与处理记录）；② 管理员每条只需点一下 **`✔ 采纳 / ✅ 已修改 / ✖ 保留原判断`**，再填 ①怎样核实 ②改了什么 ③为什么这样处理 —— 这三段会随留言一起公开，正是老师要的「保留记录」；③「📋 复制全部反馈」直接导出四段文本，可贴进期末材料。连 broker 都发不出去时才用「📤 复制给组长」链接兜底。**修复96 起**④ 新增「☁ 云存档」：同学点「发送」时**他自己的浏览器**就把留言写进 Supabase / 自建 Worker（或飞书群机器人立刻推手机），**不需要任何管理员设备在线，也不受 6 小时限制**；下次谁打开反馈页自动拉回。飞书多维表格 / 腾讯文档 / Excel 里的记录可用「粘贴导入」一次并入（自动认表头、按 id 去重）。兜底顺序：**云存档 → MQTT 实时提醒（约 6 小时补收）→ GitHub 数据分支 → 复制链接**（详见修复92 / 93 / 95 / 96 与三·补13）。
 - ✅ 公开访问：GitHub Pages 云端运行
 - ✅ 可更新 + 有记录：「更新记录」页 + 每次同步自动留 Git 提交历史
 - ✅ 可追溯：每个页面都有「来源引用」内容块

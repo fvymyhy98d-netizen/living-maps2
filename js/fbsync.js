@@ -19,17 +19,32 @@ W.LMFB = (function () {
   const FILE_PATH = 'data/feedback.json';
 
   /* ---------- ① 纯函数：规范化 / 合并 / 打包 ---------- */
+  function pick(it, a, b) { var v = it[a]; if (v == null || v === '') v = it[b]; return String(v == null ? '' : v).slice(0, 300); }
   function norm(it) {
     if (!it || typeof it !== 'object' || !it.id) return null;
     const o = {
       id: String(it.id), ts: +it.ts || 0, type: String(it.type || ''),
       name: String(it.name || '匿名').slice(0, 30), text: String(it.text || ''),
       dev: String(it.dev || ''), url: String(it.url || ''),
-      status: String(it.status || '待处理'), reply: String(it.reply || '')
+      status: fixStatus(it.status), reply: String(it.reply || '').slice(0, 200),
+      /* ★ 修复95：老师要求「反馈必须得到回应」的四段记录
+         ★ 修复96：也认 Supabase 表里常被改名的 *_note 别名（避免 SQL 关键字冲突） */
+      check: pick(it, 'check', 'check_note'),    /* 我们怎样核实 */
+      change: pick(it, 'change', 'change_note'),  /* 修改了什么 */
+      why: pick(it, 'why', 'why_note')            /* 为什么调整 / 为什么保留原判断 */
     };
     o.updatedAt = +it.updatedAt || o.ts || 0;
     if (it.del) o.del = 1;
     return o;
+  }
+  /* ★ 修复95：状态统一（旧数据的 处理中/已处理 自动迁移） */
+  var STS = ['待处理', '已采纳', '已修改', '保留原判断'];
+  function fixStatus(s) {
+    var t = String(s == null ? '' : s).trim();
+    if (STS.indexOf(t) >= 0) return t;
+    if (t === '处理中') return '已采纳';
+    if (t === '已处理') return '已修改';
+    return '待处理';
   }
   /* 合并两份反馈列表：同 id 取 updatedAt 更新的；其余按时间升序 */
   function merge(a, b) {
@@ -64,6 +79,9 @@ W.LMFB = (function () {
     if (n.url) o.url = n.url;
     if (n.status && n.status !== '待处理') o.status = n.status;
     if (n.reply) o.reply = n.reply;
+    if (n.check) o.check = n.check;      /* ★ 修复95：处理记录也要传给别人 */
+    if (n.change) o.change = n.change;
+    if (n.why) o.why = n.why;
     if (n.updatedAt) o.updatedAt = n.updatedAt;
     if (n.del) o.del = 1;
     return o;
@@ -176,6 +194,243 @@ W.LMFB = (function () {
       return push(merged).then(function () { return { ok: true, list: merged, changed: true }; });
     });
   }
+  /* ---------- ②b 公开读取（★ 修复95：访客没有 Token 也能看到大家的反馈）----------
+     反馈文件放在**公开仓库**的数据分支上，所以 raw.githubusercontent.com 可直接读，不需要任何凭据。
+     owner/repo：管理员设备用已绑定配置；访客从网址推导（<owner>.github.io/<repo>/）。
+     ref：管理员用配置的数据分支；访客默认 lm-data（读不到再退回 main）。 */
+  function publicCtx() {
+    var S = win().LMStore, cfg = null;
+    try { cfg = (S && S.getGhCfg) ? S.getGhCfg() : null; } catch (e) { cfg = null; }
+    var owner = (cfg && cfg.owner) || '', repo = (cfg && cfg.repo) || '', ref = '';
+    if (!owner || !repo) {
+      try {
+        var h = String(win().location && location.hostname || '');
+        var p = String(win().location && location.pathname || '');
+        var m = h.match(/^([^.]+)\.github\.io$/i);
+        var seg = p.split('/')[1] || '';
+        if (m && seg) { owner = m[1]; repo = seg.replace(/\.git$/, ''); }
+      } catch (e2) { /* noop */ }
+    }
+    if (!owner || !repo) return null;
+    try { if (S && S.dataRefOf && cfg) ref = S.dataRefOf(cfg); } catch (e3) { ref = ''; }
+    if (!ref) ref = 'lm-data';
+    return { owner: owner, repo: repo, ref: ref };
+  }
+  function publicUrl(c, ref) {
+    return 'https://raw.githubusercontent.com/' + c.owner + '/' + c.repo + '/'
+      + encodeURIComponent(ref || c.ref) + '/' + FILE_PATH + '?t=' + Date.now();
+  }
+  /* 依次尝试 [数据分支, main]，谁都读不到就返回 ok:false（前端静默，不影响留言） */
+  function pullPublic() {
+    var c = publicCtx();
+    if (!c) return Promise.resolve({ ok: false, list: [], why: '无法推导仓库' });
+    var refs = [c.ref];
+    if (c.ref !== 'main') refs.push('main');
+    var i = 0;
+    function tryNext() {
+      if (i >= refs.length) return Promise.resolve({ ok: false, list: [], why: 'raw 读取失败' });
+      var ref = refs[i++];
+      return fetch(publicUrl(c, ref), { cache: 'no-store' })
+        .then(function (r) {
+          if (!r.ok) return tryNext();
+          return r.text().then(function (t) {
+            var list = [];
+            try { list = JSON.parse(t); } catch (e) { list = []; }
+            if (!Array.isArray(list)) return tryNext();
+            return { ok: true, list: list, ref: ref, url: publicUrl(c, ref) };
+          });
+        })
+        .catch(tryNext);
+    }
+    return tryNext();
+  }
+
+  /* ---------- ②c 云存档（★ 修复96）：把「写」放在提交者的浏览器里 ----------
+     为什么需要它：公共 MQTT 的离线补收窗口只有 6 小时（broker 白送的额度，改不了），
+     而「谁都没开网页」时根本没人去收 —— 只要同学点「发送」的那一刻就把数据写进一个
+     **永久存储**，就不需要任何人在线，也不受 6 小时限制；下次谁打开反馈页都会自动拉回来。
+     三种适配（管理员在「反馈处理」面板里填，任选其一）：
+       ① supabase —— 免费 Postgres；anon key 设计上就可以公开，靠 RLS 只允许 insert / 允许读；
+       ② worker   —— 自建 Cloudflare Worker（免费）：POST 收 JSON、GET 返回数组，一个网址够了；
+       ③ webhook  —— 飞书 / 钉钉 / 企业微信群机器人：只负责「立刻通知到手机」，不读回。
+     配置存在内容里（config.fbCloud）——端点必须对**所有访客**可见，否则他们写不进去。 */
+  function contentCfg() {
+    try {
+      var A = win().LMApp, c = A && A.state && A.state.content;
+      var f = c && c.config && c.config.fbCloud;
+      return (f && typeof f === 'object') ? f : null;
+    } catch (e) { return null; }
+  }
+  function cloudCfg() {
+    var f = contentCfg();
+    if (!f) return null;
+    var kind = String(f.kind || '').trim().toLowerCase();
+    var url = String(f.url || '').trim().replace(/\/+$/, '');
+    if (!kind || kind === 'off' || kind === 'none' || !url) return null;
+    if (!/^https:\/\//i.test(url)) return null;          /* 只允许 https，避免明文与混合内容 */
+    if (kind === 'supabase') {
+      var key = String(f.key || '').trim();
+      if (!key) return null;
+      return { kind: 'supabase', url: url, key: key, table: String(f.table || 'lm_feedback').trim() || 'lm_feedback' };
+    }
+    if (kind === 'worker' || kind === 'webhook') return { kind: kind, url: url };
+    return null;
+  }
+  function cloudInfo() {                                  /* 给界面看（不显示 key） */
+    var c = cloudCfg();
+    if (!c) return { on: false, kind: '', host: '', text: '未配置（只能靠 MQTT / GitHub / 链接）' };
+    var host = '?';
+    try { host = String(c.url).replace(/^https:\/\//i, '').split('/')[0]; } catch (e) { /* noop */ }
+    var label = c.kind === 'supabase' ? 'Supabase' : (c.kind === 'worker' ? '自建 Worker' : '群机器人（只提醒）');
+    return { on: true, kind: c.kind, host: host, text: label + ' · ' + host };
+  }
+  /* 写一条：成功返回 true。失败一律静默（不能因为云存档挂了就让人发不出留言） */
+  function cloudSave(item) {
+    var c = cloudCfg(), it = slim(item);
+    if (!c || !it) return Promise.resolve(false);
+    try {
+      if (c.kind === 'webhook') return hookSend(c.url, it);
+      if (c.kind === 'supabase') {
+        return fetch(c.url + '/rest/v1/' + encodeURIComponent(c.table), {
+          method: 'POST', cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json', apikey: c.key,
+            Authorization: 'Bearer ' + c.key, Prefer: 'return=minimal'
+          },
+          body: JSON.stringify(it)
+        }).then(function (r) { return !!r && r.ok; }).catch(function () { return false; });
+      }
+      /* worker 约定：POST 收 { t:'lmfb1', it }，GET 返回数组 */
+      return fetch(c.url, {
+        method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ t: 'lmfb1', it: it })
+      }).then(function (r) { return !!r && r.ok; }).catch(function () { return false; });
+    } catch (e) { return Promise.resolve(false); }
+  }
+  /* 群机器人：飞书 / 钉钉 / 企业微信 三种 body 都兼容（无关字段对方会忽略） */
+  function hookSend(url, it) {
+    var text = '📥 新反馈 ' + it.id + '\n' + (it.name || '匿名') + ' · ' + (it.type || '')
+      + '\n' + String(it.text || '').slice(0, 500) + (it.url ? '\n' + it.url : '');
+    var body = { msgtype: 'text', text: { content: text } };        /* 钉钉 / 企业微信 */
+    if (/feishu|larksuite/i.test(url)) body = { msg_type: 'text', content: JSON.stringify({ text: text }) };
+    return fetch(url, {
+      method: 'POST', mode: 'no-cors', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function () { return true; }).catch(function () { return false; });
+  }
+  /* 读全部：supabase 直接查表；worker 直接 GET；webhook 读不了 */
+  function cloudList() {
+    var c = cloudCfg();
+    if (!c) return Promise.resolve({ ok: false, list: [], why: '未配置' });
+    if (c.kind === 'webhook') return Promise.resolve({ ok: false, list: [], why: '群机器人只能提醒、不能读回' });
+    var url, opt;
+    if (c.kind === 'supabase') {
+      url = c.url + '/rest/v1/' + encodeURIComponent(c.table) + '?select=*&order=ts.asc&limit=1000';
+      opt = { cache: 'no-store', headers: { apikey: c.key, Authorization: 'Bearer ' + c.key } };
+    } else {
+      url = c.url; opt = { cache: 'no-store' };
+    }
+    try {
+      return fetch(url, opt).then(function (r) {
+        if (!r || !r.ok) return { ok: false, list: [], why: 'HTTP ' + (r ? r.status : '?') };
+        return r.json().then(function (j) {
+          var arr = Array.isArray(j) ? j : (j && Array.isArray(j.items) ? j.items : []);
+          return { ok: true, list: arr, why: '' };
+        });
+      }).catch(function () { return { ok: false, list: [], why: '网络失败（CSP / 域名白名单）' }; });
+    } catch (e) { return Promise.resolve({ ok: false, list: [], why: String(e && e.message || e) }); }
+  }
+
+
+  /* ---------- ②d 粘贴导入（★ 修复96）：云文档导出后直接粘进来 ----------
+     适用：飞书多维表格 / 腾讯文档 / 金山文档 / Excel —— 导出或直接框选复制，带表头粘进文本框。
+     表头按中英文同义词匹配（时间/称呼/类型/内容…），没认出来就按「时间, 称呼, 类型, 内容」兜底。
+     也支持直接粘 JSON 数组（[{id,ts,text,...}]）。重复导入不会翻倍：id 稳定 + 按 updatedAt 合并。 */
+  var COLS = {
+    id: ['id', '编号', '序号'],
+    ts: ['ts', 'time', '日期', '时间', '提交时间', '创建时间', '填写时间'],
+    type: ['type', '类型', '分类', '反馈类型'],
+    name: ['name', '称呼', '昵称', '姓名', '填写人'],
+    text: ['text', '内容', '留言', '反馈', '建议', '意见', '反馈内容'],
+    url: ['url', '链接', '相关链接'],
+    status: ['status', '状态', '处理状态'],
+    reply: ['reply', '回复', '小组回复'],
+    check: ['check', '核实', '怎样核实', '核实情况'],
+    change: ['change', '修改', '修改了什么', '处理结果'],
+    why: ['why', '理由', '为什么', '原因']
+  };
+  function hash36s(s) {
+    var h = 5381; s = String(s || '');
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+  /* 一行 CSV/TSV → 字段数组（支持 "引号包裹的逗号" 与 "" 转义） */
+  function splitRow(line, sep) {
+    var out = [], cur = '', q = false, i = 0;
+    while (i < line.length) {
+      var ch = line.charAt(i);
+      if (q) {
+        if (ch === '"') {
+          if (line.charAt(i + 1) === '"') { cur += '"'; i += 2; continue; }
+          q = false; i++; continue;
+        }
+        cur += ch; i++; continue;
+      }
+      if (ch === '"') { q = true; i++; continue; }
+      if (ch === sep) { out.push(cur); cur = ''; i++; continue; }
+      cur += ch; i++;
+    }
+    out.push(cur);
+    return out;
+  }
+  function parseImport(text) {
+    var raw = String(text == null ? '' : text).replace(/^\uFEFF/, '').trim();
+    if (!raw) return [];
+    /* ① JSON 数组 / {items:[]} */
+    if (raw.charAt(0) === '[' || raw.charAt(0) === '{') {
+      var j = null;
+      try { j = JSON.parse(raw); } catch (e) { j = null; }
+      if (j) {
+        var arr = Array.isArray(j) ? j : (Array.isArray(j.items) ? j.items : null);
+        if (arr) return arr.map(norm).filter(Boolean);
+      }
+    }
+    /* ② 表格：自动判分隔符（制表符 = Excel/飞书直接粘贴；逗号 = CSV） */
+    var lines = raw.split(/\r\n|\n|\r/).filter(function (l) { return String(l).trim() !== ''; });
+    if (!lines.length) return [];
+    var head = lines[0];
+    var sep = (head.split('\t').length > head.split(',').length) ? '\t' : ',';
+    var cells = splitRow(head, sep).map(function (s) { return String(s).trim().toLowerCase(); });
+    var map = {};
+    Object.keys(COLS).forEach(function (k) {
+      for (var i = 0; i < cells.length; i++) {
+        if (COLS[k].indexOf(cells[i]) >= 0) { map[k] = i; break; }
+      }
+    });
+    /* 一行表头都没认出来 → 当「没有表头」，全部行都是数据，按常见列序 时间/称呼/类型/内容 兜底 */
+    var hasHeader = Object.keys(map).length > 0;
+    if (!hasHeader) { map.ts = 0; map.name = 1; map.type = 2; map.text = 3; }
+    var out = [], hasText = map.text != null;
+    for (var n = (hasHeader ? 1 : 0); n < lines.length; n++) {
+      var c = splitRow(lines[n], sep).map(function (s) { return String(s).trim(); });
+      var get = function (k) { return (map[k] != null && c[map[k]] != null) ? c[map[k]] : ''; };
+      var txt = (hasText ? get('text') : (c[3] || c[2] || '')).slice(0, 800);
+      if (!txt) continue;
+      var tsRaw = get('ts'), ts = NaN;
+      if (tsRaw) ts = Date.parse(String(tsRaw).replace(/[./]/g, '-').replace(/\s+/, ' '));
+      if (!isFinite(ts)) ts = Date.now() + n;                 /* 没时间列 → 按导入顺序排 */
+      var id = get('id') || ('F-' + hash36s(ts + '|' + txt).slice(0, 6).toUpperCase());
+      out.push(norm({
+        id: id, ts: ts, type: get('type') || '导入', name: get('name') || '匿名',
+        text: txt, url: get('url'), dev: 'import',
+        status: get('status') || '待处理', reply: get('reply'),
+        check: get('check'), change: get('change'), why: get('why'),
+        updatedAt: Date.now()
+      }));
+    }
+    return out.filter(Boolean);
+  }
+
   function hasCloud() { return !!ctx(); }
   function refName() { const c = ctx(); return c ? c.ref : ''; }
 
@@ -184,10 +439,12 @@ W.LMFB = (function () {
      CSP 里 connect-src 已含 wss:，所以这条路**不加依赖、不改 CSP、不要 Key**。
      关键的「设备没开机怎么收」：订阅方用固定 clientId + clean=false → 会话留在 broker 上，
      离线期间的 QoS1 消息会排队，下次连上一次性补发（已实测：离线期间 3 条全部补收到）。
-     谁是「组长」：MQTT 本身没有身份。这里的做法是 **只有进入管理员模式的设备才订阅**
-     （要输管理密码），访客只发不收 —— 属「软隔离」，防误看而非防破解；
-     真正的机密请用下一步的口令加密（README 修复92 的隐私说明）。 */
-  var MQ = { client: null, onItem: null, topic: '', url: '', keep: 0 };
+     ★ 修复95：反馈改为「像讨论区一样对所有人可见」——
+       · 访客也订阅（clean=true + 随机 clientId → 只收在线期间的新留言，不占会话、不补收）；
+       · 历史列表由 pullPublic() 从公开仓库 raw 拉（不需要 Token）；管理员另有 API 同步。
+       · 管理员（输入密码后）仍用 clean=false + 固定 clientId → 关机期间也能补收。
+     主题由「房间 + 口令」哈希派生，属「软隔离」：防误看，不防破解（公共 broker 明文）。 */
+  var MQ = { client: null, onItem: null, topic: '', url: '', keep: 0, admin: false };
   /* 离线补收窗口：向 broker 申请的会话保留秒数（MQTT5）。
      实测公共 broker 的实际上限：EMQX 21600 秒（6 小时）、HiveMQ 1800 秒（30 分钟）；
      broker 会在 CONNACK 里回它真正给的值，我们以那个为准（见 listen 里的 MQ.keep）。 */
@@ -229,13 +486,19 @@ W.LMFB = (function () {
       return w.mqtt.connect(c.url, o);
     } catch (e) { return null; }
   }
-  /* 组长/管理员：订阅并持续接收（clean=false → 离线期间的留言会被 broker 攒着，下次连上补收） */
-  function listen(onItem) {
+  /* 订阅并持续接收。opts.visitor=true → 访客只读实时流（clean=true，不占 broker 会话、不补收历史，
+     历史由 pullPublic() 从 raw 拉）。管理员：clean=false + 固定 clientId → 关机期间的会补收。 */
+  function listen(onItem, opts) {
     if (!mqReady()) return function () {};
-    if (MQ.client) { MQ.onItem = onItem; return function () {}; }
-    var c = mqCfg(), cl = mqOpen(true);
+    var asAdmin = !(opts && opts.visitor);
+    if (MQ.client) {
+      if (MQ.admin === asAdmin) { MQ.onItem = onItem; return function () {}; }
+      try { MQ.client.end(true); } catch (e0) { /* noop */ }
+      MQ.client = null;
+    }
+    var c = mqCfg(), cl = mqOpen(asAdmin);
     if (!cl) return function () {};
-    MQ.client = cl; MQ.onItem = onItem; MQ.topic = c.topic; MQ.url = c.url;
+    MQ.client = cl; MQ.onItem = onItem; MQ.topic = c.topic; MQ.url = c.url; MQ.admin = asAdmin;
     cl.on('connect', function (ck) {
       /* ★ 修复94：MQTT5 CONNACK 会回 broker 真正给的会话保留秒数 → 记下来，界面如实显示「能补收多久」 */
       try {
@@ -297,7 +560,13 @@ W.LMFB = (function () {
     shareLink: shareLink, readFromUrl: readFromUrl,
     pull: pull, push: push, sync: sync, hasCloud: hasCloud, refName: refName,
     path: FILE_PATH, lastSyncAt: function () { return lastSync; },
-    publish: publish, listen: listen, mqInfo: mqInfo, mqCfg: mqCfg
+    publish: publish, listen: listen, mqInfo: mqInfo, mqCfg: mqCfg,
+    /* ★ 修复95：公开可见 + 状态/处理记录 */
+    pullPublic: pullPublic, publicCtx: publicCtx, publicUrl: publicUrl,
+    fixStatus: fixStatus, statuses: STS.slice(),
+    /* ★ 修复96：云存档（永久收件箱，不受 6 小时限制）+ 粘贴导入 */
+    cloudCfg: cloudCfg, cloudInfo: cloudInfo, cloudSave: cloudSave, cloudList: cloudList,
+    parseImport: parseImport, contentCfg: contentCfg
   };
 })();
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {}));

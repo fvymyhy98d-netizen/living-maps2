@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '94';
+var LM_ASSET_VER = '96';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1152,6 +1152,11 @@ window.LMApp = (function () {
       app.insertAdjacentHTML('beforeend', '<div id="fbMount"></div>');
       mountFeedback();
     }
+    /* ★ 修复95：讨论区单独一页（不再和反馈挤在一起，避免被留言淹没） */
+    if (p && p.id === 'discuss') {
+      app.insertAdjacentHTML('beforeend', '<div id="dcMount"></div>');
+      mountDiscuss();
+    }
     /* 渲染图表（占位 → SVG） */
     if (p && p.blocks) {
       app.querySelectorAll('.chart-slot').forEach(function (slot) {
@@ -2075,19 +2080,30 @@ window.LMApp = (function () {
      留言框与管理员查看通道由 mountFeedback() 动态渲染（静态页存浏览器本地） */
   const FEEDBACK_PAGE = {
     id: 'feedback', kind: 'page', icon: '💬', label: '反馈与建议', title: '反馈与建议',
-    description: '对我们的工作有疑问、发现错误或有改进建议？在下方留言即可（可匿名，仅小组管理员可见）。',
+    description: '对我们的工作有疑问、发现错误或有改进建议？在下方留言（可匿名）。留言与处理记录对所有人公开，我们会逐条回应。',
     blocks: [
-      { type: 'paragraph', size: 'lead', text: '如果你对我们的**选题、页面、资料或分工**有疑问、发现错误，或者有改进建议，欢迎在下方留言——**可以匿名**；提交后只有我们小组的管理员能看到，其他访客互相看不到留言。' },
-      { type: 'callout', tone: 'blue', title: '我们会怎么处理', text: '我们会定期查看反馈：**已修改 / 暂缓 / 不采纳**都会在「更新记录」页对应版本里写明依据。提问题时建议说清楚：针对哪个页面或哪项工作、遇到了什么问题、期望是什么。' }
+      { type: 'paragraph', size: 'lead', text: '如果你对我们的**选题、页面、资料或分工**有疑问、发现错误，或者有改进建议，欢迎在下方留言——**可以匿名**。留言和我们的处理记录（怎样核实 → 改了什么 → 为什么这样处理）**对所有人公开**，既方便互相参考，也便于课程检查。' },
+      { type: 'callout', tone: 'blue', title: '我们会怎么处理（作业要求）', text: '**每组应获得至少 3 名非本组同学的独立反馈**，且每条都要回应：记录「同学提出了什么 → 我们怎样核实 → 修改了什么 → 为什么调整或保留原判断」；**不采纳也会写明理由**。提问题时建议说清楚：针对哪个页面或哪项工作、遇到了什么问题、期望是什么。' }
+    ]
+  };
+  /* ★ 修复95：讨论区独立成页（老内容缺这一页时由 migrate() 自动补，避免与反馈挤在一起） */
+  const DISCUSS_PAGE = {
+    id: 'discuss', kind: 'page', icon: '🗣️', label: '讨论区', title: '讨论区',
+    description: '围绕三张地图自由讨论：提问、补充材料、互相质疑都可以。与「反馈与建议」分开，避免正式反馈被聊天淹没。',
+    blocks: [
+      { type: 'paragraph', size: 'lead', text: '这里像一个小型讨论版：可以**提问、补充材料、质疑某条判断**，也可以只看别人在聊什么。发言请遵守基本礼貌；恶意刷屏会被屏蔽身份码。' },
+      { type: 'callout', tone: 'green', title: '讨论区与反馈页的分工', text: '**本页**用于自由讨论（想法、补充材料、互相答疑）；**「反馈与建议」页**用于希望我们动手修改的正式意见——那边每条都会记录「怎样核实 → 改了什么 → 为什么这样处理」并对所有人公开。想让我们改内容的，建议写到反馈页。' }
     ]
   };
 
   /* ---------- 访客反馈（留言框 + 管理员通道）----------
-     静态站方案：反馈保存在访客浏览器本地（localStorage lm_feedback_v1），不进内容 JSON。
-     访客页只显示留言表单，访客互相看不到留言；管理员登录后，本页底部出现
-     「反馈处理」通道：查看 / 改状态 / 写回复 / 删除 / 一键复制。
-     ⚠ 静态站限制：反馈存在提交时的那台浏览器里，管理员需在同一浏览器查看；
-     跨设备收集需后续接入云数据库（WorkBuddy）。所有输出都经 esc() 转义防注入。 */
+     静态站方案：反馈保存在本机 localStorage（lm_feedback_v1），不进内容 JSON。
+     ★ 修复95：反馈现在对所有人公开（不再是「只有管理员可见」）——
+       · 列表来源：① 本机已有的记录；② 有 Token 的管理员设备从数据分支 API 合并；
+         ③ 访客无 Token 时直接读公开仓库 raw 的 data/feedback.json（只读）；
+         ④ MQTT 实时流（管理员可补收，访客只收在线新留言）。
+       三/四路都汇进 fbMergeIncoming()，按 id + updatedAt 去重（删除用墓碑）。
+     所有输出都经 esc() 转义防注入。 */
   var FB_KEY = 'lm_feedback_v1';
   /* ★ 修复92：本机存「全量」（含删除墓碑 del），界面只看未删除的 —— 云端同步靠墓碑
      才能做到「A 删了，B 不会又把它同步回来」 */
@@ -2129,7 +2145,15 @@ window.LMApp = (function () {
     try { localStorage.setItem(FB_KEY, JSON.stringify(merged)); } catch (e) { return 0; }
     fbPushSoon();
     if (document.getElementById('fbMount')) mountFeedback();
-    return list.filter(function (x) { return !x.del; }).length;
+    /* ★ 修复96：返回「真正新增 / 被更新」的条数 —— 原来返回入参条数，重复拉同一份也会报「收到 N 条」 */
+    const old = {};
+    raw.forEach(function (x) { old[x.id] = x.updatedAt || x.ts || 0; });
+    let n = 0;
+    merged.forEach(function (x) {
+      const t = x.updatedAt || x.ts || 0;
+      if (old[x.id] === undefined || t > old[x.id]) n++;
+    });
+    return n;
   }
   /* ★ 修复92：URL 里带着别人的留言（#fb=…）→ 收进来（按 id 去重），有 Token 就顺手上传 */
   function fbIngestUrl() {
@@ -2155,26 +2179,66 @@ window.LMApp = (function () {
     list.forEach(function (it) { if (!it.dev) { it.dev = meD.code; changed = true; } });
     if (changed) fbStore(list);
   }
-  function fbItemHtml(it, isAdmin) {
+  /* ★ 修复95：状态徽章（待处理 / 已采纳 / 已修改 / 保留原判断） */
+  function fbStatusChip(st) {
+    const s = (window.LMFB && LMFB.fixStatus) ? LMFB.fixStatus(st) : (st || '待处理');
+    const map = { '待处理': 'wait', '已采纳': 'ok', '已修改': 'done', '保留原判断': 'keep' };
+    return '<span class="fb-st fb-st-' + (map[s] || 'wait') + '">' + esc(s) + '</span>';
+  }
+  /* ★ 修复95：处理记录 —— 老师原文「同学提出了什么 → 我们怎样核实 → 修改了什么 →
+     为什么调整或保留原判断；不采纳建议时也应说明理由」 */
+  function fbRecordHtml(it) {
+    const rows = [
+      ['🔎 我们怎样核实', it.check],
+      ['✏️ 修改了什么', it.change],
+      ['💬 为什么这样处理', it.why],
+      ['📝 小组回复', it.reply]
+    ].filter(function (r) { return r[1]; });
+    if (!rows.length) return '';
+    return '<div class="fb-record">' + rows.map(function (r) {
+      return '<p><b>' + r[0] + '</b>' + esc(r[1]) + '</p>';
+    }).join('') + '</div>';
+  }
+  /* 一条反馈。opt: { admin, mine } */
+  function fbItemHtml(it, opt) {
+    const o = opt || {};
+    const isAdmin = !!o.admin;
     const safeUrl = /^https?:\/\//i.test(String(it.url || '')) ? it.url : '';
     const devChip = isAdmin && it.dev ? '<span class="fb-code">🆔 ' + esc(it.dev) + '</span>' : '';
+    const mineChip = o.mine ? '<span class="fb-code">我提的</span>' : '';
     const maskBtn = isAdmin ? '<button type="button" class="fb-mini fb-mask" data-fbmask title="屏蔽该身份码（累计3次将禁言1个月）">🚫 屏蔽</button>' : '';
-    return '<div class="fb-item" data-fbid="' + esc(it.id) + '">'
+    const acts = isAdmin ? '<div class="fb-acts">'
+      + '<button type="button" class="fb-mini fb-ac" data-fbact="已采纳">✔ 采纳</button>'
+      + '<button type="button" class="fb-mini fb-ac" data-fbact="已修改">✅ 已修改</button>'
+      + '<button type="button" class="fb-mini fb-ac" data-fbact="保留原判断">✖ 保留原判断</button>'
+      + '<button type="button" class="fb-mini" data-fbact="待处理">↺ 待处理</button>'
+      + '</div>'
+      + '<div class="fb-ops fb-ops-rec">'
+      + '<input class="fb-input" data-fbcheck maxlength="300" placeholder="① 我们怎样核实（查了哪页 / 有无来源 / 问了谁）" value="' + esc(it.check || '') + '">'
+      + '<input class="fb-input" data-fbchange maxlength="300" placeholder="② 修改了什么（改了哪页 / 哪条关系 / 补了什么来源）" value="' + esc(it.change || '') + '">'
+      + '<input class="fb-input" data-fbwhy maxlength="300" placeholder="③ 为什么调整或保留原判断（不采纳也要写理由）" value="' + esc(it.why || '') + '">'
+      + '<input class="fb-input fb-reply" data-fbreply maxlength="200" placeholder="给同学的回复（选填，公开可见）" value="' + esc(it.reply || '') + '">'
+      + '<button type="button" class="fb-mini fb-del" data-fbdel>删除</button>' + maskBtn + '</div>' : '';
+    return '<div class="fb-item' + (o.mine ? ' fb-mine' : '') + '" data-fbid="' + esc(it.id) + '">'
       + '<div class="fb-meta"><b>' + esc(it.id) + '</b><span>' + fbTs(it.ts) + '</span><span>' + esc(it.type || '')
-      + '</span><span>' + esc(it.name || '匿名') + '</span>' + devChip + '<span class="fb-st">' + esc(it.status || '待处理') + '</span></div>'
+      + '</span><span>' + esc(it.name || '匿名') + '</span>' + mineChip + devChip + fbStatusChip(it.status) + '</div>'
       + '<p class="fb-text">' + esc(it.text || '') + '</p>'
       + (safeUrl ? '<p class="fb-url">相关链接：<a href="' + esc(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + esc(safeUrl) + '</a></p>' : '')
-      + (isAdmin ? '<div class="fb-ops">'
-        + '<span class="lmsel fb-compact"><input type="hidden" data-fbst value="' + esc(it.status || '待处理') + '">'
-        + '<button type="button" class="lmsel-btn" tabindex="-1"><span class="lmsel-txt">' + esc(it.status || '待处理') + '</span><span class="lmsel-ar">▾</span></button>'
-        + '<span class="lmsel-list" hidden>'
-        + ['待处理', '处理中', '已处理'].map(function (s) { return '<button type="button" class="lmsel-it' + (s === (it.status || '待处理') ? ' on' : '') + '" data-v="' + s + '">' + s + '</button>'; }).join('')
-        + '</span></span>'
-        + '<input class="fb-input fb-reply" data-fbreply maxlength="200" placeholder="小组回复（选填，访客可见）" value="' + esc(it.reply || '') + '">'
-        + '<button type="button" class="fb-mini fb-del" data-fbdel>删除</button>'
-        + maskBtn + '</div>' : '')
-      + (!isAdmin && it.reply ? '<div class="fb-reply-box"><b>📝 小组回复</b><p>' + esc(it.reply) + '</p></div>' : '')
+      + (isAdmin ? '' : fbRecordHtml(it))
+      + acts
       + '</div>';
+  }
+  /* ★ 修复95：公开列表 —— 所有人都能看到「大家提了什么 + 我们怎么处理的」 */
+  function fbPublicHtml(list, meCode) {
+    const n = list.length;
+    return '<section class="fb-sec fb-public"><h2 class="fb-title">📋 大家的反馈与处理（' + n + '）</h2>'
+      + '<p class="fb-hint">这里对所有人公开：谁提了什么、我们怎样核实、改了哪些内容、哪些建议暂时没采纳以及理由。</p>'
+      + (n
+        ? '<div class="fb-list">' + list.slice().reverse().map(function (it) {
+          return fbItemHtml(it, { mine: !!(meCode && it.dev === meCode) });
+        }).join('') + '</div>'
+        : '<p class="fb-empty">还没有人提反馈 —— 你可以是第一个，上面的留言会显示在这里。</p>')
+      + '</section>';
   }
   /* 渲染反馈区 v3：反馈表单 + 我的反馈（含小组回复）+ 讨论区（帖子/楼中楼/昵称）+ 管理员通道 */
   function fbFormHtml() {
@@ -2187,17 +2251,11 @@ window.LMApp = (function () {
       + '</div>'
       + '<label class="fb-field"><span>内容（必填，最多 800 字）</span><textarea id="fbText" class="fb-input" rows="4" maxlength="800" placeholder="请写清楚：针对哪个页面 / 哪项工作，遇到了什么问题或有什么建议…"></textarea></label>'
       + '<label class="fb-field"><span>相关链接（选填）</span><input id="fbUrl" class="fb-input" maxlength="300" placeholder="https://…"></label>'
-      + '<div class="fb-actions"><button type="submit" class="fb-send">发送</button><span class="fb-hint">提交后仅小组管理员可见；你的留言与小组回复会显示在下方「我的反馈」。</span></div>'
+      + '<div class="fb-actions"><button type="submit" class="fb-send">发送</button><span class="fb-hint">提交后会显示在下方「大家的反馈」里，<b>对所有人公开</b>（可匿名）；我们会在每条下面写清「怎样核实 → 改了什么 → 为什么这样处理」。</span></div>'
       + '<p class="fb-ok" id="fbOk" hidden></p>'
       + '</form></section>';
   }
-  function fbMineHtml(mine) {
-    return '<section class="fb-sec"><h2 class="fb-title">📬 我的反馈</h2>'
-      + (mine.length
-        ? '<div class="fb-list">' + mine.slice().reverse().map(function (it) { return fbItemHtml(it, false); }).join('') + '</div>'
-        : '<p class="fb-empty">还没有提交过反馈。在上面提交后，会显示在这里（含小组的处理状态与回复）。</p>')
-      + '</section>';
-  }
+  /* ★ 修复95：「我的反馈」并入公开列表（带「我提的」标记），页面不再分两处重复展示 */
   /* 讨论区：昵称栏（7 天可改一次）+ 帖子 + 楼中楼回复；管理员可见身份码并可屏蔽 */
   function dcBarHtml(meD) {
     const DAY = 86400000;
@@ -2261,16 +2319,63 @@ window.LMApp = (function () {
     h += '</div></section>';
     return h;
   }
+  /* ★ 修复96：云存档配置区（管理员填一次，随内容同步给所有访客 —— 端点本来就该公开） */
+  function fbCloudHtml() {
+    const info = (window.LMFB && LMFB.cloudInfo) ? LMFB.cloudInfo() : { on: false, text: '模块未加载' };
+    const C = (function () {
+      try { return (state.content.config && state.content.config.fbCloud) || {}; } catch (e) { return {}; }
+    })();
+    const opts = [['', '关闭'], ['supabase', 'Supabase（推荐 · 可读回）'],
+      ['worker', '自建 Worker（可读回）'], ['webhook', '群机器人（只提醒，不读回）']];
+    return '<details class="fb-cloud"' + (info.on ? '' : ' open') + '>'
+      + '<summary>☁ 云存档：让「谁都没开网页」时也不丢（不受 6 小时限制）</summary>'
+      + '<p class="fb-hint">现状：<b>' + esc(info.text) + '</b>。原理 —— 同学点「发送」时，'
+      + '<b>他自己的浏览器</b>把这条留言写进云存档，所以不需要我们任何人在线；下次谁打开反馈页都会自动拉回来。'
+      + '（MQTT 只是「秒级提醒」，它的离线补收窗口由公共 broker 定死 6 小时，改不了。）</p>'
+      + '<div class="fb-row">'
+      + '<label class="fb-field"><span>类型</span><select id="fbCloudKind" class="fb-input">'
+      + opts.map(function (o) {
+        return '<option value="' + o[0] + '"' + ((C.kind || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join('')
+      + '</select></label>'
+      + '<label class="fb-field"><span>URL（Worker 填端点；Supabase 填项目地址）</span>'
+      + '<input id="fbCloudUrl" class="fb-input" maxlength="300" placeholder="https://xxxx.supabase.co" value="' + esc(C.url || '') + '"></label>'
+      + '</div>'
+      + '<div class="fb-row">'
+      + '<label class="fb-field"><span>anon key（仅 Supabase；可公开，靠 RLS 限制权限）</span>'
+      + '<input id="fbCloudKey" class="fb-input" maxlength="400" placeholder="eyJhbGciOi…（anon public）" value="' + esc(C.key || '') + '"></label>'
+      + '<label class="fb-field"><span>表名（Supabase）</span>'
+      + '<input id="fbCloudTable" class="fb-input" maxlength="60" value="' + esc(C.table || 'lm_feedback') + '"></label>'
+      + '</div>'
+      + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbCloudSave">保存云存档设置</button>'
+      + '<button type="button" class="fb-mini" id="fbCloudTest">测试 / 立即拉取</button>'
+      + '<span class="fb-hint">保存后请点顶部「☁️ 同步到 GitHub」，访客才拿得到这个端点。</span></div>'
+      + '<label class="fb-field fb-imp"><span>粘贴导入（飞书多维表格 / 腾讯文档 / Excel：框选复制，带表头直接粘）</span>'
+      + '<textarea id="fbImport" class="fb-input" rows="3" placeholder="时间&#9;称呼&#9;类型&#9;内容&#10;2026-10-30 14:20&#9;小明&#9;提建议&#9;建议给生态地图补一条公开来源"></textarea></label>'
+      + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbImportGo">导入到反馈列表</button>'
+      + '<span class="fb-hint">也支持 JSON 数组；按 id 去重，重复导入不会翻倍。</span></div>'
+      + '</details>';
+  }
   function fbAdminHtml(fb) {
+    const pending = fb.filter(function (it) { return fixSt(it.status) === '待处理'; }).length;
+    /* ★ 修复95：按「设备身份码」去重统计 —— 作业要求「至少 3 名非本组同学的独立反馈」，这里可直接自检 */
+    const devs = {};
+    fb.forEach(function (it) { if (it.dev) devs[it.dev] = 1; });
+    const devN = Object.keys(devs).length;
     return '<section class="fb-sec fb-admin"><h2 class="fb-title">🔐 反馈处理（管理员通道）</h2>'
+      /* ★ 修复95：先讲清老师要求的「四段记录」，再加统计 */
+      + '<p class="fb-hint">待处理 <b>' + pending + '</b> / 共 ' + fb.length + ' 条 · 来自 <b>' + devN + '</b> 个设备身份码'
+      + (devN < 3 ? '（作业要求至少 3 名非本组同学，还差 ' + (3 - devN) + ' 位）' : '（已满足「至少 3 名非本组同学」）') + '。'
+      + '作业要求记下：<b>① 我们怎样核实 → ② 修改了什么 → ③ 为什么调整或保留原判断</b>（不采纳也要写理由）。'
+      + '点 <b>✔ 采纳 / ✅ 已修改 / ✖ 保留原判断</b> 标记状态，填的说明会同步到下面的公开列表。</p>'
       /* ★ 修复92：云端同步状态 + 手动同步（只写数据分支，不触发构建） */
       + '<p class="fb-hint">'
       + (window.LMFB && LMFB.hasCloud()
         ? '☁ 已连接云端（分支 <b>' + esc(LMFB.refName()) + '</b> · <code>' + esc(LMFB.path) + '</code>）：'
           + '同学发来的留言会自动收进来，你改状态 / 写回复也会同步到其他设备。'
           + ' <button type="button" class="fb-mini" id="fbSyncNow">立即同步</button>'
-        : '⚠ 当前设备没有绑定 Token：留言只存在本机。建议管理员登录后绑定一次，'
-          + '同学们的留言就能自动汇总（同学那边留言后点「📤 发给组长」把链接发给你，也能一键收进来）。')
+        : '⚠ 当前设备没有绑定 Token：新留言会实时到达，但改状态/写回复只存在本机。'
+          + '建议登录后到「设置 → 同步」绑定一次仓库，处理记录才会写进数据分支、让所有人看到。')
       + '</p>'
       /* ★ 修复93：实时通道状态（复用 EMQX 公共 MQTT，免费匿名；离线期间的留言会补收） */
       + (window.LMFB && LMFB.mqInfo
@@ -2283,49 +2388,82 @@ window.LMApp = (function () {
             + '</p>';
         })()
         : '')
+      + fbCloudHtml()
       + (fb.length
-        ? '<div class="fb-list">' + fb.slice().reverse().map(function (it) { return fbItemHtml(it, true); }).join('') + '</div>'
-          + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbCopy">📋 复制全部反馈</button></div>'
-        : '<p class="fb-empty">还没有收到反馈。同学在手机上留言后：① 他点「📤 发给组长」把链接发给你；'
-          + '② 你打开链接就自动收进来（有 Token 时同时上传云端）。</p>')
+        ? '<div class="fb-list">' + fb.slice().reverse().map(function (it) { return fbItemHtml(it, { admin: true }); }).join('') + '</div>'
+          + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbCopy">📋 复制全部反馈（含处理记录）</button></div>'
+        : '<p class="fb-empty">还没有收到反馈。同学在留言页提交后会实时到达；'
+          + '若他当时网络异常，也可以点「📤 复制给组长」把链接发给你，你打开就自动收进来。</p>')
       + '</section>';
+  }
+  /* ★ 修复95：状态归一（页面里也有一份，避免依赖顺序） */
+  function fixSt(s) {
+    return (window.LMFB && LMFB.fixStatus) ? LMFB.fixStatus(s) : (s || '待处理');
+  }
+  /* ★ 修复95：反馈对外公开 + 实时
+     - 有 Token 的管理员：走 API 读写数据分支（多设备合并）
+     - 所有人（含访客）：pullPublic 从 raw 读公开列表（不需要 Token）+ 订阅 MQTT 实时流
+     - 拉取 60 秒节流；管理员 clean=false（可补收），访客 clean=true（只收在线） */
+  var _fbPullAt = 0;
+  function fbWatch() {
+    if (!window.LMFB) return;
+    try {
+      LMFB.listen(function (it) {
+        const n = fbMergeIncoming([it]);
+        /* 只有正看着反馈页才弹提示（离开页面后仍会收下并保存，只是不打扰） */
+        if (n && document.getElementById('fbMount')) toast('📥 收到新反馈 ' + it.id + '（' + (it.name || '匿名') + '）');
+      }, { visitor: !state.admin });
+    } catch (eL) { /* noop */ }
+    const now = Date.now();
+    if (now - _fbPullAt < 60000) return;
+    _fbPullAt = now;
+    if (LMFB.hasCloud()) {
+      fbSyncNow(false);
+    } else {
+      LMFB.pullPublic().then(function (r) {
+        if (!r || !r.ok || !r.list.length) return;
+        const n = fbMergeIncoming(r.list);
+        if (n) toast('📥 收到 ' + n + ' 条反馈（公开列表）');
+      });
+    }
+    /* ★ 修复96：云存档是「永不丢」的那一份 —— 管理员设备也要拉（他可能没绑 Token / 换了浏览器） */
+    try {
+      if (LMFB.cloudCfg && LMFB.cloudCfg()) {
+        LMFB.cloudList().then(function (r) {
+          if (!r || !r.ok || !r.list.length) return;
+          const n = fbMergeIncoming(r.list);
+          if (n) toast('☁ 从云存档收到 ' + n + ' 条反馈');
+        });
+      }
+    } catch (eC) { /* noop */ }
   }
   function mountFeedback() {
     const host = document.getElementById('fbMount');
     if (!host) return;
     if (!window.LMCommunity) { host.innerHTML = '<p class="fb-empty">社区模块未加载（js/community.js）。</p>'; return; }
-    /* ★ 修复92：打开反馈页顺手拉一次云端（只有带 Token 的设备才会真的发请求；
-       没变化就是一次 304 / 或直接不发 → 不耗额度） */
-    try {
-      if (window.LMFB && LMFB.hasCloud() && !_fbBusy && Date.now() - (state._fbPullAt || 0) > 20000) {
-        state._fbPullAt = Date.now();
-        setTimeout(function () { fbSyncNow(false); }, 60);
-      }
-    } catch (eFb) { /* noop */ }
+    /* ★ 修复95：所有人都会「拉公开列表 + 订阅实时流」（管理员有 Token 时改走 API 合并）。
+       ⚠ 必须先跑 fbWatch 再拼 html：管理面板要读 mqInfo().on。 */
+    fbWatch();
     fbMigrate();
     const meD = LMCommunity.me();
     const fb = fbList();
-    const mine = fb.filter(function (it) { return it.dev === meD.code; });
     let html;
     if (commentsOff()) {
-      html = '<p class="fb-empty">💬 留言与讨论已由管理员暂时关闭。你可以继续浏览全部内容；有需要请通过课程渠道联系小组。</p>';
+      html = '<p class="fb-empty">💬 反馈已由管理员暂时关闭。你可以继续浏览全部内容；有需要请通过课程渠道联系小组。</p>';
     } else {
-      html = fbFormHtml() + fbMineHtml(mine) + dcHtml();
-    }
-    /* ★ 修复93：管理员模式才订阅实时留言（访客只发不收 → 看不到别人的留言）。
-       clean=false + 固定 clientId → 组长离线期间的留言由 broker 攒着，下次打开自动补收。
-       每台设备各自一条会话（clientId 带本机 deviceTag），不会互相踢下线。
-       ⚠ 必须先订阅再拼 html：下面的状态行要读 mqInfo().on。 */
-    if (state.admin && window.LMFB && LMFB.listen) {
-      try {
-        LMFB.listen(function (it) {
-          const n = fbMergeIncoming([it]);
-          if (n) toast('📥 收到新留言 ' + it.id + '（' + (it.name || '匿名') + '）');
-        });
-      } catch (eL) { /* noop */ }
+      html = fbFormHtml() + fbPublicHtml(fb, meD.code);
     }
     if (state.admin) html += fbAdminHtml(fb);
     host.innerHTML = html;
+  }
+  /* ★ 修复95：讨论区独立成页（不再和反馈挤在一页，避免被留言淹没） */
+  function mountDiscuss() {
+    const host = document.getElementById('dcMount');
+    if (!host) return;
+    if (!window.LMCommunity) { host.innerHTML = '<p class="fb-empty">社区模块未加载（js/community.js）。</p>'; return; }
+    host.innerHTML = commentsOff()
+      ? '<p class="fb-empty">🗣️ 讨论区已由管理员暂时关闭。你可以继续浏览全部内容；有需要请通过课程渠道联系小组。</p>'
+      : dcHtml();
   }
   /* 提交统一处理：#fbForm 反馈 / #dcForm 讨论帖 / [data-dcreply] 楼中楼回复
      全部经 LMCommunity.gate()：限流 → 屏蔽 → 禁言 → 敏感词拦截（连续拦截累计禁言） */
@@ -2375,14 +2513,23 @@ window.LMApp = (function () {
           } catch (eC) { ask(); }
         });
       };
-      if (window.LMFB && LMFB.publish) {
-        LMFB.publish(it).then(function (sent) {
-          const el = document.getElementById('fbOk');
-          if (!el) return;
-          if (sent) el.textContent = '✅ 已提交（' + it.id + '）并已直达小组：组长下次打开反馈页会自动看到（他当时没开电脑也不会丢）。';
-          else fbFallback();
-        });
-      } else fbFallback();
+      /* ★ 修复96：先把留言写进「云存档」（提交者浏览器直接写永久存储 → 谁都不用开着网页，也不受 6 小时限制）；
+         同时发 MQTT 实时通知；两条都失败才退回「复制给组长」链接。 */
+      const cloudP = (window.LMFB && LMFB.cloudSave) ? LMFB.cloudSave(it) : Promise.resolve(false);
+      const mqP = (window.LMFB && LMFB.publish) ? LMFB.publish(it) : Promise.resolve(false);
+      Promise.all([cloudP, mqP]).then(function (r) {
+        const el = document.getElementById('fbOk');
+        if (!el) return;
+        const saved = !!r[0], sent = !!r[1];
+        if (sent) {
+          el.textContent = '✅ 已提交（' + it.id + '）并已直达小组：组长下次打开反馈页会自动看到（他当时没开电脑也不会丢）。'
+            + (saved ? ' 同时已存进云存档。' : '');
+        } else if (saved) {
+          el.textContent = '✅ 已提交（' + it.id + '）并已存进云存档：小组下次打开反馈页会自动收取（不受 6 小时补收窗口限制）。';
+        } else {
+          fbFallback();
+        }
+      }).catch(function () { fbFallback(); });
     } else if (f.id === 'dcForm') {
       e.preventDefault();
       if (commentsOff()) { toast('讨论区已由管理员关闭'); return; }
@@ -2393,7 +2540,7 @@ window.LMApp = (function () {
         nick: LMCommunity.displayName(), text: g.text, ts: Date.now() };
       dcAll().push(post);
       dcPersist([post]);
-      mountFeedback();
+      mountDiscuss();   /* ★ 修复95：讨论区独立成页后只重渲染讨论区 */
       toast(window.LMCollab ? '已发表（实时同步给其他设备；云端设备随轮询可见）' : '已发表');
     } else if (f.hasAttribute && f.hasAttribute('data-dcreply')) {
       e.preventDefault();
@@ -2407,9 +2554,27 @@ window.LMApp = (function () {
         nick: LMCommunity.displayName(), text: g.text, ts: Date.now(), rto: (rto && rto.value) || '' };
       dcAll().push(rep);
       dcPersist([rep]);
-      mountFeedback();
+      mountDiscuss();   /* ★ 修复95 */
       toast('回复已发布');
     }
+  });
+  /* ★ 修复95：管理员一键「✔ 采纳 / ✅ 已修改 / ✖ 保留原判断 / ↺ 待处理」
+     —— 对应作业要求「反馈必须得到回应」，状态与三段说明会同步到公开列表 */
+  document.addEventListener('click', function (e) {
+    const b = (e.target && e.target.closest) ? e.target.closest('[data-fbact]') : null;
+    if (!b) return;
+    const item = b.closest('.fb-item');
+    const id = item ? item.getAttribute('data-fbid') : '';
+    const to = b.getAttribute('data-fbact') || '';
+    const raw = fbRaw();
+    const it = raw.find(function (x) { return x.id === id; });
+    if (!it) return;
+    e.preventDefault();
+    it.status = fixSt(to);
+    it.updatedAt = Date.now();
+    fbStore(raw);
+    mountFeedback();
+    toast(id + ' → ' + it.status + (it.check || it.change || it.why ? '' : '（建议再填 ①核实 ②改了什么 ③为什么）'));
   });
   /* ★ 修复92：手动「立即同步」反馈（只有带 Token 的设备才会渲染这个按钮） */
   document.addEventListener('click', function (e) {
@@ -2419,7 +2584,48 @@ window.LMApp = (function () {
     toast('☁ 正在与云端核对反馈…');
     fbSyncNow(true);
   });
-  /* 管理员通道：改状态 / 写回复（事件委托，列表重渲染后依然有效） */
+  /* ★ 修复96：云存档 —— 保存配置 / 测试拉取 / 表格粘贴导入 */
+  document.addEventListener('click', function (e) {
+    const t = e.target;
+    if (!t || !t.closest) return;
+
+    if (t.id === 'fbCloudSave') {
+      const v = function (id) { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+      if (!state.content.config) state.content.config = {};
+      state.content.config.fbCloud = {
+        kind: v('fbCloudKind'), url: v('fbCloudUrl'),
+        key: v('fbCloudKey'), table: v('fbCloudTable') || 'lm_feedback'
+      };
+      applyEdit('云存档设置已保存');
+      mountFeedback();
+      toast('已保存云存档设置；点顶部「☁️ 同步到 GitHub」后访客生效');
+      return;
+    }
+
+    if (t.id === 'fbCloudTest') {
+      if (!window.LMFB || !LMFB.cloudCfg || !LMFB.cloudCfg()) { toast('还没配置云存档（先选类型、填 URL、点保存）'); return; }
+      toast('☁ 正在读取云存档…');
+      LMFB.cloudList().then(function (r) {
+        if (!r || !r.ok) { toast('读取失败：' + ((r && r.why) || '未知原因')); return; }
+        const n = fbMergeIncoming(r.list);
+        toast(n ? ('云存档可读：共 ' + r.list.length + ' 条，本次新增/更新 ' + n + ' 条') : ('云存档可读：共 ' + r.list.length + ' 条，没有新内容'));
+        mountFeedback();
+      });
+      return;
+    }
+
+    if (t.id === 'fbImportGo') {
+      const ta = document.getElementById('fbImport');
+      const arr = (window.LMFB && LMFB.parseImport) ? LMFB.parseImport(ta ? ta.value : '') : [];
+      if (!arr.length) { toast('没解析出条目：需要「表头 + 至少一行」，或直接粘 JSON 数组'); return; }
+      const n = fbMergeIncoming(arr);
+      if (ta) ta.value = '';
+      toast('已导入 ' + arr.length + ' 条，并入本机列表' + (n ? '（新增/更新 ' + n + ' 条）' : '（都已存在）'));
+      mountFeedback();
+      return;
+    }
+  });
+
   document.addEventListener('change', function (e) {
     const t = e.target;
     if (!t || !t.closest || !t.closest('.fb-item')) return;
@@ -2428,12 +2634,19 @@ window.LMApp = (function () {
     const it = list.find(function (x) { return x.id === id; });
     if (!it) return;
     if (t.hasAttribute('data-fbst')) {
-      it.status = t.value; it.updatedAt = Date.now();   /* ★ 修复92：改状态也算一次更新，云端按 updatedAt 合并 */
+      it.status = fixSt(t.value); it.updatedAt = Date.now();   /* ★ 修复95：状态归一 */
       fbStore(list); mountFeedback();
-      toast(it.id + ' 状态已改为「' + t.value + '」');
+      toast(it.id + ' 状态已改为「' + it.status + '」');
     } else if (t.hasAttribute('data-fbreply')) {
       it.reply = (t.value || '').slice(0, 200); it.updatedAt = Date.now();   /* ★ 修复92 */
       fbStore(list);
+    } else if (t.hasAttribute('data-fbcheck') || t.hasAttribute('data-fbchange') || t.hasAttribute('data-fbwhy')) {
+      /* ★ 修复95：三段处理记录（核实 / 修改 / 理由）—— 失焦即保存，随 next push 同步到公开列表 */
+      const k = t.hasAttribute('data-fbcheck') ? 'check' : (t.hasAttribute('data-fbchange') ? 'change' : 'why');
+      it[k] = (t.value || '').slice(0, 300);
+      it.updatedAt = Date.now();
+      fbStore(list);
+      toast('已保存「' + (k === 'check' ? '怎样核实' : k === 'change' ? '修改了什么' : '为什么这样处理') + '」');
     }
   });
   /* 点击统一处理：反馈删除/复制/屏蔽 + 讨论区（改昵称 / 展开回复 / 删除 / 屏蔽发言者） */
@@ -2469,11 +2682,18 @@ window.LMApp = (function () {
     }
     if (t.id === 'fbCopy') {
       const list = fbList();
+      /* ★ 修复95：导出的文本带「四段记录」，可直接贴进期末材料的「同学反馈及处理结果」 */
       const txt = list.map(function (it) {
-        return it.id + ' | ' + fbTs(it.ts) + ' | ' + it.type + ' | ' + (it.name || '匿名') + ' | 🆔' + (it.dev || '?') + ' | ' + it.status
-          + (it.reply ? ' | 回复：' + it.reply : '') + '\n' + it.text + (it.url ? '\n链接：' + it.url : '');
+        return it.id + ' | ' + fbTs(it.ts) + ' | ' + it.type + ' | ' + (it.name || '匿名') + ' | 🆔' + (it.dev || '?')
+          + ' | ' + fixSt(it.status)
+          + '\n【同学提出】' + it.text
+          + (it.url ? '\n链接：' + it.url : '')
+          + '\n【我们怎样核实】' + (it.check || '（未填）')
+          + '\n【修改了什么】' + (it.change || '（未填）')
+          + '\n【为什么这样处理】' + (it.why || '（未填）')
+          + (it.reply ? '\n【给同学的回复】' + it.reply : '');
       }).join('\n\n');
-      const done = function () { toast('已复制 ' + list.length + ' 条反馈'); };
+      const done = function () { toast('已复制 ' + list.length + ' 条反馈（含处理记录）'); };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, function () { toast('复制失败，请手动选择文本复制'); });
       else toast('当前环境不支持一键复制，请手动选择文本');
       return;
@@ -2484,7 +2704,7 @@ window.LMApp = (function () {
       const input = document.getElementById('dcNick');
       const r = LMCommunity.setNick(input ? input.value : '');
       toast(r.ok ? '昵称已改为「' + LMCommunity.displayName() + '」（7 天后可再改）' : r.msg);
-      if (r.ok) mountFeedback();
+      if (r.ok) mountDiscuss();
       return;
     }
     const show = t.closest('[data-dcshow]');
@@ -2514,7 +2734,7 @@ window.LMApp = (function () {
         const affected = list.filter(function (m) { return m && !m.del && (m.id === id || (isPost && m.pid === id)); });
         affected.forEach(function (m) { m.del = now; }); /* 墓碑标记：删除会跨设备传播，而不是静默复活 */
         dcPersist(affected);
-        mountFeedback();
+        mountDiscuss();
         toast(window.LMCollab ? '已删除（其他设备同步删除）' : '已删除');
       });
       return;
@@ -2528,7 +2748,7 @@ window.LMApp = (function () {
         LMCommunity.hideMsg(id);
         const r = LMCommunity.manualStrike(m.dev);
         toast('已屏蔽该言论；身份码记录 ' + r.count + '/3' + (r.muted ? '，已禁言 1 个月' : ''));
-        mountFeedback();
+        mountDiscuss();
       });
       return;
     }
@@ -2547,11 +2767,37 @@ window.LMApp = (function () {
       };
     }
     if (!c.config.footer) c.config.footer = {};
+    /* ★ 修复96：云存档配置（缺省关闭；管理员在反馈处理面板里填，随内容同步给所有访客） */
+    if (!c.config.fbCloud || typeof c.config.fbCloud !== 'object') {
+      c.config.fbCloud = { kind: '', url: '', key: '', table: 'lm_feedback' };
+    }
     /* 老师要求六个页面：缺「反馈与建议」页时自动补齐（老内容无感升级，只加框架不代填内容） */
     if (!c.pages.some(function (p) { return p && p.id === 'feedback'; })) {
       const fb = JSON.parse(JSON.stringify(FEEDBACK_PAGE));
       const at = c.pages.findIndex(function (p) { return p && p.id === 'about'; });
       if (at >= 0) c.pages.splice(at, 0, fb); else c.pages.push(fb);
+    }
+    /* ★ 修复95：缺「讨论区」页同样自动补齐（老内容 / 云端旧内容无感升级）
+       —— 讨论区以前挤在反馈页里，现在独立成页，否则云端旧内容一覆盖就没了 */
+    if (!c.pages.some(function (p) { return p && p.id === 'discuss'; })) {
+      const dc = JSON.parse(JSON.stringify(DISCUSS_PAGE));
+      const atDc = c.pages.findIndex(function (p) { return p && p.id === 'about'; });
+      if (atDc >= 0) c.pages.splice(atDc, 0, dc); else c.pages.push(dc);
+    }
+    /* 反馈页 v3（修复95）：把「仅小组管理员可见」的旧文案换成公开口径 —— 只在检测到旧句子时改，不动用户自己写的内容 */
+    const fbp3 = c.pages.find(function (p) { return p && p.id === 'feedback'; });
+    if (fbp3) {
+      const oldLead = '提交后只有我们小组的管理员能看到，其他访客互相看不到留言';
+      if (Array.isArray(fbp3.blocks)) {
+        fbp3.blocks.forEach(function (bk) {
+          if (bk && typeof bk.text === 'string' && bk.text.indexOf(oldLead) >= 0) {
+            bk.text = '留言和我们的处理记录（怎样核实 → 改了什么 → 为什么这样处理）**对所有人公开**，既方便互相参考，也便于课程检查。';
+          }
+        });
+      }
+      if (typeof fbp3.description === 'string' && fbp3.description.indexOf('仅小组管理员可见') >= 0) {
+        fbp3.description = '对我们的工作有疑问、发现错误或有改进建议？在下方留言（可匿名）。留言与处理记录对所有人公开，我们会逐条回应。';
+      }
     }
     /* 反馈页 v2：从「组内公示表」升级为「访客留言框」—— 老内容里检测到旧占位表格就整体替换文案 */
     const fbp = c.pages.find(function (p) { return p && p.id === 'feedback'; });
