@@ -1025,6 +1025,8 @@ window.LMEditor = (function () {
           const cfg2 = LMStore.getGhCfg();
           cfg2.token = cfg2.token || LMStore.ghToken();
           LMStore.saveGitHub(cfg2, LMApp.state.content).then(function () {
+            /* ★ 修复90：手动写完后清掉 sha 缓存，避免下一笔自动推送拿着旧 sha 必撞 409 */
+            try { if (window.LMCollab && LMCollab.dropGhSha) LMCollab.dropGhSha(); } catch (eDS) { /* noop */ }
             LMEditor.closeModal();
             LMApp.toast('✅ 已上传到 GitHub，网页 1-2 分钟后自动更新');
           }).catch(function (err) {
@@ -1105,6 +1107,8 @@ window.LMEditor = (function () {
         const btn = form.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = '正在同步…';
         LMStore.saveGitHub(c, LMApp.state.content).then(function () {
+          /* ★ 修复90：手动写完后清掉 sha 缓存，避免下一笔自动推送拿着旧 sha 必撞 409 */
+          try { if (window.LMCollab && LMCollab.dropGhSha) LMCollab.dropGhSha(); } catch (eDS) { /* noop */ }
           closeModal();
           LMApp.toast('已提交到 GitHub！页面 1-2 分钟后自动更新' + (String((new FormData(form)).get('teamPw') || '').trim() ? '；团队分发已更新' : ''));
         }).catch(function (err) {

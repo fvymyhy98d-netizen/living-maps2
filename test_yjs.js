@@ -466,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '89';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '90';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -2015,6 +2015,102 @@ console.log('【9.55】修复89：实时内容写 lm-data（0 构建）· main �
   T('README 记录修复89：数据分支 lm-data · 30 分钟快照 · 10 次构建 口径',
     readme.indexOf('修复89') > 0 && readme.indexOf('lm-data') > 0
       && readme.indexOf('30 分钟') > 0 && readme.indexOf('10 次构建') > 0);
+})();
+
+
+/* ---------- 9.56) 修复90：额度自适应 · 限流不误降级 · 快照窗口跨刷新 · 内容没变不重推 ---------- */
+console.log('【9.56】修复90：403 不再误降级 · 快照窗口跨刷新 · 重复 PUT 去重 · 剩余额度自动降挡');
+(function () {
+  const collab = srcOf('js/collab.js');
+  const editor = srcOf('js/editor.js');
+  const readme = srcOf('README.md');
+
+  /* 从源码切出独立函数：两个纯函数 + 假响应头真跑 */
+  const fnAt = function (src, name) {
+    const i = src.indexOf('function ' + name + '(');
+    if (i < 0) return null;
+    const j = src.indexOf('\n  }', i);
+    if (j < 0) return null;
+    return src.slice(i, j + 4);
+  };
+  const mkRes = function (hdr) {
+    return { headers: { get: function (k) { return hdr[k] == null ? '' : String(hdr[k]); } } };
+  };
+
+  let rateGapOf = null, retryAfterMs = null;
+  try {
+    rateGapOf = new Function(fnAt(collab, 'rateGapOf') + '\nreturn rateGapOf;')();
+    retryAfterMs = new Function(fnAt(collab, 'retryAfterMs') + '\nreturn retryAfterMs;')();
+  } catch (e) { /* 下面断言会失败并给出原因 */ }
+
+  T('真跑 rateGapOf：额度充裕不放慢 · ≤800 降 12 秒 · ≤200 降 30 秒 · 未知/非法值不干预',
+    !!rateGapOf
+      && rateGapOf(null) === 0 && rateGapOf('') === 0 && rateGapOf('abc') === 0
+      && rateGapOf('5000') === 0 && rateGapOf('900') === 0
+      && rateGapOf('800') === 12000 && rateGapOf('500') === 12000
+      && rateGapOf('200') === 30000 && rateGapOf('0') === 30000,
+    rateGapOf ? JSON.stringify([null, '5000', '900', '800', '200', '0'].map(function (v) { return [v, rateGapOf(v)]; })) : '提取失败');
+
+  const futureReset = Math.floor((Date.now() + 120000) / 1000);
+  T('真跑 retryAfterMs：优先 Retry-After（秒）· 也认 HTTP 日期 · 再退到 X-RateLimit-Reset · 上限 5 分钟 / 兜底 60 秒',
+    !!retryAfterMs
+      && retryAfterMs(mkRes({ 'Retry-After': '30' })) === 30000
+      && retryAfterMs(mkRes({ 'Retry-After': '9999' })) === 300000
+      && retryAfterMs(mkRes({})) === 60000
+      && retryAfterMs(mkRes({ 'X-RateLimit-Reset': String(futureReset) })) > 60000
+      && retryAfterMs(mkRes({ 'Retry-After': new Date(Date.now() + 45000).toUTCString() })) > 1000,
+    retryAfterMs ? JSON.stringify({
+      秒数: retryAfterMs(mkRes({ 'Retry-After': '30' })),
+      超长被截断: retryAfterMs(mkRes({ 'Retry-After': '9999' })),
+      兜底: retryAfterMs(mkRes({})),
+      重置时刻: retryAfterMs(mkRes({ 'X-RateLimit-Reset': String(futureReset) }))
+    }) : '提取失败');
+
+  T('降级收窄：只有「分支真的不存在」(404 / 建 ref 失败) 才退回发布分支，其余错误不动分支策略',
+    collab.indexOf('const branchMissing = !!r._mkFail || r.status === 404;') > 0
+      && collab.indexOf('if (!branchMissing) return;') > 0
+      && collab.indexOf('GH.useMain = true;') > 0);
+
+  T('限流不哑火：403/429 按响应头退避 + 只提示一次；退避期内 ghPush 直接不写；401 提示换 Token',
+    collab.indexOf('if (r.status === 403 || r.status === 429) {') > 0
+      && collab.indexOf('GH.blockUntil = Date.now() + ms;') > 0
+      && collab.indexOf('if (!GH._rlToast) {') > 0
+      && collab.indexOf('if (now < GH.blockUntil) return;') > 0
+      && collab.indexOf('if (r.status === 401) {') > 0
+      && collab.indexOf('if (!GH._authToast) {') > 0);
+
+  T('快照窗口跨刷新：显式写/读 localStorage（否则每刷新一次就又能写一次 main，连刷 10 次 = 10 次构建）',
+    collab.indexOf("const SNAP_TS_KEY = 'lm_gh_snap_ts';") > 0
+      && collab.indexOf('localStorage.getItem(SNAP_TS_KEY)') > 0
+      && collab.indexOf('localStorage.setItem(SNAP_TS_KEY, String(now))') > 0);
+
+  T('去重：文本与上次成功推送完全一致 → 不发 PUT（协同里很多 commit 只动 _ts，纯烧额度）',
+    collab.indexOf('if (text === GH.lastText) return;') > 0
+      && collab.indexOf('GH.lastText = text;') > 0
+      && collab.indexOf("lastText: '',") > 0);
+
+  T('降挡：推送间隔取 max(正常间隔, 限额间隔) —— 充裕时仍是 2.6s / 6s，不受影响',
+    collab.indexOf('Math.max(pushWaitMin(peersHot()), rateGap())') > 0
+      && collab.indexOf('function rateGap()') > 0);
+
+  T('配置漂移：换仓库/分支/数据分支后清掉 sha 缓存与「已回退 main」错误状态',
+    collab.indexOf('if (_sig !== GH._sig) {') > 0
+      && collab.indexOf('Object.keys(shaOf).forEach(function (k) { delete shaOf[k]; });') > 0
+      && collab.indexOf("GH.useMain = false; GH.etag = ''; GH.lastText = '';") > 0);
+
+  T('访客也回退：数据分支不存在（管理员 Token 无建分支权限）→ 访客改读发布分支，不会永远停在旧快照',
+    collab.indexOf('if (r.status === 404 && !useApi && !GH.useMain && ghDataRef() !== ghMainRef()) {') > 0);
+
+  T('手动「☁ 同步」后清 sha（否则下一笔自动推送拿着旧 sha 必撞 409、白跑一轮）',
+    collab.indexOf('dropGhSha: function () {') > 0
+      && (editor.split('LMCollab.dropGhSha()').length - 1) >= 2);
+
+  T('协作诊断能看到「额度剩余 + 当前推送间隔」，现场可核对降挡是否生效',
+    collab.indexOf('额度剩余: (GH.rateLeft == null') > 0);
+
+  T('README 记录修复90（403 不误降级 / 快照跨刷新 / 去重 / 额度降挡）',
+    readme.indexOf('修复90') > 0 && readme.indexOf('403') > 0
+      && readme.indexOf('lm_gh_snap_ts') > 0 && readme.indexOf('X-RateLimit-Remaining') > 0);
 })();
 
 

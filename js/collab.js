@@ -931,6 +931,9 @@ window.LMCollab = (function () {
   const GH = { cfg: null, token: '', etag: '', lastPush: 0, timer: 0, inFlight: false, lastPullTs: 0,
                useMain: false,      /* 已回退到 main（本页会话内有效） */
                snapAt: 0,           /* 上次写 main 快照的时刻 */
+               blockUntil: 0,       /* ★ 修复90：限流/退避到期时刻，到期前一律不写（越撞越死） */
+               rateLeft: null,      /* ★ 修复90：X-RateLimit-Remaining 观测值 */
+               lastText: '',        /* ★ 修复90：上次成功推送的文件文本，内容没变就不重复 PUT */
                _mk: null };         /* 建数据分支的进行中 Promise（去重） */
   const shaOf = {};                  /* 分支 → 该文件 blob sha（乐观锁缓存，按分支分开） */
   /* 内容分支：默认数据分支；dataBranch:'' → 跟随 branch；未配置 → lm-data（判定在 store.js） */
@@ -943,6 +946,43 @@ window.LMCollab = (function () {
   function ghBranch() { return GH.useMain ? ghMainRef() : ghDataRef(); }
   /* 快照是否到期（纯函数，test_yjs 直接提取验数字） */
   function snapDue(now, lastAt, minGap) { return !lastAt || (now - lastAt) >= minGap; }
+  /* ★ 修复90：剩余额度 → 推送最小间隔（0 = 不用放慢）。GitHub 认证 API 5000 次/小时，
+     只有「真的写/真读新内容」才计数（If-None-Match 命中 304 不耗额度），所以额度紧张时只需放慢写。
+     多人长时间同时编辑，每人 ~1400 次 PUT/小时，理论上能撞到 5000 —— 这里让它自动降挡而不是撞 403 后哑掉 */
+  function rateGapOf(left) {
+    const n = (left == null || left === "") ? NaN : +left;
+    if (isNaN(n)) return 0;
+    if (n <= 200) return 30000;     /* 快见底：30 秒一写（≈120 次/小时） */
+    if (n <= 800) return 12000;     /* 偏紧：12 秒一写（≈300 次/小时） */
+    return 0;                       /* 充裕：按 2.6s / 6s 正常推 */
+  }
+  function rateGap() { return rateGapOf(GH.rateLeft); }
+  /* ★ 修复90：403/429 退避多久 —— 优先 Retry-After，其次 X-RateLimit-Reset，兜底 60 秒（上限 5 分钟） */
+  function retryAfterMs(r) {
+    try {
+      const ra = r && r.headers && r.headers.get ? r.headers.get('Retry-After') : '';
+      if (ra) {
+        const n = +ra;
+        if (!isNaN(n)) return Math.min(300000, Math.max(1000, n * 1000));
+        const d = Date.parse(ra);
+        if (!isNaN(d)) return Math.min(300000, Math.max(1000, d - Date.now()));
+      }
+      const reset = r && r.headers && r.headers.get ? r.headers.get('X-RateLimit-Reset') : '';
+      if (reset) {
+        const ms = (+reset) * 1000 - Date.now();
+        if (ms > 0) return Math.min(300000, ms);
+      }
+    } catch (e) { /* noop */ }
+    return 60000;
+  }
+  /* 从响应头记下剩余额度（260/261 都在带） */
+  function noteRate(r) {
+    try {
+      const v = r && r.headers && r.headers.get ? r.headers.get('X-RateLimit-Remaining') : '';
+      if (v !== "" && v != null && !isNaN(+v)) GH.rateLeft = +v;
+    } catch (e) { /* noop */ }
+  }
+  const SNAP_TS_KEY = 'lm_gh_snap_ts';   /* ★ 修复90：快照时间戳落到本机，刷新页面不会重置 30 分钟窗口 */
   function ghApi() {
     const path = (GH.cfg.path || 'data/content.js').replace(/^\/+/, '');
     return 'https://api.github.com/repos/' + encodeURIComponent(GH.cfg.owner) + '/'
@@ -974,7 +1014,16 @@ window.LMCollab = (function () {
     const opt = useApi ? { headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json' } } : {};
     if (useApi && GH.etag) opt.headers['If-None-Match'] = GH.etag; /* 条件请求：没更新时返回 304，且不消耗 API 限额 */
     fetch(url, opt).then(function (r) {
-      if (r.status === 304) return null;             /* 云端没变化 */
+      noteRate(r);                                  /* ★ 修复90：记下剩余额度 */
+      if (r.status === 304) return null;             /* 云端没变化（且不耗额度） */
+      /* ★ 修复90：访客只读。若数据分支还不存在（管理员尚未落库成功 / Token 无建分支权限），
+         改读发布分支 —— 内容一定在那里；否则访客会永远停在首屏快照上看不到更新 */
+      if (r.status === 404 && !useApi && !GH.useMain && ghDataRef() !== ghMainRef()) {
+        GH.useMain = true; GH.etag = ''; GH.timer = 0;
+        GH.inFlight = false;
+        setTimeout(ghPull, 40);
+        return null;
+      }
       if (!r.ok) throw new Error('http ' + r.status);
       if (useApi) { const et = r.headers.get('etag'); if (et) GH.etag = et; }
       return r.json().then(function (j) {
@@ -1022,8 +1071,12 @@ window.LMCollab = (function () {
       const main = ghMainRef();
       if (ghBranch() === main) return;                 /* 回退态已在写 main，无需快照 */
       const now = Date.now();
+      /* ★ 修复90：窗口状态落到本机 —— 否则每刷新一次页面 snapAt 归零，
+         连刷 10 次就又能写 10 次 main = 10 次构建，「30 分钟一次」形同虚设 */
+      if (!GH.snapAt) { try { GH.snapAt = (+(localStorage.getItem(SNAP_TS_KEY) || 0)) || 0; } catch (eT) { GH.snapAt = 0; } }
       if (!snapDue(now, GH.snapAt, SNAP_MIN)) return;
       GH.snapAt = now;
+      try { localStorage.setItem(SNAP_TS_KEY, String(now)); } catch (eS) { /* noop */ }
       const S = window.LMStore;
       if (!S) return;
       const b64 = S.utf8ToBase64 ? S.utf8ToBase64(text) : btoa(unescape(encodeURIComponent(text)));
@@ -1049,8 +1102,10 @@ window.LMCollab = (function () {
     const myTs = +(((content.config || {}).collab || {}).syncTs || 0);
     if (GH.lastPullTs > myTs) { ghPull(); return; }
     const now = Date.now();
+    if (now < GH.blockUntil) return;   /* ★ 修复90：限流/退避期内不写，避免越撞越死 */
     if (GH.inFlight) return;
-    const wait = pushWaitMin(peersHot()) - (now - GH.lastPush); /* ★ 修复88：有人在线 → 2.6s 就推，不再死等 6s */
+    /* ★ 修复90：额度紧张时把推送间隔自动拉长（rateGap）；额度充裕时完全不受影响 */
+    const wait = Math.max(pushWaitMin(peersHot()), rateGap()) - (now - GH.lastPush); /* ★ 修复88：有人在线 → 2.6s 就推，不再死等 6s */
     if (wait > 0) { /* 防抖：连续保存只在安静一小会儿后补推最新版（尾随触发，不会漏推） */
       if (!GH._defer) GH._defer = setTimeout(function () {
         GH._defer = null;
@@ -1060,9 +1115,11 @@ window.LMCollab = (function () {
     }
     if (GH._defer) { clearTimeout(GH._defer); GH._defer = null; }
     const ref = ghBranch();      /* ★ 修复89：默认写数据分支（不触发 Pages 构建） */
+    const text = LMStore.buildFileText(content);
+    /* ★ 修复90：与上次成功推送的文本完全一致 → 不发 PUT（协同里很多 commit 只动了时间戳，纯白烧额度） */
+    if (text === GH.lastText) return;
     GH.lastPush = now;
     GH.inFlight = true;
-    const text = LMStore.buildFileText(content);
     const b64 = LMStore.utf8ToBase64 ? LMStore.utf8ToBase64(text) : btoa(unescape(encodeURIComponent(text)));
     const H = { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
     const put = function (br, sha) {
@@ -1096,6 +1153,7 @@ window.LMCollab = (function () {
     };
     tryPut(ref).then(function (r) {
       GH.inFlight = false;
+      noteRate(r);                       /* ★ 修复90：记下剩余额度，决定下一轮要不要降挡 */
       if (r.status === 409 || r.status === 422) { /* 别人先提交 → 拉最新；6 秒后尾随重推一次（防 409 后最后一笔只留本机） */
         delete shaOf[ref]; ghPull();
         if (!GH._409T) GH._409T = setTimeout(function () {
@@ -1105,7 +1163,28 @@ window.LMCollab = (function () {
         return;
       }
       if (!r.ok) {
-        /* ★ 修复89：数据分支彻底写不进去（Token 权限不足 / 仓库策略限制）→ 回退 main（= 旧行为），只提示一次 */
+        /* ★ 修复90：只有「分支真的不存在」才是降级信号（404 / 建 ref 失败）。
+           403·429 = 限流、401 = Token 失效、5xx = 暂时故障 —— 它们跟分支无关，**绝不能**降级到 main：
+           旧写法会把一次限流误判成「权限不足」，永久退回发布分支，白烧构建配额 */
+        const branchMissing = !!r._mkFail || r.status === 404;
+        if (r.status === 403 || r.status === 429) {
+          const ms = retryAfterMs(r);
+          GH.blockUntil = Date.now() + ms;
+          if (!GH._rlToast) {
+            GH._rlToast = true;
+            toast('⏳ GitHub 写入额度/频率受限：已自动放慢同步（退避 ' + Math.round(ms / 1000) + ' 秒），内容留在本机不会丢');
+          }
+          return;
+        }
+        if (r.status === 401) {
+          if (!GH._authToast) {
+            GH._authToast = true;
+            toast('🔑 GitHub Token 无效或已过期：请到「☁ 同步到 GitHub」重新粘贴（其他设备的内容同步不受影响）');
+          }
+          GH.blockUntil = Date.now() + 120000;
+          return;
+        }
+        if (!branchMissing) return;   /* 5xx / 其他：下个周期再试，不动分支策略 */
         if (!GH.useMain && ghDataRef() !== ghMainRef()) {
           const bad = ghDataRef();
           GH.useMain = true;
@@ -1115,6 +1194,7 @@ window.LMCollab = (function () {
         }
         return;
       }
+      GH.lastText = text;               /* ★ 修复90：记下已推送文本，供下一轮去重 */
       return r.json().then(function (j) {
         shaOf[ref] = j.content && j.content.sha;
         /* ★ 修复62 / 83：上传成功 → 只重拍「最近上传版」pushSnap，绝不再动 adminSnap */
@@ -1133,6 +1213,14 @@ window.LMCollab = (function () {
     /* 可重入：管理员登录（拿到 Token）后由 refreshGh 再次调用，自动升级为上传通道 */
     try { GH.cfg = window.LMStore ? LMStore.getGhCfg() : null; } catch (e) { GH.cfg = null; }
     GH.token = (window.LMStore && LMStore.ghToken()) || '';
+    /* ★ 修复90：换了仓库/分支/数据分支/路径 → 清掉上一套缓存。
+       不清就会用旧分支的 sha 去写新分支（必 409），或把「已回退 main」的错误状态一直粘着 */
+    const _sig = GH.cfg ? [GH.cfg.owner, GH.cfg.repo, GH.cfg.branch, GH.cfg.dataBranch, GH.cfg.path, GH.token ? 1 : 0].join('|') : '';
+    if (_sig !== GH._sig) {
+      GH._sig = _sig;
+      GH.useMain = false; GH.etag = ''; GH.lastText = ''; GH.blockUntil = 0; GH.rateLeft = null;
+      Object.keys(shaOf).forEach(function (k) { delete shaOf[k]; });
+    }
     if (GH.cfg && GH.cfg.owner && GH.cfg.repo && GH.token) {
       if (GH._wired !== 'admin') {
         GH._wired = 'admin';
@@ -1337,6 +1425,9 @@ window.LMCollab = (function () {
     enforceBans: enforceBans,
     paintChip: paintChip,
     refreshGh: ghInit, /* 普通管理员登录取回 Token 后重探云端通道（ghInit 已重入化，不会重复接线） */
+    dropGhSha: function () {   /* ★ 修复90：手动同步成功后清 sha 缓存（否则下一笔自动推送必 409、白跑一轮） */
+      try { delete shaOf[ghBranch()]; } catch (e) { /* noop */ }
+    },
     renderPanel: renderPanel,
     presenceTick: presenceTick, /* ★ 修复73：awareness 增减时由 ycollab 立刻催一拍，不必等 2 秒定时 */
     devices: function () { return deviceList(); },
@@ -1359,6 +1450,7 @@ window.LMCollab = (function () {
         在线设备: liveCount(),
         通道: modeLabel,
         内容分支: (function () { try { return ghBranch() + (GH.useMain ? '（已回退 main）' : '') + (ghBranch() !== ghMainRef() ? '（不触发 Pages 构建）' : ''); } catch (e) { return '?'; } })(),
+        额度剩余: (GH.rateLeft == null ? '未知（还没收到 GitHub 响应头）' : (GH.rateLeft + ' 次/小时 · 当前推送间隔 ' + (Math.max(pushWaitMin(peersHot()), rateGap()) / 1000) + ' 秒')),
         /* ★ 修复88：现场可核对当前节奏（有人在线会自动更快） */
         节奏: (function () {
           try {
