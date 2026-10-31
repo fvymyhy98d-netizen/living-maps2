@@ -579,7 +579,13 @@ living-maps/
 **为什么云文档不能「网页自动写进去」**：飞书多维表格、腾讯文档、金山文档的写入接口都要 `app_secret` / `access_token`。把密钥放进公开的 GitHub Pages，等于把文档交给全网。能「零密钥写入」的只有三类：①专门给浏览器用的匿名 key（Supabase anon + RLS）、②表单（人工填）、③群机器人 Webhook（URL 本身即密钥，被刷可随时重置）。
 
 ### 3) Supabase 五步（约 5 分钟）
-1. <https://supabase.com> 注册 → New project（区域选 Singapore / Tokyo 都行，免费额度 500MB 够用到毕业）。
+1. <https://supabase.com> 注册 → New project。**创建页怎么填（照这个选，选错的代价见备注）**：
+   - **Organization**：默认的个人（Personal）即可。
+   - **Project name**：`living-maps-fb`（只能小写字母 / 数字 / 连字符）。
+   - **Database password**：点 *Generate a password* → 复制存进自己的记事本。REST 接口**用不到**它（我们用 `anon` key），但丢了只能重置库密码；**不要用你的常用密码**。
+   - **Region**：选 **Southeast Asia (Singapore) `ap-southeast-1`**（国内延迟最低，约 60–100ms；备选 Northeast Asia (Tokyo) `ap-northeast-1`）。**免费计划建好后区域不能改**，别选 US / EU（跨太平洋 200ms+，同学手机上会明显变慢）。
+   - **Security 三项（截图里的三个勾选框）**：**勾选** `Enable Data API`（云存档就是打 `/rest/v1/` 这个 REST 接口，不勾等于没开 API）· **不勾** `Automatically expose new tables`（Supabase 自己都建议关：新表默认对全网开放风险太高，我们改为在下一步 SQL 里**显式授权**）· **不勾** `Enable automatic RLS`（行级安全也由 SQL 显式 `enable row level security` + 建策略，避免自动触发器带来的意外）。
+   - 免费额度 500MB，够用到毕业；**闲置 7 天会被暂停**（暂停后云存档读不到），打开 <https://supabase.com/dashboard> 点 *Restore* 即可恢复，数据不丢。学校项目建议每周打开一次控制台。
 2. 打开 **SQL Editor**，粘贴建表 + 授权：
    ```sql
    create table if not exists lm_feedback (
@@ -598,6 +604,8 @@ living-maps/
      updatedAt   bigint,
      del         smallint  -- 删除墓碑（正常留言为空；预留着，免得将来报「找不到列」）
    );
+   -- 创建项目时「Automatically expose new tables」没勾 → 这里显式授权（匿名只能读 + 增，其余什么都没给）
+   grant select, insert on lm_feedback to anon, authenticated;
    alter table lm_feedback enable row level security;
    -- 任何人可读（反馈本来就是公开的）
    create policy "public read" on lm_feedback for select using (true);
@@ -611,7 +619,7 @@ living-maps/
 4. 打开本站 → 管理员模式 → 反馈页 → 展开「☁ 云存档」→ 类型选 *Supabase*、填 URL / anon key / 表名（`lm_feedback`）→ **保存云存档设置**。
 5. 点顶部 **☁️ 同步到 GitHub**（让所有访客都拿到这个端点）→ 再点「测试 / 立即拉取」应显示「云存档可读：共 N 条」。
 
-> 备注：Supabase 的 `select=*` 会把整行 JSON 原样返回，字段名与页面一致（`check` 等），所以「写得进、读得回」一次到位。如果写入报 `PGRST204 Could not find the 'xxx' column`，说明表少了列（建表时漏了，或 `"check"` 没加双引号）—— 删表按上面重新建一次即可。若重复执行这段 SQL 报 `policy "public read" already exists`，说明策略已在，忽略即可（或先 `drop policy` 再建）。
+> 备注：Supabase 的 `select=*` 会把整行 JSON 原样返回，字段名与页面一致（`check` 等），所以「写得进、读得回」一次到位。如果写入报 `PGRST204 Could not find the 'xxx' column`，说明表少了列（建表时漏了，或 `"check"` 没加双引号）—— 删表按上面重新建一次即可。若重复执行这段 SQL 报 `policy "public read" already exists`，说明策略已在，忽略即可（或先 `drop policy` 再建）。若**写入**报 `permission denied for table lm_feedback`（错误码 `42501`），说明表的权限没给到 `anon`（建项目时没勾 `Automatically expose new tables` 就会出现），补跑第 2 步里的 `grant select, insert on lm_feedback to anon, authenticated;` 即可。
 >
 > 三个必须记牢的点：① 面板里只填 **Project URL + `anon public`**（那个很长的 `eyJ…`），**绝不要**填 `service_role`（它是管理员密钥，泄露等于把整库交出去）；② `anon key` 写进 `data/content.js` 是**可接受**的（权限由 RLS 管，本来就设计成公开）；③ 任何大模型的 API Key **都不能**放进这个站（前端代码全公开）。
 
