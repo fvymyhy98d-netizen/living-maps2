@@ -2631,10 +2631,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=102 · LM_ASSET_VER=102',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=103 · LM_ASSET_VER=103',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=101/g) || []).length === 0 && /\?v=102/.test(html)
-      && /LM_ASSET_VER = '102'/.test(appJs));
+      && (html.match(/\?v=102/g) || []).length === 0 && /\?v=103/.test(html)
+      && /LM_ASSET_VER = '103'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -2849,8 +2849,9 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && appJs.indexOf('dcCloudPull();   /* ★ 修复100') > 0
       && appJs.indexOf('window.LMFB.dcMerge(cur, list)') > 0);
 
-  T('离线自愈 + 节流：30 秒节流、本机有云端没有的补推（上限 30 条）、补齐时页面提示',
-    appJs.indexOf('if (now - _dcPullAt < 30000 || _dcPulling) return;') > 0
+  T('离线自愈 + 节流：轮询间隔按 _dcGap 走、本机有云端没有的补推（上限 30 条）、补齐时页面提示',
+    appJs.indexOf('if (now - _dcPullAt < _dcGap || _dcPulling) return;') > 0
+      && appJs.indexOf('var _dcGap = 30000;') > 0
       && appJs.indexOf('!cloudIds[m.id] && m.dev !== \'import\'' ) > 0
       && appJs.indexOf('.slice(0, 30)') > 0
       && appJs.indexOf('☁ 讨论区从云存档补齐 ') > 0);
@@ -2860,7 +2861,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
     /setInterval\(function \(\) \{\s*if \(document\.hidden\) return;\s*if \(!document\.getElementById\('dcMount'\)\) \{ _dcDirty = false; return; \}\s*if \(_dcDirty\) dcRepaint\(\);\s*dcCloudPull\(\);\s*\}, 15000\);/.test(appJs));
 
   T('别人的删除也要立刻消失：res.changed 就重绘（以前只在「补齐新帖」时重绘，删除不刷新）',
-    appJs.indexOf('if (res.changed) dcRepaint();') > 0);
+    appJs.indexOf('if (changedNow) dcRepaint();') > 0);
 
   T('协作 dcommit 到达后重绘讨论区（refreshDiscuss 以前错接成 mountFeedback，数据合了页面不刷）',
     appJs.indexOf('refreshDiscuss: function () {') > 0
@@ -2874,7 +2875,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && appJs.indexOf('if (_dcDirty) dcRepaint();') > 0);
 
   T('三个重绘入口统一走 dcRepaint（云存档变化 / 15 秒自检补刷 / 协作 dcommit）',
-    appJs.indexOf('if (res.changed) dcRepaint();') > 0
+    appJs.indexOf('if (changedNow) dcRepaint();') > 0
       && /if \(_dcDirty\) dcRepaint\(\);/.test(appJs)
       && /refreshDiscuss: function \(\) \{\s*mountFeedback\(\);\s*dcRepaint\(\);/.test(appJs));
 
@@ -2909,16 +2910,87 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
     /const PBKDF2_ITERS = 210000;/.test(srcOf('js/store.js'))
       && srcOf('js/store.js').indexOf('iterations: Math.max(1000, +iterations || PBKDF2_ITERS)') > 0);
 
+  /* ★ 修复103：言论过滤（不需要我写词条）+ 发言限流 + 额度保护 */
+  const CMC = require(path.join(DIR, 'js/community.js'));
+  const CM = global.LMCommunity;
+
+  T('词表双来源真跑：文件内置 + 后台 config.modWords 合并；rebuildWords 后立刻生效，清空即恢复放行',
+    (function () {
+      if (!CM || !CM.wordStats) return false;
+      /* ⚠ 只在现有 LMApp 上临时加/改 modWords，用完原样还原 ——
+         后面还有异步测试要靠同一份 LMApp.state.content.config.fbCloud 跑云存档。 */
+      const prevApp = global.LMApp;
+      if (!prevApp) global.LMApp = { state: { content: { config: {} } } };
+      const cfg = global.LMApp.state.content.config;
+      const had = Object.prototype.hasOwnProperty.call(cfg, 'modWords');
+      const keep = cfg.modWords;
+      cfg.modWords = [];
+      CM.rebuildWords();
+      const st0 = CM.wordStats();
+      const okBefore = CM.check('这是一段完全正常的讨论内容').ok;
+      cfg.modWords = ['测试屏蔽词甲', '测试屏蔽词乙'];
+      CM.rebuildWords();
+      const st1 = CM.wordStats();
+      const hit = CM.check('这里含测试屏蔽词甲，应该被拦').ok;
+      const variant = CM.check('测 试 屏 蔽 词 乙（插空格与全角括号）').ok;
+      const clean = CM.check('正常内容不受影响，照常发出去').ok;
+      if (had) cfg.modWords = keep; else delete cfg.modWords;
+      global.LMApp = prevApp;
+      CM.rebuildWords();
+      return okBefore && hit === false && variant === false && clean === true
+        && st1.mod === 2 && st1.active === 2 && st1.file === st0.file;
+    })());
+
+  T('结构化拦截真跑（不需要词表）：11 位手机号 / 引导站外私聊 / 链接刷屏 / 长串重复字符',
+    (function () {
+      if (!CM || !CM.spamCheck) return false;
+      const phone = '1' + '3900001111';
+      return CM.spamCheck('联系我 ' + phone).ok === false
+        && CM.spamCheck('加我微信私聊').ok === false
+        && CM.spamCheck('vx:abcdefg123').ok === false
+        && CM.spamCheck('https://a.com https://b.com https://c.com').ok === false
+        && CM.spamCheck(new Array(31).join('啊')).ok === false
+        && CM.spamCheck('同学你好，这条在讨论雾霾与新能源的关系').ok === true;
+    })());
+
+  T('发言限流真跑：同设备 10 秒内第二条被挡（存在 localStorage，刷新页面绕不过），rateInfo 计数正确',
+    (function () {
+      if (!CM || !CM.rateReset) return false;
+      CM.rateReset();
+      const a = CM.gate('post', '第一条正常的讨论内容');
+      const b = CM.gate('post', '紧接着再发的一条');
+      const info = CM.rateInfo('post');
+      CM.rateReset();
+      return a.ok === true && b.ok === false && String(b.msg).indexOf('发言太快') === 0
+        && info.used === 1 && info.max === 8;
+    })());
+
+  T('10 分钟窗口上限：讨论区 8 条 / 反馈 4 条，且只在真正发出时记账（被拦不占额度）',
+    /WIN_MAX = \{ discuss: 8, feedback: 4 \}/.test(srcOf('js/community.js'))
+      && srcOf('js/community.js').indexOf("why: 'win'") > 0
+      && srcOf('js/community.js').indexOf('rateCommit(kind);') > 0
+      && srcOf('js/community.js').indexOf("RATE_KEY = 'lm_rate_v1'") > 0);
+
+  T('额度保护：讨论区没人说话时 30s→60s→120s 自动降频，一有变化立刻回到 30s',
+    appJs.indexOf('_dcGap = changedNow ? 30000 : Math.min(Math.round(_dcGap * 2), 120000);') > 0
+      && appJs.indexOf('if (now - _dcPullAt < _dcGap || _dcPulling) return;') > 0);
+
+  T('后台可维护词表：🛡️ 面板 + 保存写进 config.modWords 并 rebuildWords（源码里零词条）',
+    appJs.indexOf('id="fbModWords"') > 0 && appJs.indexOf("t.id === 'fbModSave'") > 0
+      && appJs.indexOf('state.content.config.modWords = arr;') > 0
+      && appJs.indexOf('LMCommunity.rebuildWords()') > 0
+      && appJs.indexOf('fbModHtml()') > 0);
+
   T('README 记录修复100：lm_discuss 建表 SQL（含 "updatedAt" bigint）+ grant select, insert, update + upsert 说明',
     readme.indexOf('修复100') > 0 && readme.indexOf('lm_discuss') > 0
       && /create table if not exists lm_discuss/.test(readme)
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 102（?v=102 共 20 处 · v101 无残留 · LM_ASSET_VER=102）',
-    (html.match(/\?v=102/g) || []).length === 20 && (html.match(/\?v=101/g) || []).length === 0
-      && /LM_ASSET_VER = '102'/.test(appJs),
-    'v102=' + (html.match(/\?v=102/g) || []).length + ' v101=' + (html.match(/\?v=101/g) || []).length);
+  T('版本已升到 103（?v=103 共 20 处 · v102 无残留 · LM_ASSET_VER=103）',
+    (html.match(/\?v=103/g) || []).length === 20 && (html.match(/\?v=102/g) || []).length === 0
+      && /LM_ASSET_VER = '103'/.test(appJs),
+    'v103=' + (html.match(/\?v=103/g) || []).length + ' v102=' + (html.match(/\?v=102/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

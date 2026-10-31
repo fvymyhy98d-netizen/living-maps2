@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '102';
+var LM_ASSET_VER = '103';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2306,6 +2306,10 @@ window.LMApp = (function () {
      —— 打开讨论区时拉一次（60 秒节流）：云端有、本机没有的并进来（删除墓碑优先）；
      本机有、云端没有的（离线发的、上次写失败、刚换表）补推一次，双向自愈。 */
   var _dcPullAt = 0, _dcPulling = false;
+  /* ★ 修复103（额度保护）：没人说话的时候自动降频，别让「挂着讨论区一整天」把云存档流量耗光。
+     30 秒（有人在说话）→ 60 秒 → 120 秒（上限）；一检测到变化立刻回到 30 秒。
+     15 秒自检不变，所以最多 120 秒内必定发现别人的新帖/删除，正常聊天时段仍是 30 秒。 */
+  var _dcGap = 30000;
   function dcCloudApply(list) {
     const cur = dcAll();
     const have = {};
@@ -2347,20 +2351,24 @@ window.LMApp = (function () {
     try { cfg = LMFB.cloudCfg(); } catch (e0) { cfg = null; }
     if (!cfg) return;                                   /* 没配云存档：一个字都不提，界面照旧 */
     const now = Date.now();
-    if (now - _dcPullAt < 30000 || _dcPulling) return;
+    if (now - _dcPullAt < _dcGap || _dcPulling) return;
     _dcPullAt = now; _dcPulling = true;
     LMFB.dcList().then(function (r) {
       _dcPulling = false;
-      if (!r || !r.ok || !Array.isArray(r.list)) return;
+      if (!r || !r.ok || !Array.isArray(r.list)) return;   /* 失败：节奏保持不变，下次照常重试 */
       const cloudIds = {};
       r.list.forEach(function (m) { if (m && m.id) cloudIds[m.id] = 1; });
+      let changedNow = false;
       if (r.list.length) {
         const res = dcCloudApply(r.list);
-        if (res.changed) dcRepaint();   /* ★ 修复101/102：删除也要重绘；但正在打字时不打断 */
+        changedNow = !!res.changed;
+        if (changedNow) dcRepaint();   /* ★ 修复101/102：删除也要重绘；但正在打字时不打断 */
         if (res.added && document.getElementById('dcMount')) {
           toast('☁ 讨论区从云存档补齐 ' + res.added + ' 条');
         }
       }
+      /* ★ 修复103：有变化 → 回到 30 秒；一直没变化 → 逐步放宽到 120 秒（省云存档流量） */
+      _dcGap = changedNow ? 30000 : Math.min(Math.round(_dcGap * 2), 120000);
       /* 本机有、云端没有 → 补推（含删除墓碑），一次最多 30 条，避免把整库怼上去 */
       const miss = dcAll().filter(function (m) { return m && m.id && !cloudIds[m.id] && m.dev !== 'import'; }).slice(0, 30);
       if (miss.length) { try { LMFB.dcSave(miss); } catch (e3) { /* noop */ } }
@@ -2480,12 +2488,35 @@ window.LMApp = (function () {
          页面上不出现任何端点、密钥，也不出现任何权限说明。
          数据通道不受影响：cloudCfg() 读的是已公开的 content.config.fbCloud，照常收发。 */
       + (state.root ? fbCloudHtml() : '')
+      + fbModHtml()   /* ★ 修复103：词表编辑（词条只在数据里，代码不含任何词） */
       + (fb.length
         ? '<div class="fb-list">' + fb.slice().reverse().map(function (it) { return fbItemHtml(it, { admin: true }); }).join('') + '</div>'
           + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbCopy">📋 复制全部反馈（含处理记录）</button></div>'
         : '<p class="fb-empty">还没有收到反馈。同学在留言页提交后会实时到达；'
           + '若他当时网络异常，也可以点「📤 复制给组长」把链接发给你，你打开就自动收进来。</p>')
       + '</section>';
+  }
+  /* ★ 修复103：言论过滤词表（管理员维护）
+     —— 词条只存在**数据**里（config.modWords，随「同步到 GitHub」发给所有访客），
+        源码里一个词都没有。界面只显示数量，不列出词条内容。 */
+  function fbModHtml() {
+    const st = (window.LMCommunity && LMCommunity.wordStats) ? LMCommunity.wordStats() : { file: 0, mod: 0, active: 0 };
+    const arr = (function () {
+      try { return (state.content.config && state.content.config.modWords) || []; } catch (e) { return []; }
+    })();
+    return '<details class="fb-cloud">'
+      + '<summary>🛡️ 言论过滤：敏感词 / 广告 / 联系方式（当前生效 ' + st.active + ' 条）</summary>'
+      + '<p class="fb-hint">反馈与讨论区在**发布前**都会过一遍：① <b>词表命中</b>（含变体：全角、插空格、加符号、零宽字符）；'
+      + '② <b>手机号 / 引导到站外私聊</b>；③ <b>链接刷屏</b>（≥3 条）；④ <b>长串重复字符</b>；⑤ <b>几乎全是符号</b>。'
+      + '命中直接拦下并当场提示，不会发出去；词表命中连续 3 次自动禁言 1 个月（防硬试）。<br>'
+      + '速度限制：同一设备 <b>10 秒 1 条</b>；讨论区 <b>10 分钟最多 8 条</b>、反馈 <b>10 分钟最多 4 条</b>（刷新页面也照样生效）。</p>'
+      + '<label class="fb-field"><span>自定义词表（一行一条，2–30 字；可从公开词表清单整段粘贴，留空 = 只用文件内置）</span>'
+      + '<textarea id="fbModWords" class="fb-input" rows="4" maxlength="20000" placeholder="每行一条，保存后随内容同步给所有访客">'
+      + esc(arr.join('\n')) + '</textarea></label>'
+      + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbModSave">保存词表</button>'
+      + '<span class="fb-hint">当前：文件内置 <b>' + st.file + '</b> 条 + 后台 <b>' + st.mod + '</b> 条。'
+      + '保存后点顶部「☁️ 同步到 GitHub」才对访客生效。</span></div>'
+      + '</details>';
   }
   /* ★ 修复95：状态归一（页面里也有一份，避免依赖顺序） */
   function fixSt(s) {
@@ -2692,6 +2723,24 @@ window.LMApp = (function () {
       cloudMsg('已保存。点下面「测试 / 立即拉取」就能验证到底通不通。');
       mountFeedback();
       toast('已保存云存档设置；点顶部「☁️ 同步到 GitHub」后访客生效');
+      return;
+    }
+
+    if (t.id === 'fbModSave') {
+      const ta = document.getElementById('fbModWords');
+      const seen = {}, arr = [];
+      String(ta ? ta.value : '').split(/\r?\n/).forEach(function (w) {
+        w = String(w || '').replace(/[\u200B\u200C\u200D\uFEFF]/g, '').trim();
+        if (w.length < 2 || w.length > 30 || seen[w]) return;
+        seen[w] = 1;
+        arr.push(w);
+      });
+      if (!state.content.config) state.content.config = {};
+      state.content.config.modWords = arr;
+      try { if (window.LMCommunity && LMCommunity.rebuildWords) LMCommunity.rebuildWords(); } catch (e1) { /* noop */ }
+      applyEdit('言论过滤词表已更新（' + arr.length + ' 条）');
+      mountFeedback();
+      toast('词表已保存：生效 ' + arr.length + ' 条（点顶部「☁️ 同步到 GitHub」后对所有访客生效）');
       return;
     }
 

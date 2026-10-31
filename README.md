@@ -456,6 +456,8 @@ living-maps/
 - **修复101（「别人删了帖 / 发了帖，我这边半天不更新」）**：现象是**放在讨论区页面不动时，别人的新增与删除永远不出现**，必须手动切页重进。三个原因一起修：① `dcCloudPull()` 以前只在「打开讨论区那一刻」被调用，页面上没有任何定时器 → 新增 `setInterval(…, 15000)` 自检：**浏览器后台（`document.hidden`）或不在讨论区页（没有 `#dcMount`）时一次请求都不发**，真拉取仍受 `dcCloudPull()` 内部节流约束；② 节流从 60 秒收紧到 **30 秒**（配合 15 秒自检 → 别人的删除/新帖最多 30 秒内出现）；③ 以前只有「补齐了云端新帖」才 `mountDiscuss()` 重绘，**删除（墓碑）就算并进来了也不重绘** → 改成 `if (res.changed) mountDiscuss()`。顺手修一个真 bug：`LMApp.refreshDiscuss` 被错接成 `mountFeedback`，导致协作 `dcommit` 帧到达后数据合了却没重绘讨论区（要切页才看到）——现在是 `function(){ mountFeedback(); if (dcMount) mountDiscuss(); }`。时效汇总：自己这边**发出是立即的**（Supabase upsert ≈0.2–1 秒进库）；管理员设备之间走 `dcommit` **近乎实时**；访客之间靠云存档轮询，**最多 30 秒**。资源版本升至 `?v=101` / `LM_ASSET_VER='101'`。
 - **回归（修复101）**：`node --check js/app.js / test_yjs.js` 通过；`test_yjs.js` **356/356**（新增 3 条：15 秒自检且不在讨论区页/后台不发请求、`res.changed` 就重绘（删除也刷新）、`refreshDiscuss` 必须重绘讨论区；节流断言同步改成 30000；版本断言 100 → 101（`?v=101` 共 20 处、v100 必须为 0））；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
 - **修复102（「7 天不用会被关掉」的真相 + 保活 + 安全审计落地）**：① **被关掉的不是 GitHub，是 Supabase 免费版项目**（详见「三·补14」）：官方 *Project Pausing* 写明「一周内数据库活动太少就会被暂停」，并说 `a few user requests to the database each day over the previous week is enough`。② **保活**：新增 `.github/workflows/keepalive.yml` + `tools/keepalive.js`，每天 03:17 / 15:17 UTC 各发 **2 条只读请求**（`?select=id&limit=1` 打 `lm_feedback` 与 `lm_discuss`）—— 就是官方说的「每天几个请求」，**不写数据、不留垃圾行**；脚本直接读 `data/content.js` 里已公开的云存档配置（改配置不用动脚本、也不用往 GitHub Secrets 塞东西），`--dry` 只打印地址不联网。比「定时发一条再删掉」干净：那种做法要在库里留测试帖、依赖 delete 权限（与「删除=只写墓碑」的设计冲突），删失败还会被访客看见。③ **自动刷新不许吞掉正在输入的草稿**：修复101 的 15 秒自检在别人发帖/删帖后会 `mountDiscuss()` 重建整段 HTML，正在写的「发帖框 / 回复框」会被清空 → 新增 `dcBusy()`（判断 `document.activeElement` 是否落在 `#dcMount` 内的 `textarea/input`）+ `_dcDirty` 记账 + `dcRepaint()`：**打字中只记账不重绘**，离开输入框后的下一次自检补刷；`refreshDiscuss`（协作 `dcommit` 路径）也统一走 `dcRepaint()`。④ **云端来的行一律就地截断**（`dcSlim`）：RLS 只管「谁能写」不管「写多大」，一条 5 MB 的 `text` 或畸形 id 能把页面拖垮 → 读回时裁到 `id≤40 / dev≤24 / nick≤40 / text≤2000 / rto≤60`。资源版本升至 `?v=102` / `LM_ASSET_VER='102'`。
+- **修复103（言论自动过滤 + 发帖限流 + 额度账本）**：① **敏感词屏蔽并不是做不到** —— 代码早就写好了（`js/community.js` 的 `check()` + 归一化匹配 + 累积违规禁言），缺的只是**词表**（`data/sensitive-words.js` 当前是 `[]`，等于未启用）。**词表不能由 AI 写进对话/源码**（既容易被平台判违规，又等于把词条公开挂在仓库里），所以做了两条「你自己填、代码零词条」的路：文件路径 `data/raw-sensitive.txt` → `node build_words.js`（只打印条数）；以及在后台「🛡️ 言论过滤」直接粘贴保存（写进 `config.modWords`，随「同步到 GitHub」对所有访客生效）。② **词表双来源合并**（文件内置 + 后台自定义），`rebuildWords()` 保存后立刻生效，缓存用「条数 + 首尾词」签名，词表变了自动重建。③ **不用词表也能拦的结构化内容**（新增 `spamCheck()`）：11 位手机号（同学隐私）、引导到站外私聊（加我/私我/vx:…/qq:…）、一次 ≥3 条链接、连续 20+ 个重复字符、几乎全是符号 —— 命中即拦下并给出具体理由，不计入违规。④ **发帖限流**从「内存里 10 秒冷却」升级为**持久化**（`lm_rate_v1`，刷新页面绕不过）：冷却 10 秒 + 窗口上限（讨论区 10 分钟 8 条、反馈 10 分钟 4 条），且**只在真正发出去时记账**（被词表/结构化拦下不占额度）。⑤ **额度保护**：讨论区轮询从固定 30 秒改为自适应 30→60→120 秒（一直没变化就降频，一有变化立刻回到 30 秒），长时间挂着页面也不再持续消耗云存档流量。资源版本升至 `?v=103` / `LM_ASSET_VER='103'`。
+- **回归（修复103）**：`node --check js/community.js / js/app.js / test_yjs.js` 通过；`test_yjs.js` **367/367**（新增 6 条：词表双来源真跑（含「插空格 + 全角」变体必须命中、清空后恢复放行、用完还原 `LMApp` 以免影响后面的异步云存档用例）、结构化拦截真跑 6 例、限流真跑（10 秒内第二条被挡 + `rateInfo` 计数）、窗口上限与「只在发出时记账」、自适应降频、后台词表面板接线；顺带把 101/102 里写死 `res.changed`、`< 30000` 的断言改成跟随现行代码（`changedNow` / `_dcGap`））；`test_comments.js` 9/9、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_collab.js` 9/9、`test_yield.js` 全 PASS。官方额度已核对：Supabase 免费版 **5 GB egress / 500 MB 库 / 无限 API 请求 / 2 个项目**，GitHub Pages **100 GB 带宽/月、1 GB 站点、10 构建/小时**。
 - **回归（修复102）**：`node --check js/app.js / js/fbsync.js / test_yjs.js` 通过；`node tools/keepalive.js --dry` 打印两条目标地址、真跑对两张表各发一条只读请求均为 **HTTP 200**（`lm_feedback` → `F-01`，`lm_discuss` → `D-03-engd`）；`test_yjs.js` **361/361**（新增 5 条：`dcBusy()` + `_dcDirty` 草稿保护、`dcRepaint()` 三处接线、`dcSlim` 长度截断真跑、保活工作流 cron/`contents: read` + `tools/keepalive.js` 的 `pickCfg()`/`endpoints()` 真跑（抠配置、剥 `/rest/v1`、双表地址、webhook 模式不发请求）、`PBKDF2_ITERS=210000`；版本断言 101 → 102）；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
 - **回归（修复100）**：`node --check js/fbsync.js / js/app.js / test_yjs.js` 通过；`test_yjs.js` **353/353**（新增 12 条：接口齐全；`dcTableName()` 默认 `lm_discuss` 且支持 `config.fbCloud.dcTable` 覆盖；`dcSlim()` 只留同步字段且 `del` 归一 / 空 id 返回 null；`dcMerge()` 三条真跑 —— 并集去重、删除墓碑落到本机、已有正文不被云端覆盖；`dcSave()` 真跑断言 URL `…/rest/v1/lm_discuss?on_conflict=id` + `Prefer: resolution=merge-duplicates,return=minimal` + body 是数组；`dcList()` 真跑断言 `select=*&order=ts.asc&limit=1000` + apikey 头；源码守护 —— `dcPersist` 必须调 `LMFB.dcSave`、`mountDiscuss` 必须调 `dcCloudPull`、节流 60000 与补推上限 30、提示文案；README 必须含 `lm_discuss` 建表 SQL（`"updatedAt" bigint`）与 `grant select, insert, update`；版本断言 99 → 100（`?v=100` 共 20 处、v99 必须为 0））；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
 
@@ -837,6 +839,64 @@ select tgname  from pg_trigger     where tgrelid = 'lm_discuss'::regclass and no
 1. Dashboard → **Table Editor** → `lm_discuss` → 按 `dev` 过滤 → 删掉该身份码的行（或 SQL：`delete from lm_discuss where dev = 'xxx';`）；
 2. **Project Settings → API → Rotate anon key** → 把新 key 填回「反馈页 → ☁ 云存档」→ 保存 → 顶部「☁️ 同步到 GitHub」（旧 key 立刻失效，作恶者手里的 key 变废纸；站点会短暂读不到，重填即可）；
 3. 页面自带的「🚫 屏蔽身份码 / 禁言」只作用于**界面显示**（同浏览器/同设备），**挡不住直接调 API 的人** —— 前两步才是真拦。
+
+## 三·补15、言论自动过滤 · 发帖限流 · 额度账本（2026-10-31 · 修复103）
+
+### 1) 敏感词自动屏蔽能不能做到？——能，而且代码早就写好了，**只缺词表**
+
+- `js/community.js` 里已经有：`check()` 词表匹配、**归一化**（全角→半角、大小写、零宽字符、插空格/加符号、`@`/`＄` 形近还原）、
+  命中累积违规、连续 3 次自动禁言 1 个月、永久屏蔽。
+- `data/sensitive-words.js` 现在是 `[]`（文件头就写着"当前为空 = 拦截功能未启用"），所以目前只跑结构化规则。
+- **词表不该由 AI 打进对话或源码**：那等于把词条公开挂在仓库里，也容易被平台判成违规内容（这就是上一个 AI 翻车的点）。
+  正确做法是「**你自己放词表，代码里零词条**」，两条路都**不用改代码**：
+  1. **文件**：把任意「一行一词」的清单存成 `data/raw-sensitive.txt` → 在项目根目录跑 `node build_words.js`
+     （它只打印 `words=数量`，绝不回显词条）→ 提交 `data/sensitive-words.js`。
+  2. **后台（推荐，零代码、手机上也能改）**：管理员 → 反馈页 → 「🛡️ 言论过滤」→ 把清单整段粘进文本框 → **保存词表**
+     → 顶部「☁️ 同步到 GitHub」。词条存进内容文件的 `config.modWords`，**所有访客立刻生效**。
+     词表会随 `data/content.js` 一起公开（这是静态站的固有性质），但代码里永远不出现词条。
+
+### 2) 不用词表也能拦的「不当内容」（客观形态，不猜语义）
+
+| 规则 | 例子 | 提示 |
+| --- | --- | --- |
+| 11 位手机号 | 公开区留电话 | 请不要在公开区留手机号（涉及同学隐私） |
+| 引导站外私聊 | 「加我微信」「私我」「vx:…」「qq:…」 | 疑似引导到站外私聊，请直接在讨论区交流 |
+| 链接刷屏 | 一条里 ≥3 个 `http(s)://` | 链接太多了，请不要刷屏 |
+| 长串重复 | 连续 20+ 个相同字符 | 重复字符过多，像是刷屏 |
+| 纯符号刷屏 | 去空白后 85% 以上是符号 | 内容几乎全是符号，像是刷屏 |
+
+这些规则命中只**拦截并说明原因**，不计入违规次数；只有**词表命中**才累计（3 次 → 禁言 1 个月）。
+
+### 3) 发帖限流（你问的「10 秒 / 20 秒」「10 分钟内太多就不行」）
+
+| 规则 | 值 | 覆盖范围 |
+| --- | --- | --- |
+| 冷却 | **10 秒** | 所有发言（反馈 / 发帖 / 回复） |
+| 窗口上限 | **10 分钟 8 条** | 讨论区（发帖 + 回复） |
+| 窗口上限 | **10 分钟 4 条** | 反馈 |
+
+- 以前的冷却只在内存里，**刷新页面就清零**；现在存 `localStorage.lm_rate_v1`，重开标签页也绕不过。
+- **只在真正发出去时记账**：被词表 / 结构化规则拦下的尝试不占额度（不会出现"打错一次就锁 10 分钟"）。
+- 边界（诚实说）：这是**客户端**限制。有人照抄 `anon key` 直接调 REST API 就绕过了 →
+  那类滥用靠「三·补14 §3 的数据库加固 + 轮换 anon key」，不是靠这一层。
+
+### 4) 额度账本（官方数字，2026-10-31 核对；不靠记忆）
+
+| 服务 | 免费额度 | 我们的实际用量 | 会不会耗光 |
+| --- | --- | --- | --- |
+| **Supabase** | 无限 API 请求 · 50,000 MAU · **500 MB 库** · **5 GB egress/月** · 2 个项目 · 一周无活动会暂停 | 每帖约 300 B；100 帖时一次拉取≈30 KB。开着讨论区：30 秒/次≈3.6 MB/小时 | 正常用（每次看几分钟）连 1% 都用不到；要撞 5 GB 得**约 1400 个"页面小时"**/月。已加自适应降频再降 4 倍 |
+| **GitHub Pages** | 站点 ≤1 GB · **100 GB 带宽/月**（软限制）· 10 构建/小时，部署超时 10 分钟 | 整站几 MB，一次完整访问≈1–2 MB | 5 万次访问/月，远超课程规模 |
+| **GitHub Actions** | 公开仓库免费（私有才计 2,000 分钟/月） | 保活每天 2 次 × 约 30 秒 | 忽略不计 |
+| **MQTT（EMQX 公共 broker）** | 无配额承诺，尽力而为 | 只传提醒，正文走云存档 | 丢了也不影响数据（云存档兜底） |
+
+**结论**：按课程站的真实使用量，这些额度**用不完**；唯一要注意的是「有人把讨论区页面挂一整天不退」——已用自适应降频（30→60→120 秒）把这个成本压下去。
+
+### 5) 验收（两分钟）
+
+1. 管理员 → 反馈页 → 「🛡️ 言论过滤」→ 贴 3 条自造测试词（如 `测试屏蔽词甲`）→ **保存词表** → 顶部「☁️ 同步到 GitHub」。
+2. 讨论区发「测试屏蔽词甲你好」→ 应被拦并提示；**把字拆开加空格再发**也应变体命中；连试 3 次 → 禁言提示。
+3. 10 秒内连续发两条正常帖 → 第二条提示「发言太快，请稍候 10 秒再试」；刷新页面后仍受限。
+4. 发一条含 11 位手机号的内容 → 提示「请不要在公开区留手机号」。
 
 ## 五、配置"网站上直接改内容"（云端保存）
 
