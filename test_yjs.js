@@ -1861,5 +1861,58 @@ T('diag 里能直接看到当前节奏（现场核对「有人在线是否真的
 })();
 
 
+/* ---------- 9.54) Pages「10 次构建/小时」限额：影响说明 + 可选 Actions 发布模板 ---------- */
+console.log('【9.54】Pages 构建软限：内容同步不受影响 · 发代码可能被跳过 · 模板让内容提交不再触发部署');
+(function () {
+  const wfPath = 'deploy/pages-actions.yml';
+  const hasWf = exists(wfPath);
+  const yml = hasWf ? srcOf(wfPath).replace(/\r\n/g, '\n') : '';
+  const git = exists('.gitignore') ? srcOf('.gitignore') : '';
+  const readme = srcOf('README.md');
+
+  T('模板放在 deploy/ 而不是 .github/workflows/（未切到 Actions 前不会跑出红叉）',
+    hasWf && !exists('.github/workflows/pages.yml') && !exists('.github/workflows/pages.yaml'),
+    hasWf ? '模板缺失或已放进 .github/workflows' : 'deploy/pages-actions.yml 不存在');
+  T('模板含 Actions 发布必需件：pages/id-token 权限 · upload-pages-artifact · deploy-pages · 手动触发',
+    yml.indexOf('pages: write') > 0 && yml.indexOf('id-token: write') > 0
+      && yml.indexOf('actions/upload-pages-artifact@v3') > 0 && yml.indexOf('actions/deploy-pages@v4') > 0
+      && yml.indexOf('workflow_dispatch:') > 0);
+  T('模板只打包站点目录（不含 node_modules / 测试脚本，产物不会变胖；.gitignore 已排除 node_modules）',
+    yml.indexOf('cp -r index.html css js lib data images _site/') > 0
+      && yml.indexOf('path: _site') > 0 && git.indexOf('node_modules/') >= 0);
+
+  /* 真跑：用缩进扫描把 on.push.paths-ignore 的清单取出来，验证内容提交确实被挡在部署之外 */
+  const scanList = function (text, key) {
+    const L = text.split('\n');
+    const k = L.findIndex(function (l) { return l.trim().indexOf(key) === 0; });
+    if (k < 0) return null;
+    const base = L[k].search(/\S/);
+    const out = [];
+    for (let i = k + 1; i < L.length; i++) {
+      const ln = L[i];
+      if (!ln.trim()) continue;
+      if (ln.search(/\S/) <= base) break;          /* 回到同级或更外层 → 这个块结束 */
+      const m = /^\s*-\s*'?([^'#]+?)'?\s*$/.exec(ln);
+      if (m) out.push(m[1].trim());
+    }
+    return out;
+  };
+  const ignore = scanList(yml, 'paths-ignore:');
+  const yamlClean = !!yml && yml.indexOf('\t') < 0
+    && yml.split('\n').filter(function (l) { return l.trim() && l.trim().indexOf('#') !== 0; })
+      .every(function (l) { return (/^ */).exec(l)[0].length % 2 === 0; });
+  T('真跑模板：paths-ignore 含 data/content.js（内容保存不占构建配额）· 无 tab 缩进 · 缩进偶数',
+    !!ignore && ignore.indexOf('data/content.js') >= 0 && yamlClean,
+    JSON.stringify({ pathsIgnore: ignore, yamlClean: yamlClean }));
+
+  T('README 写清官方口径与三条解法（不受影响 / 临时缓解 / Actions 一劳永逸 + 回退步骤）',
+    readme.indexOf('soft limit of 10 builds per hour') > 0
+      && readme.indexOf('does not apply if you build and publish your site with a custom GitHub Actions workflow') > 0
+      && readme.indexOf('deploy/pages-actions.yml') > 0
+      && readme.indexOf('完全不受影响：协同内容本身') > 0
+      && readme.indexOf('回退') > 0);
+})();
+
+
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

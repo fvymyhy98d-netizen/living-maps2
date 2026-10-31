@@ -1,0 +1,68 @@
+# =========================================================
+#  可选：用 GitHub Actions 发布 GitHub Pages（模板，不会自动生效）
+#  为什么要有它：官方口径「GitHub Pages 站点有每小时 10 次构建的软限制；
+#  用自定义 GitHub Actions 工作流构建和发布时，此限制不适用」。
+#  而本站每次协同保存都会提交 data/content.js —— 分支发布模式下这等于每次
+#  保存都触发一次 Pages 构建，协同一多小时就会把 10 次/小时 用光，导致
+#  「发代码后线上还是旧版」。本模板用 paths-ignore 把内容提交挡在部署之外。
+#
+#  启用三步（约 5 分钟，可回退）：
+#    ① 把本文件移动到 .github/workflows/pages.yml
+#    ② 仓库 Settings → Pages → Source 改成 “GitHub Actions”
+#       （改完之后，原来「Deploy from a branch」的分支发布自动停用）
+#    ③ 随便改一行代码提交，确认 Actions 里 pages 工作流变绿、站点正常
+#  回退：删掉 .github/workflows/pages.yml，把 Source 改回
+#        “Deploy from a branch” → main → / (root) 即可。
+# =========================================================
+name: pages
+
+on:
+  push:
+    branches: [main]
+    # ★ 关键：协同内容提交不触发部署 —— 内容由页内脚本经 GitHub API / raw 实时同步，
+    #   与站点构建无关；因此这些路径的提交不占 Pages 构建配额。
+    paths-ignore:
+      - 'data/content.js'
+      - 'README.md'
+      - 'deploy/**'
+  workflow_dispatch:   # 允许在 Actions 页面手动点一次「Run workflow」重新发布
+
+# 最小权限：读仓库 + 写 Pages + 取 OIDC 令牌（deploy-pages 需要）
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只跑一个部署；不取消进行中的（避免把正在发布的站点打断成 404）
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      # 只打包站点需要的文件（node_modules 已被 .gitignore 排除，测试脚本不进产物）
+      - name: 收集站点文件到 _site
+        run: |
+          mkdir -p _site
+          cp -r index.html css js lib data images _site/
+          echo "打包内容：" && ls -1 _site
+
+      - name: 上传产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: 部署到 Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
