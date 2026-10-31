@@ -4808,16 +4808,25 @@ window.LMEditor = (function () {
     const blk = t.closest('.block-wrap[data-idx],.free-box[data-idx]');
     if (!el && !blk) return;
     if (el && document.activeElement === el) return; /* 编辑中：单击移动光标，放行 */
+    /* ★ 修复120：双击判定改用「块」当 key（旧版是 `el || blk`）。
+       旧问题是：第一下点在文字（el）上、第二下点在图片/空白（blk）上时两个 key 不同，
+       第二下被当成「新的第一下」，结果只是又选了一次块 —— 怎么点都进不了编辑。 */
+    const wrap = blk || (el ? el.closest('.block-wrap[data-idx],.free-box[data-idx]') : null);
+    /* ★ 修复120：找不到所属块时直接放行 —— 旧版这里已经 preventDefault，
+       等于把一个可编辑元素的第一击吞掉，用户点它永远进不了编辑。 */
+    if (!wrap) return;
+    const wi = +wrap.getAttribute('data-idx');
+    if (isNaN(wi)) return;
+    const key = wrap;
     const now = Date.now();
-    const key = el || blk;
     if (lastEditTap.el === key && now - lastEditTap.t < 400) { lastEditTap = { t: 0, el: null }; return; } /* 双击：放行原生聚焦进编辑 */
     lastEditTap = { t: now, el: key };
     e.preventDefault(); /* 第一击：阻止原生聚焦与合成 click，只做「选中块浮现操作栏」 */
-    const wrap = blk || (el ? el.closest('.block-wrap[data-idx],.free-box[data-idx]') : null);
-    if (wrap && !isNaN(+wrap.getAttribute('data-idx'))) {
-      selectBlock(+wrap.getAttribute('data-idx')); /* 单击：选中并浮现操作栏 */
-      wrap.classList.add('selected'); /* ★ 修复㉟：双保险 —— 选中态直接点亮，不依赖内部链路的任何一环 */
-    }
+    /* ★ 修复120：已经是当前块就不要再 selectBlock —— 它会整条 renderToolbar()，
+       连续点同一块时工具栏会重建/闪一下（手机上重建后还会退回 ⌨️ 收起态，看着像"弹一下就没了"）。
+       与拖动把手那两处一致：只在「换了块」时才重建。 */
+    if (tb.active !== wi) selectBlock(wi); /* 单击：选中并浮现操作栏 */
+    wrap.classList.add('selected'); /* ★ 修复㉟：双保险 —— 选中态直接点亮，不依赖内部链路的任何一环 */
   }, true);
   document.addEventListener('focusin', function (e) {
     if (!window.LMApp || !LMApp.state.admin) return;

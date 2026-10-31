@@ -2636,7 +2636,19 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && s.indexOf('if (isNew) page.blocks.push(nb); else page.blocks[idx] = nb;') > 0;
     })());
 
-  /* ★ 修复119：引文「展开全文」+ 手机锁滚动 */
+  T('触屏1：手机「单击弹操作栏 / 双击进编辑」的两个真 bug —— 双击 key 用块、同块连点不重建工具栏',
+    (function () {
+      const s = srcOf('js/editor.js');
+      const i = s.indexOf('if (!el && !blk) return;');
+      const seg = i > 0 ? s.slice(i, i + 1800) : '';
+      return seg.indexOf("const wrap = blk || (el ? el.closest('.block-wrap[data-idx],.free-box[data-idx]') : null);") > 0
+        && seg.indexOf('const key = wrap;') > 0
+        && seg.indexOf('const key = el || blk;') < 0            /* 旧的判定必须消失 */
+        && seg.indexOf('if (!wrap) return;') > 0               /* 没有所属块 → 放行原生聚焦 */
+        && seg.indexOf('if (tb.active !== wi) selectBlock(wi);') > 0 /* 同块连点不再重建工具栏 */
+        && seg.indexOf('wrap.classList.add(\'selected\')') > 0;
+    })());
+
   T('引文1：长引文可就地展开全文 —— 用同页句子把原文找回来，不用跳页（找不到就原样显示）',
     (function () {
       const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
@@ -3197,10 +3209,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=119 · LM_ASSET_VER=119',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=120 · LM_ASSET_VER=120',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=118/g) || []).length === 0 && /\?v=119/.test(html)
-      && /LM_ASSET_VER = '119'/.test(appJs));
+      && (html.match(/\?v=119/g) || []).length === 0 && /\?v=120/.test(html)
+      && /LM_ASSET_VER = '120'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3553,10 +3565,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 119（?v=119 共 21 处 · v118 无残留 · LM_ASSET_VER=119）',
-    (html.match(/\?v=119/g) || []).length === 21 && (html.match(/\?v=118/g) || []).length === 0
-      && /LM_ASSET_VER = '119'/.test(appJs),
-    'v119=' + (html.match(/\?v=119/g) || []).length + ' v118=' + (html.match(/\?v=118/g) || []).length);
+  T('版本已升到 120（?v=120 共 21 处 · v119 无残留 · LM_ASSET_VER=120）',
+    (html.match(/\?v=120/g) || []).length === 21 && (html.match(/\?v=119/g) || []).length === 0
+      && /LM_ASSET_VER = '120'/.test(appJs),
+    'v120=' + (html.match(/\?v=120/g) || []).length + ' v119=' + (html.match(/\?v=119/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

@@ -1127,3 +1127,21 @@ node tools/train_lm.js 5          # 指定阶数（1-5）
 - **没有用户可见收益**：拆分只改代码组织，功能、性能、包体积都不变；`ai.js` 现在 1100 行且已有清晰分节（①②…⑨界面），可读性没到非拆不可的程度。
 - **会引入真实风险**：`renderPanel()` 依赖同文件里的十几个内部函数（`esc` / `tokens` / `hiText` / `quoteHtml` / `chatOf` / `askSmart` / `indexNow` …）。拆出去就得新开一层全局边界（`window.LMAIUI`）或在 `ai.js` 里导出内部实现，等于把「一个 IIFE 内部的小作用域」换成「两个文件间的契约」，是**为了好看而增加耦合**。
 - **顺带纠正我上一轮说错的一点**：CSP 不必改 —— 已是 `script-src 'self'`，同目录新脚本本来就允许；真正要改的只有 `index.html` 加一行 `<script>`、`?v=` 处数 21→22、以及若干测试断言。成本不高但收益为零，**建议留到真有第二个文件要共享这些函数时再做**。
+
+## v120：手机端「单击弹操作栏 / 双击进编辑」的两个真 bug（修复㉜ 的补丁）
+
+现行规则（editor.js 触屏 touchend，仅 `body.mobile-view` + 管理员 + 位移≤12px）：
+
+1. 正在编辑**同一个**文字元素 → 直接放行，双击=选词，工具栏**不会**重弹；
+2. 否则**第一下** = `preventDefault()` + 选中块 + 弹操作栏；
+3. **400ms 内第二下**（同一块）= 不再拦截 → 原生聚焦 → 进编辑。
+
+所以顺序是「先弹栏、后进编辑」，不是「双击优先、工具栏不弹」。这轮修的两个 bug：
+
+| 问题 | 原因 | 修法 |
+|---|---|---|
+| 同一块内换位置就进不了编辑（第一下点文字、第二下点图片/空白 → 只又选了一次块） | 双击 key 用 `el \|\| blk`：一个是内层文字元素、一个是块容器，`lastEditTap.el === key` 不成立 | key 改用**块容器** `const key = wrap;` |
+| 连点同一块时工具栏重建 / 闪一下（手机上重建后还退回 ⌨️ 收起态） | `selectBlock()` 无条件 `renderToolbar()` | 与拖动把手两处一致：`if (tb.active !== wi) selectBlock(wi);` 只在换块时重建 |
+| 可编辑元素不在任何块里时，第一击被 `preventDefault()` 吞掉 → 永远进不了编辑 | `preventDefault` 在 `wrap` 判空之前 | 先算 `wrap`，`if (!wrap) return;` 放行原生聚焦 |
+
+**回归（修复120）**：`node --check js/editor.js` 通过；`test_yjs.js` **418/418**（新增 `触屏1`）；`test_comments.js` 9/9、`test_collab.js` 9/9、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS。资源版本升至 `?v=120` / `LM_ASSET_VER='120'`。
