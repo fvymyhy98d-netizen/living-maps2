@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793409318173,
+      "syncTs": 1793416049374,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -83,7 +83,7 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "研究边界",
-          "text": "我们聚焦语言模[[j:Jmvthsiw05ei,型的基本原理与使用，暂不展]]开分布式训练与多模态。后续根据课程进度补充。",
+          "text": "我们聚焦语言模型的基本原理与使用，暂不展开分布式训练与多模态。后续根据课程进度补充。",
           "style": {
             "hl": "#ffc9de"
           },
@@ -92,7 +92,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "主要问题与典型任务"
+          "text": "主要问题与典型任务？？？",
+          "_ts": 1793416049359
         },
         {
           "type": "paragraph",
@@ -169,13 +170,7 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "核心概念",
-          "free": {
-            "x": 2.8,
-            "y": 1038,
-            "w": 94.4,
-            "ride": 0
-          }
+          "text": "核心概念"
         },
         {
           "type": "table",
@@ -193,7 +188,7 @@ window.SITE_CONTENT = {
             ],
             [
               "Transformer",
-              "目前主流的模型结构，核心是注意力机制",
+              "目前==主流的模型结构，核心是注意力机制==",
               "GPT 系列、LLaMA 系列"
             ],
             [
@@ -208,11 +203,12 @@ window.SITE_CONTENT = {
             ]
           ],
           "free": {
-            "x": 2.8,
-            "y": 1234,
+            "x": 1.7,
+            "y": 1177,
             "w": 94.4,
-            "ride": 86
-          }
+            "ride": 0
+          },
+          "_ts": 1793415612554
         }
       ],
       "heroAlign": ""
@@ -527,22 +523,6 @@ window.SITE_CONTENT = {
     }
   ],
   "discuss": [],
-  "jumps": [
-    {
-      "id": "Jmvthsiw05ei",
-      "from": {
-        "page": "domain",
-        "bi": 1,
-        "text": "型的基本原理与使用，暂不展",
-        "cell": null
-      },
-      "to": {
-        "page": "domain",
-        "bi": 9,
-        "text": "以上为示例，请对照",
-        "cell": null
-      }
-    }
-  ]
+  "jumps": []
 };
 /*CONTENT-END*/
