@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793455264028,
+      "syncTs": 1793455275517,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -136,6 +136,49 @@ window.SITE_CONTENT = {
           "text": "**前置基础：**高等数学（概率与矩阵）→ **核心覆盖：**人工智能导论、机器学习 → **实践应用：**本课程大作业 → **自主拓展：**经典论文与开源项目。\n\n以上为示例，请对照你们专业的培养方案逐条核实，无法确认的先标\"待核实\"。"
         },
         {
+          "type": "files",
+          "title": "学习资料与附件",
+          "items": [
+            {
+              "name": "课程大作业要求：三张活地图",
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
+            },
+            {
+              "name": "MDN · Web 开发入门（做本站用的技术）",
+              "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
+            }
+          ]
+        },
+        {
+          "type": "sources",
+          "title": "本页来源",
+          "items": [
+            {
+              "label": "Vaswani 等, Attention Is All You Need (2017)",
+              "url": "https://arxiv.org/abs/1706.03762",
+              "id": "r1"
+            },
+            {
+              "label": "示例来源：请替换为你们实际查阅的资料",
+              "url": "#",
+              "id": "r2"
+            }
+          ],
+          "seq": 2
+        },
+        {
+          "type": "entries",
+          "title": "下级条目",
+          "mode": "card",
+          "cols": 3,
+          "note": ""
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "核心概念"
+        },
+        {
           "type": "table",
           "title": "核心概念速览（示例）",
           "headers": [
@@ -167,54 +210,11 @@ window.SITE_CONTENT = {
           ],
           "free": {
             "x": 1.7,
-            "y": 1594,
+            "y": 1177,
             "w": 94.4,
             "ride": 0
           },
           "_ts": 1793415612554
-        },
-        {
-          "type": "sources",
-          "title": "本页来源",
-          "items": [
-            {
-              "label": "Vaswani 等, Attention Is All You Need (2017)",
-              "url": "https://arxiv.org/abs/1706.03762",
-              "id": "r1"
-            },
-            {
-              "label": "示例来源：请替换为你们实际查阅的资料",
-              "url": "#",
-              "id": "r2"
-            }
-          ],
-          "seq": 2
-        },
-        {
-          "type": "entries",
-          "title": "下级条目",
-          "mode": "card",
-          "cols": 3,
-          "note": ""
-        },
-        {
-          "type": "files",
-          "title": "学习资料与附件",
-          "items": [
-            {
-              "name": "课程大作业要求：三张活地图",
-              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
-            },
-            {
-              "name": "MDN · Web 开发入门（做本站用的技术）",
-              "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
-            }
-          ]
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "核心概念"
         }
       ],
       "heroAlign": ""
