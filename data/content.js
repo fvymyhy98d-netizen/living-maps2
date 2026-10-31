@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793416049374,
+      "syncTs": 1793436915946,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -57,6 +57,12 @@ window.SITE_CONTENT = {
         "iv": "1yX3Ue5fHpAjSxNB",
         "ct": "bpg1HKMX8o04obVen3ZDwIDfnOK+MbKb88JYtfxmzUgm65AhYKqNt33nxz8SA8Qrd4KTfztR8XyL8l5ea1gdiivULBlhvQcXAgdvBeVbXyuNaGDS5m5xoElwSa8zAhttj5cN2aPk/q9TSwI6/4uyaAPf2s/BWdUjIgyDR0dWW3WzEqpcwZz/j7ndAU/nA8BQwuekL0giz0FqVe10or0PMwRbKkCsBC0euFYhRo66og6WX9VVenRjm7M4olRQpJ97B2mxmpDmlj+x6D283pJeOpDbpwSX"
       }
+    },
+    "fbCloud": {
+      "kind": "supabase",
+      "url": "https://yrclasqlcatczjlingii.supabase.co/rest/v1/",
+      "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyY2xhc3FsY2F0Y3pqbGluZ2lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0Mjc5NzUsImV4cCI6MjEwOTAwMzk3NX0.WKHIYCA-JlOAdZSbDPbv5LpElMLhwDfF4jKBdKGpXsc",
+      "table": "lm_feedback"
     }
   },
   "pages": [
