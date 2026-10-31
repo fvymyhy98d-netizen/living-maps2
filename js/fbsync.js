@@ -271,6 +271,9 @@ W.LMFB = (function () {
     if (kind === 'supabase') {
       var key = String(f.key || '').trim();
       if (!key) return null;
+      /* ★ 修复97：手滑把 Project Settings 里的 `/rest/v1` 也复制进 URL 时自动纠正。
+         否则 cloudList / cloudSave 会再拼一次 → `/rest/v1/rest/v1/<表>` → 恒 404。 */
+      url = url.replace(/\/rest\/v1$/i, '').replace(/\/+$/, '');
       return { kind: 'supabase', url: url, key: key, table: String(f.table || 'lm_feedback').trim() || 'lm_feedback' };
     }
     if (kind === 'worker' || kind === 'webhook') return { kind: kind, url: url };
@@ -318,6 +321,38 @@ W.LMFB = (function () {
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function () { return true; }).catch(function () { return false; });
   }
+  /* ★ 修复97：把 HTTP 错误翻译成「照着改」的提示。
+     起因：面板只显示「读取失败：HTTP 404」，看不出是「表没建」「表名错」「key 没复制全」
+     还是「项目被暂停（免费版闲置 7 天）」。PostgREST 的错误体里其实写得很清楚
+     （PGRST205 表不在 schema cache / 42501 权限不足 / 42P01 关系不存在），这里统一翻成人话。 */
+  function whyText(status, body) {
+    var code = '', msg = '';
+    var s = String(body == null ? '' : body).trim();
+    if (s.charAt(0) === '{') {
+      try {
+        var j = JSON.parse(s);
+        code = String(j.code || j.error || '');
+        msg = String(j.message || j.error_description || j.hint || '');
+      } catch (e) { msg = s.slice(0, 140); }
+    } else if (s) {
+      msg = s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 140);
+    }
+    var both = code + ' ' + msg;
+    var head = 'HTTP ' + status + (code ? ' · ' + code : '') + (msg ? ' · ' + msg : '');
+    if (status === 404 || /PGRST205|42P01|does not exist|schema cache/i.test(both)) {
+      return head + ' → 表不在 public：核对上面填的「表名」，或先去 SQL Editor 跑建表 SQL';
+    }
+    if (status === 401 || /PGRST30[01]|JWT|No API key|invalid api key/i.test(both)) {
+      return head + ' → anon key 不对 / 没复制全（Project Settings → API 的 anon public 整串）';
+    }
+    if (status === 403 || /42501|permission denied/i.test(both)) {
+      return head + ' → 权限不足：补跑 SQL 里的 grant select, insert … to anon';
+    }
+    if (status === 503 || /paused|restore|unavailable/i.test(both)) {
+      return head + ' → 项目被暂停（免费版闲置 7 天）：去 Dashboard 点 Restore 即可恢复';
+    }
+    return head;
+  }
   /* 读全部：supabase 直接查表；worker 直接 GET；webhook 读不了 */
   function cloudList() {
     var c = cloudCfg();
@@ -332,7 +367,15 @@ W.LMFB = (function () {
     }
     try {
       return fetch(url, opt).then(function (r) {
-        if (!r || !r.ok) return { ok: false, list: [], why: 'HTTP ' + (r ? r.status : '?') };
+        if (!r || !r.ok) {                          /* ★ 修复97：读出错误体再翻译，别只说「HTTP 404」 */
+          var st = (r && r.status) || 0, bad = { ok: false, list: [], why: 'HTTP ' + st, status: st };
+          if (!r) return bad;
+          var rd = r.text ? r.text()
+            : (r.json ? r.json().then(function (j) { return JSON.stringify(j); }) : Promise.resolve(''));
+          return Promise.resolve(rd)
+            .then(function (b) { bad.why = whyText(st, b); return bad; })
+            .catch(function () { return bad; });
+        }
         return r.json().then(function (j) {
           var arr = Array.isArray(j) ? j : (j && Array.isArray(j.items) ? j.items : []);
           return { ok: true, list: arr, why: '' };
@@ -566,7 +609,7 @@ W.LMFB = (function () {
     fixStatus: fixStatus, statuses: STS.slice(),
     /* ★ 修复96：云存档（永久收件箱，不受 6 小时限制）+ 粘贴导入 */
     cloudCfg: cloudCfg, cloudInfo: cloudInfo, cloudSave: cloudSave, cloudList: cloudList,
-    parseImport: parseImport, contentCfg: contentCfg
+    parseImport: parseImport, contentCfg: contentCfg, cloudWhy: whyText
   };
 })();
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {}));

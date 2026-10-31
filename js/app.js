@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '96';
+var LM_ASSET_VER = '97';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2320,6 +2320,13 @@ window.LMApp = (function () {
     return h;
   }
   /* ★ 修复96：云存档配置区（管理员填一次，随内容同步给所有访客 —— 端点本来就该公开） */
+  /* ★ 修复97：云存档测试结果常驻显示（toast 2.6 秒就消失，错误信息必须留在面板上） */
+  let fbCloudMsg = '';
+  function cloudMsg(txt) {
+    fbCloudMsg = String(txt || '');
+    const el = document.getElementById('fbCloudMsg');
+    if (el) el.textContent = fbCloudMsg;
+  }
   function fbCloudHtml() {
     const info = (window.LMFB && LMFB.cloudInfo) ? LMFB.cloudInfo() : { on: false, text: '模块未加载' };
     const C = (function () {
@@ -2350,6 +2357,7 @@ window.LMApp = (function () {
       + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbCloudSave">保存云存档设置</button>'
       + '<button type="button" class="fb-mini" id="fbCloudTest">测试 / 立即拉取</button>'
       + '<span class="fb-hint">保存后请点顶部「☁️ 同步到 GitHub」，访客才拿得到这个端点。</span></div>'
+      + '<p class="fb-hint fb-cloud-msg" id="fbCloudMsg">' + esc(fbCloudMsg) + '</p>'
       + '<label class="fb-field fb-imp"><span>粘贴导入（飞书多维表格 / 腾讯文档 / Excel：框选复制，带表头直接粘）</span>'
       + '<textarea id="fbImport" class="fb-input" rows="3" placeholder="时间&#9;称呼&#9;类型&#9;内容&#10;2026-10-30 14:20&#9;小明&#9;提建议&#9;建议给生态地图补一条公开来源"></textarea></label>'
       + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbImportGo">导入到反馈列表</button>'
@@ -2597,6 +2605,7 @@ window.LMApp = (function () {
         key: v('fbCloudKey'), table: v('fbCloudTable') || 'lm_feedback'
       };
       applyEdit('云存档设置已保存');
+      cloudMsg('已保存。点下面「测试 / 立即拉取」就能验证到底通不通。');
       mountFeedback();
       toast('已保存云存档设置；点顶部「☁️ 同步到 GitHub」后访客生效');
       return;
@@ -2606,8 +2615,14 @@ window.LMApp = (function () {
       if (!window.LMFB || !LMFB.cloudCfg || !LMFB.cloudCfg()) { toast('还没配置云存档（先选类型、填 URL、点保存）'); return; }
       toast('☁ 正在读取云存档…');
       LMFB.cloudList().then(function (r) {
-        if (!r || !r.ok) { toast('读取失败：' + ((r && r.why) || '未知原因')); return; }
+        if (!r || !r.ok) {
+          const why = (r && r.why) || '未知原因';
+          cloudMsg('❌ 读取失败：' + why);
+          toast('读取失败：' + why);
+          return;
+        }
         const n = fbMergeIncoming(r.list);
+        cloudMsg('✅ 云存档可读：共 ' + r.list.length + ' 条' + (n ? '，本次新增/更新 ' + n + ' 条' : ''));
         toast(n ? ('云存档可读：共 ' + r.list.length + ' 条，本次新增/更新 ' + n + ' 条') : ('云存档可读：共 ' + r.list.length + ' 条，没有新内容'));
         mountFeedback();
       });

@@ -2543,14 +2543,24 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && fb.cloudInfo().text.indexOf('anon-key') < 0,
     JSON.stringify(fb.cloudInfo()));
 
+  T('手滑把 /rest/v1 也复制进 URL 时自动纠正（否则会拼成 /rest/v1/rest/v1/<表> → 恒 404）',
+    (setCfg({ kind: 'supabase', url: 'https://abc.supabase.co/rest/v1/', key: 'anon-key' }),
+      !!fb.cloudCfg() && fb.cloudCfg().url === 'https://abc.supabase.co'),
+    JSON.stringify(fb.cloudCfg()));
+
+  T('建表 SQL 与代码字段同名同大小写：updatedAt 必须加双引号（Postgres 会把未加引号的转小写 → 写入报 PGRST204）',
+    readme.indexOf('"updatedAt" bigint') > 0 && !/\n\s*updatedAt\s+bigint/.test(readme)
+      && fb.slim({ id: 'F-9', ts: 1, text: 'x', updatedAt: 2, del: 1 }).updatedAt === 2);
+
   /* —— 真跑：写一条 / 读全部（桩 fetch，检查 URL、头、body） —— */
   const calls = [];
-  function stubFetch(ok, body) {
+  function stubFetch(ok, body, status, raw) {
     globalThis.fetch = function (u, o) {
       calls.push({ u: u, o: o || {} });
       return Promise.resolve({
-        ok: ok, status: ok ? 200 : 401,
-        json: function () { return Promise.resolve(body || []); }
+        ok: ok, status: status || (ok ? 200 : 401),
+        json: function () { return Promise.resolve(body || []); },
+        text: function () { return Promise.resolve(raw == null ? JSON.stringify(body || []) : raw); }
       });
     };
   }
@@ -2621,10 +2631,28 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=96 · LM_ASSET_VER=96',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=97 · LM_ASSET_VER=97',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=95/g) || []).length === 0 && /\?v=96/.test(html)
-      && /LM_ASSET_VER = '96'/.test(appJs));
+      && (html.match(/\?v=96/g) || []).length === 0 && /\?v=97/.test(html)
+      && /LM_ASSET_VER = '97'/.test(appJs));
+
+  /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
+  const _why = fb.cloudWhy || function () { return ''; };
+  T('错误翻译真跑：404/PGRST205 → 查表名或建表 SQL；401 → anon key；403/42501 → grant；503 → 项目暂停',
+    (function () {
+      const a = _why(404, '{"code":"PGRST205","message":"Could not find the table in the schema cache"}');
+      const b = _why(401, '{"message":"No API key found in request"}');
+      const c = _why(403, '{"code":"42501","message":"permission denied for table lm_feedback"}');
+      const d = _why(503, '<html>Project is paused. Restore it</html>');
+      const e = _why(500, 'something odd');
+      return a.indexOf('404') >= 0 && a.indexOf('PGRST205') > 0 && a.indexOf('表名') > 0
+        && b.indexOf('anon key') > 0 && c.indexOf('grant') > 0
+        && d.indexOf('暂停') > 0 && e.indexOf('HTTP 500') === 0;
+    })());
+
+  T('管理面板把错误留在页面上：常驻 #fbCloudMsg（toast 2.6 秒就消失）+ 黄色提示条样式',
+    appJs.indexOf('id="fbCloudMsg"') > 0 && appJs.indexOf('function cloudMsg') > 0
+      && appJs.indexOf('❌ 读取失败：') > 0 && css.indexOf('.fb-cloud-msg') > 0);
 
   T('README 记录修复96（6 小时为何改不了 / 云存档三种接法 / 表格导入）', readme.indexOf('修复96') > 0);
 
@@ -2690,6 +2718,17 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
   }).then(function (r2) {
     T('群机器人只提醒、不读回：cloudList 明确返回 ok:false + 原因（界面据此提示，不误导）',
       r2.ok === false && String(r2.why).indexOf('不能读回') >= 0);
+
+    /* ★ 修复97：404 真跑 —— 面板上的 why 必须带错误码 + 可操作提示 */
+    setCfg({ kind: 'supabase', url: 'https://abc.supabase.co', key: 'anon-key', table: 'lm_feedback' });
+    calls.length = 0;
+    stubFetch(false, [], 404, '{"code":"PGRST205","message":"Could not find the table in the schema cache"}');
+    return fb.cloudList();
+  }).then(function (r3) {
+    T('404 真跑：cloudList 读错误体并翻译（why 含 PGRST205 + 「表名」，不再只有光秃秃的 HTTP 404）',
+      r3.ok === false && r3.status === 404
+        && String(r3.why).indexOf('PGRST205') > 0 && String(r3.why).indexOf('表名') > 0,
+      r3.why);
 
     if (g0) globalThis.LMApp = g0; else delete globalThis.LMApp;
   }).catch(function (e) {

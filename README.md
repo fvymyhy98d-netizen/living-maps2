@@ -440,6 +440,13 @@ living-maps/
   **⑤ 隐私提醒**：云存档是**公开可写**的（否则访客写不进去），配合页面里的 `gate()` 限流/敏感词 + 表上的 RLS（只许 insert、不许 update/delete）已够班级场景；被恶意刷时可直接在 Supabase 控制台删行，或在 Worker 里加 IP 限流。
   资源版本随发版升至 `?v=96` / `LM_ASSET_VER='96'`；CSP 只**新增白名单域名**（`*.supabase.co`、`*.workers.dev`、飞书/钉钉/企业微信），没有放开 `https:`。
 - **回归（修复96）**：`node --check js/app.js / js/fbsync.js` 通过；`test_yjs.js` **331/331**（新增 9.61 节 23 条：**14 条真跑** —— 配置归一（http 明文 / 缺 key / 未知类型一律拒绝）、合法配置去尾斜杠且界面不泄露 key、Supabase 写入（URL `/rest/v1/<表>` + `apikey`/`Bearer`/`Prefer` 头 + 瘦身 body）、Supabase 读取（`select=*&order=ts.asc&limit=1000`）、Worker 写入（`{t:"lmfb1",it}`）、飞书 `msg_type+content`、钉钉 `msgtype+text.content`、webhook 明确「不能读回」、**粘贴导入 6 条**（TSV 中文表头、CSV 引号内逗号、JSON 数组、空/乱码容错 + 同内容同 id、无表头按位置兜底 + 旧状态迁移、`dev:"import"` + 800 字截断）；**9 条源码守护** —— 接口齐全、提交时 `Promise.all([cloudP, mqP])` 三分支提示、打开页拉云存档、面板四个控件 + 保存/测试/导入、配置写进内容、`ensureConfig` 默认值、CSP 只加白名单、版本 96、README 记录）；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
+- **修复97（「面板只弹一句 `读取失败：HTTP 404`，到底哪儿错了？」—— 把数据库的错误翻成人话，并让提示留在页面上）**：现象 —— 云存档「测试 / 立即拉取」失败时，`toast` 只显示 `读取失败：HTTP 404`，2.6 秒后消失，无法判断是「表没建」「表名写错」「key 没复制全」还是「项目被暂停」。根因 —— 云存档读的是 `GET <项目>/rest/v1/<表>?select=*&order=ts.asc&limit=1000`，**这个 404 只有一种含义：PostgREST 的 schema cache 里没有这张表**（`PGRST205` / `42P01`），具体是：① 建表 SQL 还没跑；② 表名填错（`lm_feedback` 首字母是**小写 L**，不是大写 I）；③ 表建到了非 `public` 的 schema；④ 项目 URL 指向了另一个项目；⑤ 项目被暂停（免费版闲置 7 天）。而 401 / 403 / 503 是完全不同的三类问题（key / 权限 / 暂停），以前全被压成一个 `HTTP xxx`。
+  **① 错误翻译（`js/fbsync.js` → `whyText()`）**：读出响应体里 PostgREST 的 `code` + `message`，按状态码给出能照着改的结论 —— `404`/`PGRST205`/`42P01` → 「表不在 public：核对表名，或先去 SQL Editor 跑建表 SQL」；`401`/`JWT`/`No API key` → 「anon key 不对 / 没复制全」；`403`/`42501`/`permission denied` → 「补跑 `grant select, insert … to anon`」；`503`/`paused` → 「项目被暂停（闲置 7 天），去 Dashboard 点 Restore」；其他原样显示 `HTTP xxx · code · message`。`cloudList()` 失败时先 `r.text()` 再翻译（也兼容只有 `json()` 的桩实现），返回值新增 `status`；`cloudWhy` 一并导出便于真跑断言。
+  **② 提示常驻页面（`js/app.js`）**：新增 `fbCloudMsg` + `cloudMsg()`，面板里渲染 `<p id="fbCloudMsg" class="fb-hint fb-cloud-msg">`；保存 → 「已保存。点下面「测试 / 立即拉取」就能验证到底通不通。」；成功 → 「✅ 云存档可读：共 N 条」；失败 → 「❌ 读取失败：<翻译后的原因>」。CSS 新增 `.fb-cloud-msg`（黄底提示条）与 `.fb-cloud-msg:empty{display:none}`（空时不占位）。
+  **③ URL 手滑自动纠正（`cloudCfg()`）**：从 Project Settings 复制时很容易把 `/rest/v1` 一起带上，代码再拼一次就变成 `/rest/v1/rest/v1/<表>` → **恒 404**（而且看起来像"表没建"）。现在 `cloudCfg()` 会剥掉误粘的 `/rest/v1` 与尾部斜杠，正确 URL 只到 `.supabase.co` 为止。
+  资源版本升至 `?v=97` / `LM_ASSET_VER='97'`。
+- **回归（修复97）**：`node --check js/app.js / js/fbsync.js / test_yjs.js` 通过；`test_yjs.js` **336/336**（新增 5 条：**3 条真跑** —— `cloudWhy()` 四种状态码翻译（404/PGRST205 含「表名」、401 含「anon key」、403/42501 含「grant」、503 含「暂停」，未知码回落为 `HTTP 500`）+ **404 真跑**（`ok:false, status:404` 的桩下 `cloudList()` 的 `why` 含 `PGRST205` 与「表名」）+ **URL 纠错真跑**（`https://abc.supabase.co/rest/v1/` → 归一为 `https://abc.supabase.co`）；**2 条源码守护** —— `#fbCloudMsg` 常驻节点 + `cloudMsg()` + `❌ 读取失败：` + CSS `.fb-cloud-msg`；**建表 SQL 与代码字段同名同大小写**（README 必须写 `"updatedAt" bigint` 带双引号、且不能再出现未加引号的 `updatedAt bigint`，同时 `slim()` 发出的就是驼峰 `updatedAt` —— 防止「SQL 没加引号 → Postgres 存成全小写 updatedat → 写入报 PGRST204」这个真实踩过的坑））；版本断言从 96 改为 97（`?v=97` 共 20 处、v96 必须为 0）；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
+
 
 
 
@@ -601,7 +608,7 @@ living-maps/
      "check"     text,     -- 「我们怎样核实」（check 是 SQL 关键字，必须加双引号）
      "change"    text,     -- 「修改了什么」
      "why"       text,     -- 「为什么这样处理 / 为什么保留原判断」
-     updatedAt   bigint,
+     "updatedAt" bigint,   -- ⚠ 必须加双引号：Postgres 会把未加引号的标识符转成全小写（存成 updatedat），而页面发的是驼峰 updatedAt → 写入报 PGRST204
      del         smallint  -- 删除墓碑（正常留言为空；预留着，免得将来报「找不到列」）
    );
    -- 创建项目时「Automatically expose new tables」没勾 → 这里显式授权（匿名只能读 + 增，其余什么都没给）
@@ -615,11 +622,11 @@ living-maps/
    revoke update, delete on lm_feedback from anon;
    ```
    > 列名说明：页面提交的字段就是 `check / change / why`，SQL 里用双引号建同名列 → **不需要任何字段映射**，建完就能写。若你更想用 `check_note / change_note / why_note`，也能用：读回来时 `norm()` 会自动认这两个别名，但**写入**那一侧需要改 `cloudSave()` 的字段名（或在 Worker / 数据库视图里做一次映射）。
-3. **Project Settings → API**，复制 `Project URL` 和 `anon public` key。
+3. **Project Settings → API**，复制 `Project URL` 和 `anon public` key（**URL 只到 `.supabase.co` 为止**；手滑带上 `/rest/v1` 也会被 `cloudCfg()` 自动剥掉）。表请**一定用第 2 步的 SQL 建**，别在 Table Editor 里手点 —— 那个界面默认给的是 `id int8` + `created_at`，与页面字段对不上（写入会报 `PGRST204 Could not find the 'ts' column`），而且建完还得手动补 2 条策略。
 4. 打开本站 → 管理员模式 → 反馈页 → 展开「☁ 云存档」→ 类型选 *Supabase*、填 URL / anon key / 表名（`lm_feedback`）→ **保存云存档设置**。
 5. 点顶部 **☁️ 同步到 GitHub**（让所有访客都拿到这个端点）→ 再点「测试 / 立即拉取」应显示「云存档可读：共 N 条」。
 
-> 备注：Supabase 的 `select=*` 会把整行 JSON 原样返回，字段名与页面一致（`check` 等），所以「写得进、读得回」一次到位。如果写入报 `PGRST204 Could not find the 'xxx' column`，说明表少了列（建表时漏了，或 `"check"` 没加双引号）—— 删表按上面重新建一次即可。若重复执行这段 SQL 报 `policy "public read" already exists`，说明策略已在，忽略即可（或先 `drop policy` 再建）。若**写入**报 `permission denied for table lm_feedback`（错误码 `42501`），说明表的权限没给到 `anon`（建项目时没勾 `Automatically expose new tables` 就会出现），补跑第 2 步里的 `grant select, insert on lm_feedback to anon, authenticated;` 即可。
+> 备注：Supabase 的 `select=*` 会把整行 JSON 原样返回，字段名与页面一致（`check` 等），所以「写得进、读得回」一次到位。如果写入报 `PGRST204 Could not find the 'xxx' column`，说明表少了列（建表时漏了，或 `"check"` 没加双引号）—— 删表按上面重新建一次即可。若重复执行这段 SQL 报 `policy "public read" already exists`，说明策略已在，忽略即可（或先 `drop policy` 再建）。若**写入**报 `permission denied for table lm_feedback`（错误码 `42501`），说明表的权限没给到 `anon`（建项目时没勾 `Automatically expose new tables` 就会出现），补跑第 2 步里的 `grant select, insert on lm_feedback to anon, authenticated;` 即可。若**写入**报 `PGRST204 Could not find the 'updatedAt' column`，说明建表时 `updatedAt` 没加双引号、被 Postgres 存成了全小写 `updatedat`（用旧版 SQL 建的表一定会这样），跑一次重命名即可：`alter table lm_feedback rename column updatedat to "updatedAt";`（若提示列不存在，改用 `alter table lm_feedback add column "updatedAt" bigint;`）。
 >
 > 三个必须记牢的点：① 面板里只填 **Project URL + `anon public`**（那个很长的 `eyJ…`），**绝不要**填 `service_role`（它是管理员密钥，泄露等于把整库交出去）；② `anon key` 写进 `data/content.js` 是**可接受**的（权限由 RLS 管，本来就设计成公开）；③ 任何大模型的 API Key **都不能**放进这个站（前端代码全公开）。
 
