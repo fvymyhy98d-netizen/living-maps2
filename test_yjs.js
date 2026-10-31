@@ -466,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '92';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '93';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -2272,10 +2272,10 @@ console.log('【9.58】修复92：反馈跨设备同步 —— 合并/打包真�
         && s.indexOf('return { ok: false, list: local || [], changed: false };') > 0;
     })());
 
-  T('接入 app.js：本机存全量但界面过滤墓碑 · 提交后给「发给组长」链接 · 打开链接自动收 · 删除写墓碑',
+  T('接入 app.js：本机存全量但界面过滤墓碑 · 提交后有兜底链接 · 打开链接自动收 · 删除写墓碑',
     (function () {
       return appJs.indexOf('function fbRaw()') > 0 && appJs.indexOf('it && !it.del') > 0
-        && appJs.indexOf("ok.innerHTML = '✅ 已提交（' + esc(it.id)") > 0
+        && appJs.indexOf('const fbFallback = function () {') > 0
         && appJs.indexOf('LMFB.shareLink([it])') > 0
         && appJs.indexOf('function fbIngestUrl()') > 0 && appJs.indexOf('fbIngestUrl();') > 0
         && appJs.indexOf('x.del = 1; x.updatedAt = Date.now();') > 0
@@ -2289,6 +2289,68 @@ console.log('【9.58】修复92：反馈跨设备同步 —— 合并/打包真�
   T('接入完整性：index.html 引入 js/fbsync.js（带版本号）· README 记录修复92 与「只写数据分支」',
     /js\/fbsync\.js\?v=\d+/.test(html) && readme.indexOf('修复92') > 0
       && readme.indexOf('data/feedback.json') > 0);
+})();
+
+
+/* ---------- 9.59) 修复93：留言「隔空直达」—— 复用 EMQX 公共 MQTT（离线也能补收） ---------- */
+console.log('【9.59】修复93：留言实时直达 —— 主题派生 / clean=false 补收 / 垃圾过滤 / 兜底链');
+(function () {
+  const fb = require(path.join(DIR, 'js/fbsync.js'));
+  const fbSrc = srcOf('js/fbsync.js');
+  const appJs = srcOf('js/app.js');
+  const html = srcOf('index.html');
+
+  T('MQTT 接口齐全：publish / listen / mqCfg / mqInfo 都在（不需要任何 Key、不引新库）',
+    typeof fb.publish === 'function' && typeof fb.listen === 'function'
+      && typeof fb.mqCfg === 'function' && typeof fb.mqInfo === 'function');
+
+  const C1 = { room: 'r1', password: 'p1', mqtt: { brokers: ['wss://a', 'wss://b', 'wss://c'] } };
+  const C2 = { room: 'r1', password: 'p1', mqtt: { brokers: ['wss://a', 'wss://b', 'wss://c'] } };
+  const C3 = { room: 'r2', password: 'p1', mqtt: { brokers: ['wss://a', 'wss://b', 'wss://c'] } };
+  const g0 = globalThis.LMYJS_CONFIG;
+  globalThis.LMYJS_CONFIG = C1; const k1 = fb.mqCfg();
+  globalThis.LMYJS_CONFIG = C2; const k2 = fb.mqCfg();
+  globalThis.LMYJS_CONFIG = C3; const k3 = fb.mqCfg();
+  globalThis.LMYJS_CONFIG = g0;
+
+  T('主题派生确定：同房间同口令 → 同 broker 同主题（所有设备天然落到同一处）',
+    k1.topic === k2.topic && k1.url === k2.url && /^lm\/[0-9a-z]+\/fb$/.test(k1.topic),
+    k1.topic + ' @ ' + k1.url);
+
+  T('房间或口令不同 → 主题不同（别的班/别的项目不会串台）',
+    k1.topic !== k3.topic && k3.topic.length > 0);
+
+  T('broker 一定取自配置池（不写死单点），且 topic/URL 不含空格等非法字符',
+    ['wss://a', 'wss://b', 'wss://c'].indexOf(k1.url) >= 0 && !/\s/.test(k1.topic + k1.url));
+
+  T('「关机也能补收」的关键：订阅方 clean=false（会话留存）+ 固定 clientId；发布方 clean=true（一次性）',
+    fbSrc.indexOf('clean: !admin') > 0 && fbSrc.indexOf('reconnectPeriod: admin ? 6000 : 0') > 0
+      && fbSrc.indexOf("{ qos: 1 }") > 0 && fbSrc.indexOf('cl.subscribe(c.topic, { qos: 1 })') > 0);
+
+  T('收到的消息先验货：只认 t==="lmfb1"、必须有 id/text、超长直接丢（公共 broker 上谁都能发，防塞爆）',
+    fbSrc.indexOf("o.t === 'lmfb1'") > 0 && fbSrc.indexOf('if (!it || !it.id || !it.text) return;') > 0
+      && fbSrc.indexOf('String(it.text).length > 1000') > 0);
+
+  T('app.js 接入：提交即 publish · 管理员模式才订阅 · 三条来路共用一个合并漏斗 · 发不出去才给链接兜底',
+    appJs.indexOf('LMFB.publish(it).then(function (sent)') > 0
+      && appJs.indexOf('if (state.admin && window.LMFB && LMFB.listen)') > 0
+      && appJs.indexOf('function fbMergeIncoming(list)') > 0
+      && appJs.indexOf('const n = fbMergeIncoming([it]);') > 0
+      && appJs.indexOf('const fbFallback = function () {') > 0);
+
+  T('顺带修掉的老 bug：提交提示条原来先写 #fbOk 再 mountFeedback()，会被重渲染冲掉（现在顺序反过来）',
+    (function () {
+      const iMount = appJs.indexOf('      f.reset();\r\n      mountFeedback();');
+      const iOk = appJs.indexOf("const fbOkEl = document.getElementById('fbOk');");
+      return iMount > 0 && iOk > iMount;
+    })());
+
+  T('不加依赖、不改 CSP：index.html 里 mqtt 仍在原位置、CSP 的 connect-src 仍只靠 wss:（没有新增域名）',
+    (function () {
+      const cspMeta = (html.match(/Content-Security-Policy"[^>]*content="([^"]+)"/) || [])[1] || '';
+      return /lib\/mqtt\.js\?v=\d+/.test(html) && cspMeta.indexOf('wss:') > 0
+        && cspMeta.indexOf('broker') < 0;
+    })());
 })();
 
 

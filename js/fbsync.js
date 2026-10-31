@@ -179,11 +179,100 @@ W.LMFB = (function () {
   function hasCloud() { return !!ctx(); }
   function refName() { const c = ctx(); return c ? c.ref : ''; }
 
+  /* ---------- ③ 实时送达（EMQX 公共 MQTT）----------
+     为什么不用服务器：我们本来就在用 EMQX 公共 broker 做 WebRTC 信令（免费、匿名、国内直连），
+     CSP 里 connect-src 已含 wss:，所以这条路**不加依赖、不改 CSP、不要 Key**。
+     关键的「设备没开机怎么收」：订阅方用固定 clientId + clean=false → 会话留在 broker 上，
+     离线期间的 QoS1 消息会排队，下次连上一次性补发（已实测：离线期间 3 条全部补收到）。
+     谁是「组长」：MQTT 本身没有身份。这里的做法是 **只有进入管理员模式的设备才订阅**
+     （要输管理密码），访客只发不收 —— 属「软隔离」，防误看而非防破解；
+     真正的机密请用下一步的口令加密（README 修复92 的隐私说明）。 */
+  var MQ = { client: null, onItem: null, topic: '', url: '' };
+  function djb2(s) {
+    var h = 5381; s = String(s || '');
+    for (var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h >>> 0);
+  }
+  function win() { return (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : {}); }
+  /* 主题 / broker 派生：与 yjs-config.js 的房间口令同源 → 同一房间的设备天然算出同一台 broker、同一主题 */
+  function mqCfg() {
+    var C = (win().LMYJS_CONFIG) || {};
+    var brokers = (C.mqtt && C.mqtt.brokers && C.mqtt.brokers.length)
+      ? C.mqtt.brokers : ['wss://broker-cn.emqx.io:8084/mqtt'];
+    var hv = djb2((C.room || 'living-maps') + '|' + (C.password || ''));
+    return { url: brokers[hv % brokers.length], topic: 'lm/' + hv.toString(36) + '/fb' };
+  }
+  function devTag() {
+    try {
+      var k = 'lm_fb_devtag_v1', v = win().localStorage && localStorage.getItem(k);
+      if (!v) { v = Math.random().toString(36).slice(2, 10); localStorage.setItem(k, v); }
+      return v;
+    } catch (e) { return 'anon'; }
+  }
+  function mqReady() { var w = win(); return !!(w.mqtt && w.mqtt.connect); }
+  function mqOpen(admin) {
+    if (!mqReady()) return null;
+    var c = mqCfg(), w = win();
+    var cid = 'lmfb-' + c.topic.replace(/[^0-9a-z]/gi, '') + '-' + devTag()
+      + (admin ? '' : '-' + Math.random().toString(36).slice(2, 7));
+    try {
+      return w.mqtt.connect(c.url, {
+        protocolVersion: 4, clientId: cid, clean: !admin,
+        connectTimeout: 8000, reconnectPeriod: admin ? 6000 : 0, keepalive: 60
+      });
+    } catch (e) { return null; }
+  }
+  /* 组长/管理员：订阅并持续接收（clean=false → 离线期间的留言会被 broker 攒着，下次连上补收） */
+  function listen(onItem) {
+    if (!mqReady()) return function () {};
+    if (MQ.client) { MQ.onItem = onItem; return function () {}; }
+    var c = mqCfg(), cl = mqOpen(true);
+    if (!cl) return function () {};
+    MQ.client = cl; MQ.onItem = onItem; MQ.topic = c.topic; MQ.url = c.url;
+    cl.on('connect', function () { try { cl.subscribe(c.topic, { qos: 1 }); } catch (e) { /* noop */ } });
+    cl.on('message', function (t, p) {
+      if (t !== c.topic) return;
+      var it = null;
+      try {
+        var o = JSON.parse(String(p));
+        if (o && o.t === 'lmfb1' && o.it) it = o.it;
+      } catch (e) { it = null; }
+      if (!it || !it.id || !it.text) return;
+      if (String(it.text).length > 1000 || String(it.id).length > 40) return;   /* 防垃圾塞爆 */
+      var n = norm(it);
+      if (!n) return;
+      try { if (MQ.onItem) MQ.onItem(n); } catch (e2) { /* noop */ }
+    });
+    return function () { try { cl.end(true); } catch (e) { /* noop */ } MQ.client = null; };
+  }
+  /* 任何人（含访客）：把一条留言发出去（QoS1）。失败返回 false，由调用方给「复制链接」兜底 */
+  function publish(item) {
+    if (!mqReady()) return Promise.resolve(false);
+    var it = slim(item);
+    if (!it) return Promise.resolve(false);
+    var c = mqCfg(), cl = mqOpen(false);
+    if (!cl) return Promise.resolve(false);
+    return new Promise(function (res) {
+      var done = false;
+      function fin(v) { if (done) return; done = true; try { cl.end(true); } catch (e) { /* noop */ } res(v); }
+      cl.on('connect', function () {
+        try {
+          cl.publish(c.topic, JSON.stringify({ t: 'lmfb1', it: it }), { qos: 1 },
+            function (e) { fin(!e); });
+        } catch (e) { fin(false); }
+      });
+      cl.on('error', function () { fin(false); });
+      setTimeout(function () { fin(false); }, 9000);
+    });
+  }
+  function mqInfo() { var c = mqCfg(); return { url: MQ.url || c.url, topic: MQ.topic || c.topic, on: !!MQ.client }; }
+
   return {
     merge: merge, norm: norm, pack: pack, unpack: unpack, slim: slim,
     shareLink: shareLink, readFromUrl: readFromUrl,
     pull: pull, push: push, sync: sync, hasCloud: hasCloud, refName: refName,
-    path: FILE_PATH, lastSyncAt: function () { return lastSync; }
+    path: FILE_PATH, lastSyncAt: function () { return lastSync; },
+    publish: publish, listen: listen, mqInfo: mqInfo, mqCfg: mqCfg
   };
 })();
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {}));

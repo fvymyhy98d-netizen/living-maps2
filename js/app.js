@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '92';
+var LM_ASSET_VER = '93';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2120,20 +2120,23 @@ window.LMApp = (function () {
       return !!(r && r.ok);
     }, function () { _fbBusy = false; return false; });
   }
+  /* ★ 修复93：把收到的留言并进本机 —— MQTT 实时送达 / 链接接力 / 云端拉取 三条路都走这一个漏斗 */
+  function fbMergeIncoming(list) {
+    if (!list || !list.length) return 0;
+    const raw = fbRaw();
+    const merged = LMFB.merge(raw, list);
+    if (JSON.stringify(merged) === JSON.stringify(raw)) return 0;
+    try { localStorage.setItem(FB_KEY, JSON.stringify(merged)); } catch (e) { return 0; }
+    fbPushSoon();
+    if (document.getElementById('fbMount')) mountFeedback();
+    return list.filter(function (x) { return !x.del; }).length;
+  }
   /* ★ 修复92：URL 里带着别人的留言（#fb=…）→ 收进来（按 id 去重），有 Token 就顺手上传 */
   function fbIngestUrl() {
     try {
       if (!window.LMFB) return;
-      const got = LMFB.readFromUrl();
-      if (!got.length) return;
-      const raw = fbRaw();
-      const merged = LMFB.merge(raw, got);
-      if (JSON.stringify(merged) === JSON.stringify(raw)) return;
-      localStorage.setItem(FB_KEY, JSON.stringify(merged));
-      const n = got.filter(function (x) { return !x.del; }).length;
-      toast('📥 已收下 ' + n + ' 条同学留言' + (LMFB.hasCloud() ? '（正在同步到云端）' : '（先存在本机）'));
-      if (document.getElementById('fbMount')) mountFeedback();
-      fbPushSoon();
+      const n = fbMergeIncoming(LMFB.readFromUrl());
+      if (n) toast('📥 已收下 ' + n + ' 条同学留言' + (LMFB.hasCloud() ? '（正在同步到云端）' : '（先存在本机）'));
     } catch (e) { /* noop */ }
   }
   function fbNextId(list) {
@@ -2269,6 +2272,16 @@ window.LMApp = (function () {
         : '⚠ 当前设备没有绑定 Token：留言只存在本机。建议管理员登录后绑定一次，'
           + '同学们的留言就能自动汇总（同学那边留言后点「📤 发给组长」把链接发给你，也能一键收进来）。')
       + '</p>'
+      /* ★ 修复93：实时通道状态（复用 EMQX 公共 MQTT，免费匿名；离线期间的留言会补收） */
+      + (window.LMFB && LMFB.mqInfo
+        ? (function () {
+          const mi = LMFB.mqInfo();
+          return '<p class="fb-hint">📡 实时通道 <code>' + esc(mi.url) + '</code>（主题 <code>' + esc(mi.topic) + '</code>）：'
+            + (mi.on ? '<b>订阅中</b> —— 同学一提交就能到；你关机期间收到的留言也会在打开页面时补收。'
+              : '未连上（不影响留言保存；打开本页会自动重连）。')
+            + '</p>';
+        })()
+        : '')
       + (fb.length
         ? '<div class="fb-list">' + fb.slice().reverse().map(function (it) { return fbItemHtml(it, true); }).join('') + '</div>'
           + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbCopy">📋 复制全部反馈</button></div>'
@@ -2298,6 +2311,18 @@ window.LMApp = (function () {
     } else {
       html = fbFormHtml() + fbMineHtml(mine) + dcHtml();
     }
+    /* ★ 修复93：管理员模式才订阅实时留言（访客只发不收 → 看不到别人的留言）。
+       clean=false + 固定 clientId → 组长离线期间的留言由 broker 攒着，下次打开自动补收。
+       每台设备各自一条会话（clientId 带本机 deviceTag），不会互相踢下线。
+       ⚠ 必须先订阅再拼 html：下面的状态行要读 mqInfo().on。 */
+    if (state.admin && window.LMFB && LMFB.listen) {
+      try {
+        LMFB.listen(function (it) {
+          const n = fbMergeIncoming([it]);
+          if (n) toast('📥 收到新留言 ' + it.id + '（' + (it.name || '匿名') + '）');
+        });
+      } catch (eL) { /* noop */ }
+    }
     if (state.admin) html += fbAdminHtml(fb);
     host.innerHTML = html;
   }
@@ -2325,27 +2350,38 @@ window.LMApp = (function () {
       list.push(it);
       fbStore(list);
       f.reset();
-      const ok = f.querySelector('#fbOk');
-      ok.hidden = false;
-      ok.textContent = '✅ 已提交（' + it.id + '）。你的留言与小组回复会显示在下方「我的反馈」。';
-      /* ★ 修复92：没有 Token 的访客 —— 这条留言只在本机，给一个「发给组长」的链接
-         （点一下复制到剪贴板，发到班级群；组长一打开就自动收进云端并去重） */
-      if (window.LMFB && !LMFB.hasCloud()) {
-        const link = LMFB.shareLink([it]);
-        ok.innerHTML = '✅ 已提交（' + esc(it.id) + '）。这条留言现在只存在你这台设备上 —— 点右边的'
-          + ' <button type="button" class="fb-mini" id="fbShare">📤 发给组长</button>'
-          + ' 复制一条链接，发到课程群 / 班级群，组长打开后就会自动收进云端。';
-        const sb = ok.querySelector('#fbShare');
-        if (sb) sb.addEventListener('click', function () {
-          const done = function () { toast('链接已复制，发到群里就行'); };
-          const fail = function () { window.prompt('复制这条链接发给组长：', link); };
-          try {
-            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, fail);
-            else fail();
-          } catch (eC) { fail(); }
-        });
-      }
       mountFeedback();
+      /* ★ 修复93：先重渲染再取提示条 —— 原来先写 #fbOk 再 mountFeedback()，提示条会被重渲染冲掉 */
+      const fbOkEl = document.getElementById('fbOk');
+      if (fbOkEl) { fbOkEl.hidden = false; fbOkEl.textContent = '✅ 已提交（' + it.id + '），正在发给小组…'; }
+      /* ★ 修复93：把留言「隔空发出去」（MQTT QoS1）。组长开着页面就秒收；他当时没开机也不会丢
+         —— broker 会把离线期间的留言攒着，他下次打开自动补收（已实测）。
+         只有连 broker 都发不出去（断网 / 被墙）才退回「复制链接」兜底。 */
+      const fbFallback = function () {
+        const el = document.getElementById('fbOk');
+        if (!el || !window.LMFB) return;
+        const link = LMFB.shareLink([it]);
+        if (!link) return;
+        el.innerHTML = '⚠ 已存在你这台设备，但没能直接送达小组 —— 点'
+          + ' <button type="button" class="fb-mini" id="fbShare">📤 复制给组长</button> 发到班级群即可。';
+        const sb = el.querySelector('#fbShare');
+        if (!sb) return;
+        sb.addEventListener('click', function () {
+          const ask = function () { window.prompt('复制这条链接发给组长：', link); };
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(function () { toast('链接已复制'); }, ask);
+            else ask();
+          } catch (eC) { ask(); }
+        });
+      };
+      if (window.LMFB && LMFB.publish) {
+        LMFB.publish(it).then(function (sent) {
+          const el = document.getElementById('fbOk');
+          if (!el) return;
+          if (sent) el.textContent = '✅ 已提交（' + it.id + '）并已直达小组：组长下次打开反馈页会自动看到（他当时没开电脑也不会丢）。';
+          else fbFallback();
+        });
+      } else fbFallback();
     } else if (f.id === 'dcForm') {
       e.preventDefault();
       if (commentsOff()) { toast('讨论区已由管理员关闭'); return; }
