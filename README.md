@@ -1163,3 +1163,35 @@ node tools/train_lm.js 5          # 指定阶数（1-5）
 - 页结构变化（插入 / 删除 / 调序）仍**整包取远端**：块下标不可靠，字段级合并会错位；这是有意的保守边界。
 
 **回归（修复121）**：`node --check js/collab.js / js/ycollab.js / js/app.js / test_yjs.js` 通过；`test_yjs.js` **421/421**（新增 3 条：`合并1` 把 `mergeBlockFields` 从源码截出来**真跑** 5 组用例 —— 各改各的字段两边都保住 / 都改同一字段按 `_ts` / 远端后写带走 / 本机新字段不被远端冲掉 / 不写空键；`合并2` 祖先推进时机与 `ancOk` 断言；`页面1` 删页护栏与 `confirmPrune` 断言）；`test_comments.js` 9/9、`test_collab.js` 9/9、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS。资源版本升至 `?v=121` / `LM_ASSET_VER='121'`。
+
+## v122：最后一轮风险彻查（存储 / 结构 / 网络）
+
+把「会**静默**出问题」的地方一次扫干净：数据存不下、内容结构坏、请求永不返回。下面每条都在 `test_yjs.js` 里有回归。
+
+| # | 风险 | 原来会怎样 | 修法 |
+|---|---|---|---|
+| 1 | 本机存储写满（贴大图最常见） | `LMStore.saveLocal()` 返回 `false` 但**没人看** → 用户看到「已保存」，刷新后改动没了 | `saveLocal` 先扔掉崩溃快照重试一次；仍失败返回 `false`，`commit()` 检查返回值并 toast「本机存储已写满…请删大图或先导出备份」（20 秒节流，`silent` 编辑也不会被吞） |
+| 2 | 崩溃快照反噬 | 每 60 秒存 3 份完整内容 → 大内容时快照把 5MB 配额吃光，**主内容反而写不进**（本末倒置） | 快照分级：单份 >1.2MB 不存、>500KB 只留 1 份、正常内容留 3 份 |
+| 3 | 内容结构坏 | 导入 `pages` 不是数组的 JSON、或本地存储被外部改成 `pages: {}` → 渲染层每帧抛错，**刷新也不恢复**（等于把站点弄坏） | 新增 `LMStore.validateContent()`：坏页丢掉、缺 `id` 补一个、`blocks` 非数组当空、重复页 id 去重、缺 `site` 用内置兜底；真没法用才 `ok:false` + 原因。**四处共用**：`load()`、快照恢复、导入备份、远端包 |
+| 4 | 远端坏包 | 局域网 / MQTT / GitHub 任一通道来一个缺 `blocks` 的包 → 打崩本机渲染**并落盘**，本机也坏了 | `applyRemote()` 前置校验：`ok:false` 直接拒绝（控制台说明是哪台设备该修），`repaired` 则用规范化后的内容 |
+| 5 | 请求永不返回 | 代码里**一个超时都没有**。手机切网/信号盲区时 `GH.inFlight` 永远为 `true` → `ghPull`/`ghPush` 全部早退，云端同步彻底停摆，只有刷新页面才能恢复；手动同步则永远转圈 | `js/collab.js`、`js/store.js`、`js/fbsync.js` 各加 `fetchT(url, opt, ms)`（AbortController）：GET 15s、PUT 30–40s；另加**看门狗**：`inFlight` 超 60 秒强制复位 |
+| 6 | 大图插入 | 2.5MB 图片 base64 后约 3.5MB，加上快照必然爆配额；用户只看到"插入成功" | 插入前按 4MB 总预算预判：超了直接拦下并说明「当前已占 X KB / 这张要 Y KB，请压缩或改用链接」 |
+| 7 | 撤销/重做条目损坏 | `JSON.parse` 抛错 → 点击撤销直接把整页事件链打断 | `try/catch` 包住：提示「这一步的记录已损坏，已跳过（内容未改动）」并回退指针 |
+| 8 | 设备时钟快 | 某台设备时钟跑到明年 → 它的 `_ts` 永远最大，同一字段**永久霸占** | `mergeBlockFields` 里把未来时间戳按「此刻」计，合并结果的 `_ts` 也不外溢 |
+
+**已核查、确认没问题（不用改）**
+
+- CSP：`script-src 'self'`（零内联、零 CDN）、`frame-src 'none'`、`object-src 'none'`、`base-uri 'none'`、`form-action 'none'`；`target="_blank"` 一律带 `rel="noopener noreferrer"`；全库无 `eval` / `document.write`。
+- 粘贴：编辑器只取 `text/plain` 再 `insertText`（Word/网页样式进不来）；讨论区/反馈渲染全程 `esc()`。
+- `server.js`：坏包已有 `try { JSON.parse } catch` 忽略，请求体 >3MB 直接 destroy。
+- 本地存储损坏：`load()` 原本就有「损坏 → 快照自愈 → 内置内容」三级兜底（这次再加结构校验）。
+- 协作：三个通道（局域网 / Yjs-MQTT / GitHub）共用同一个 `applyExternal` 漏斗，超时/坏包/合并都在这一层收口。
+
+**仍未处理（记录在案，代价 > 收益）**
+
+- 内容是**单文件全量**放 localStorage：即使有 4MB 预判，图片多了仍会顶到配额（此时会明确提示，不再静默）。
+- 「管理员」身份是纯前端判定（`sessionStorage lm_admin`）：课程站定位下够用，真要防人得改成服务端签发。
+- 协同**结构变化**（插入/删除/调序）仍整包取远端；字段级合并只在页结构一致时生效。
+- `lib/` 里 Yjs/MQTT 自身的内部请求不受 `fetchT` 管控（它们走 WebSocket + IndexedDB）。
+
+**回归（修复122）**：`node --check`（store / collab / app / editor / fbsync）通过；`test_yjs.js` **425/425**（新增 4 条：`存储1` 把 `validateContent` 截出来真跑 6 组用例、`存储2` 用假 localStorage 真跑「配额满 → 清快照 → 重试成功」「始终写不进 → false」、`存储3`/`网络1` 护栏与「除 fetchT 外无裸 fetch」断言；`合并1` 追加时钟漂移用例）；`test_comments.js` 9/9、`test_collab.js` 9/9、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS。资源版本升至 `?v=122` / `LM_ASSET_VER='122'`。

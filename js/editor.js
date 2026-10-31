@@ -1631,10 +1631,14 @@ window.LMEditor = (function () {
         r.onload = function () {
           try {
             const data = JSON.parse(r.result);
-            if (!data.pages || !data.site) throw new Error('文件格式不对');
-            LMApp.state.content = data;
+            /* ★ 修复122：结构校验（原来只判 data.pages && data.site）——
+               导入 pages 不是数组 / 页面缺 id 或 blocks 的 JSON 会把站点弄坏且刷新不恢复 */
+            const v = (window.LMStore && LMStore.validateContent) ? LMStore.validateContent(data) : { ok: true, content: data };
+            if (!v.ok) throw new Error(v.why || '文件格式不对');
+            if (!v.content.site) throw new Error('缺少 site 配置（不像是本站的备份文件）');
+            LMApp.state.content = v.content;
             LMApp.ensureConfig();
-            LMApp.applyEdit('已从备份恢复');
+            LMApp.applyEdit(v.repaired ? '已从备份恢复（已自动修正结构问题）' : '已从备份恢复');
             closeModal();
           } catch (err) {
             LMApp.toast('导入失败：' + err.message);
@@ -3760,6 +3764,16 @@ window.LMEditor = (function () {
       + '<p class="pop-note">已选中图片块时，插入会替换它的图。本地图片存在浏览器里，大于 2.5MB 请先压缩。</p>',
       function (root) {
         const useSrc = function (src) {
+          /* ★ 修复122：内容全存在浏览器 localStorage（约 5MB）里，本地图片按 base64 存 → 体积再涨约 1.37 倍。
+             以前是「插进去看着成功 → 保存静默失败 → 刷新丢图」。现在插入前先按总预算拦下并说明原因。 */
+          let cur = 0;
+          try { cur = JSON.stringify(LMApp.state.content || {}).length; } catch (eS0) { cur = 0; }
+          const add = String(src || '').length;
+          if (cur + add > 4 * 1024 * 1024) {
+            LMApp.toast('图片太大：本机存储约 5MB，当前内容已占 ' + Math.round(cur / 1024)
+              + 'KB，这张图再加 ' + Math.round(add / 1024) + 'KB 就存不下了。请先压缩（建议 <500KB）或改用图片链接');
+            return;
+          }
           const ib = imgBlock();
           if (ib && ib.type === 'image') { ib.src = src; LMApp.commit({ silent: true }); LMApp.toast('图片已更新'); return; }
           insertAt({ type: 'image', src: src, caption: '', widthPct: 68 }, false, '图片已插入：悬停右上角 ⚙ 可加说明');

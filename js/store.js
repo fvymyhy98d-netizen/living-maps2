@@ -15,29 +15,92 @@ window.LMStore = (function () {
 
   function deepCopy(o) { return JSON.parse(JSON.stringify(o)); }
 
+  /* ★ 修复122：带超时的 fetch（手动同步用）—— 旧版没有超时，网络差时点「同步到 GitHub」
+     会一直转圈，而且这个 Promise 永远不落定，用户只能刷新页面。超时后 abort → 走 catch → 报错可见。 */
+  function fetchT(url, opt, ms) {
+    if (typeof AbortController === 'undefined') return fetch(url, opt);
+    const ctl = new AbortController();
+    const t = setTimeout(function () { try { ctl.abort(); } catch (eA) { /* noop */ } }, ms || 25000);
+    const o = Object.assign({}, opt || {}, { signal: ctl.signal });
+    return fetch(url, o).then(function (r) { clearTimeout(t); return r; },
+      function (e) { clearTimeout(t); throw e; });
+  }
+
+  /* ★ 修复122：内容结构校验（读取本地 / 恢复快照 / 导入备份 / 远端坏包 四处共用）
+     —— 以前只判 data.pages && data.site：导入一份 pages 不是数组、或页面缺 id / blocks 的 JSON
+        会原样写进本地存储，之后每次打开都在渲染层抛错，等于把站点弄坏且刷新不恢复。
+     这里只做「结构可用化」：坏页丢掉、缺 id 补一个、blocks 非数组当空、title 转字符串；
+     真没法用（不是对象 / 没有 pages 数组 / 一页都救不回来）才返回 ok:false + 原因。 */
+  function validateContent(c) {
+    try {
+      if (!c || typeof c !== 'object' || Array.isArray(c)) return { ok: false, why: '不是内容对象' };
+      if (!Array.isArray(c.pages)) return { ok: false, why: '缺少 pages 数组' };
+      const seen = {}, pages = [];
+      let dropped = 0;
+      c.pages.forEach(function (p, i) {
+        if (!p || typeof p !== 'object' || Array.isArray(p)) { dropped++; return; }
+        let id = (typeof p.id === 'string' && p.id) ? p.id : '';
+        if (!id) { id = 'p' + (i + 1) + '-' + Math.random().toString(36).slice(2, 7); dropped++; }
+        if (seen[id]) { dropped++; return; }            /* 重复 id → 路由/协同会串页，直接丢 */
+        seen[id] = 1;
+        const np = Object.assign({}, p, { id: id });
+        if (Array.isArray(p.blocks)) {
+          const bs = p.blocks.filter(function (b) { return b && typeof b === 'object' && !Array.isArray(b); });
+          if (bs.length !== p.blocks.length) dropped++;
+          np.blocks = bs;
+        } else { np.blocks = []; dropped++; }
+        if (typeof np.title !== 'string') np.title = np.title == null ? '' : String(np.title);
+        pages.push(np);
+      });
+      if (!pages.length) return { ok: false, why: '没有可用的页面（pages 里没有有效页对象）' };
+      const out = Object.assign({}, c, { pages: pages });
+      if (!out.site || typeof out.site !== 'object') out.site = (window.SITE_CONTENT && window.SITE_CONTENT.site) || {};
+      if (!out.config || typeof out.config !== 'object') out.config = {};
+      return { ok: true, content: out, repaired: dropped > 0 };
+    } catch (e) { return { ok: false, why: '结构异常：' + ((e && e.message) || e) }; }
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(LS_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const v = validateContent(JSON.parse(raw));   /* ★ 修复122：结构坏也算坏 */
+        if (v.ok) return v.content;
+        throw new Error(v.why);
+      }
     } catch (e) {
       /* 主存储损坏 → 自动用最近的崩溃快照恢复（快照由 app.js 每 60 秒写一份，保留 3 份） */
       try {
         const snaps = JSON.parse(localStorage.getItem('lm_snap_v1') || '[]');
         for (let i = snaps.length - 1; i >= 0; i--) {
           try {
-            const c = JSON.parse(snaps[i]).c;
-            if (c && Array.isArray(c.pages) && c.pages.length) return c;
+            const v = validateContent(JSON.parse(snaps[i]).c);   /* ★ 修复122：快照同样要过校验 */
+            if (v.ok) return v.content;
           } catch (e3) { /* 这份也坏 → 试上一份 */ }
         }
       } catch (e2) { /* 快照也没有 → 落回默认内容 */ }
     }
     return deepCopy(window.SITE_CONTENT);
   }
+  /* ★ 修复122：写盘失败（最常见是 localStorage 约 5MB 配额被大图吃满）时先腾空间再重试 ——
+     崩溃快照 lm_snap_v1 是「可再生的副本」，主内容写不进去才是真的丢数据。
+     返回 false 表示确实写不进，调用方必须提示用户（app.js commit 已处理，不再静默）。 */
   function saveLocal(content) {
-    try { localStorage.setItem(LS_KEY, JSON.stringify(content)); return true; }
-    catch (e) { return false; }
+    let text;
+    try { text = JSON.stringify(content); } catch (e0) { return false; }
+    try { localStorage.setItem(LS_KEY, text); return true; }
+    catch (e) {
+      try {
+        localStorage.removeItem('lm_snap_v1');
+        localStorage.setItem(LS_KEY, text);
+        return true;
+      } catch (e2) { return false; }
+    }
   }
-  function resetLocal() { localStorage.removeItem(LS_KEY); }
+  /* ★ 修复122：显式「恢复初始内容」时连快照一起清 —— 否则下次崩溃自愈会把刚清掉的旧内容捞回来 */
+  function resetLocal() {
+    try { localStorage.removeItem(LS_KEY); localStorage.removeItem('lm_snap_v1'); } catch (e) { /* noop */ }
+  }
 
   function getGhCfg() {
     try { return Object.assign({}, DEF_GH, JSON.parse(localStorage.getItem(LS_GH) || 'null') || {}); }
@@ -168,14 +231,14 @@ window.LMStore = (function () {
       + path.split('/').map(encodeURIComponent).join('/');
     const headers = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
     let sha = null;
-    const g = await fetch(api + '?ref=' + encodeURIComponent(branch), { headers: headers });
+    const g = await fetchT(api + '?ref=' + encodeURIComponent(branch), { headers: headers }, 15000);
     if (g.ok) { sha = (await g.json()).sha; }
     else if (g.status !== 404) {
       throw new Error('读取文件失败：HTTP ' + g.status + '（请检查 Token 权限、仓库名、分支名）');
     }
     const body = { message: msg || ('内容更新（网站后台）' + new Date().toLocaleString('zh-CN')), content: utf8ToBase64(text), branch: branch };
     if (sha) body.sha = sha;
-    return fetch(api, { method: 'PUT', headers: headers, body: JSON.stringify(body) });
+    return fetchT(api, { method: 'PUT', headers: headers, body: JSON.stringify(body) }, 40000);
   }
 
   /* ★ 修复89：按需创建分支（以 base 分支头为起点建 ref）。已存在（422）也算成功 */
@@ -183,16 +246,16 @@ window.LMStore = (function () {
     const H = { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json' };
     const repo = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/' + encodeURIComponent(cfg.repo);
     try {
-      const r = await fetch(repo + '/git/ref/heads/' + encodeURIComponent(base || cfg.branch || 'main'), { headers: H });
+      const r = await fetchT(repo + '/git/ref/heads/' + encodeURIComponent(base || cfg.branch || 'main'), { headers: H }, 15000);
       if (!r.ok) return false;
       const j = await r.json();
       const sha = j && j.object && j.object.sha;
       if (!sha) return false;
-      const r2 = await fetch(repo + '/git/refs', {
+      const r2 = await fetchT(repo + '/git/refs', {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, H),
         body: JSON.stringify({ ref: 'refs/heads/' + branch, sha: sha })
-      });
+      }, 15000);
       return r2.ok || r2.status === 422;
     } catch (e) { return false; }
   }
@@ -226,6 +289,7 @@ window.LMStore = (function () {
 
   return {
     load: load, saveLocal: saveLocal, resetLocal: resetLocal,
+    validateContent: validateContent,   /* ★ 修复122：结构校验（导入备份 / 远端坏包共用） */
     getGhCfg: getGhCfg, setGhCfg: setGhCfg, ghToken: ghToken,
     dataRefOf: dataRefOf, ensureBranchRef: ensureBranchRef, /* ★ 修复89：内容分支判定 / 建分支 */
     encryptForTeam: encryptForTeam, decryptForTeam: decryptForTeam,

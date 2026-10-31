@@ -2636,6 +2636,108 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && s.indexOf('if (isNew) page.blocks.push(nb); else page.blocks[idx] = nb;') > 0;
     })());
 
+  /* ★ 修复122：存储 / 导入 / 网络超时 */
+  T('存储1（真跑）：validateContent —— 缺 blocks 补空、缺 id 补一个、重复页 id 去重、全坏才拒绝',
+    (function () {
+      const s = srcOf('js/store.js');
+      const i0 = s.indexOf('  function validateContent(c) {');
+      if (i0 < 0) return false;
+      let i = s.indexOf('{', i0), d = 0, end = -1;
+      for (; i < s.length; i++) { if (s[i] === '{') d++; else if (s[i] === '}') { d--; if (!d) { end = i + 1; break; } } }
+      if (end < 0) return false;
+      let vc;
+      try { vc = new Function('window', 'return ' + s.slice(i0, end))({ SITE_CONTENT: { site: { title: '内置' } } }); } catch (e) { return false; }
+      if (typeof vc !== 'function') return false;
+      /* ① 正常内容原样通过 */
+      const ok1 = vc({ pages: [{ id: 'a', title: 'A', blocks: [{ type: 'paragraph', text: 'hi' }] }], site: { t: 1 } });
+      if (!ok1.ok || ok1.content.pages[0].blocks.length !== 1 || ok1.content.pages[0].id !== 'a' || ok1.repaired) return false;
+      /* ② blocks 不是数组 → 当空并标 repaired */
+      const ok2 = vc({ pages: [{ id: 'b', blocks: 'nope' }], site: {} });
+      if (!ok2.ok || ok2.content.pages[0].blocks.length !== 0 || !ok2.repaired) return false;
+      /* ③ 缺 id → 补一个非空且互不相同 */
+      const ok3 = vc({ pages: [{ blocks: [] }, { blocks: [] }], site: {} });
+      if (!ok3.ok || !ok3.content.pages[0].id || ok3.content.pages[0].id === ok3.content.pages[1].id) return false;
+      /* ④ 重复页 id → 只留第一页（否则路由/协同会串页） */
+      const ok4 = vc({ pages: [{ id: 'c', blocks: [] }, { id: 'c', blocks: [] }], site: {} });
+      if (!ok4.ok || ok4.content.pages.length !== 1) return false;
+      /* ⑤ 真没法用 → ok:false 且带原因 */
+      if (vc(null).ok || vc({}).ok || vc({ pages: [] }).ok || vc({ pages: [null, 3] }).ok) return false;
+      if (!vc({}).why) return false;
+      /* ⑥ 缺 site → 用内置 SITE_CONTENT 兜底（不因缺一个字段就判死） */
+      const ok6 = vc({ pages: [{ id: 'd', blocks: [] }] });
+      return ok6.ok && !!ok6.content.site;
+    })());
+
+  T('存储2（真跑）：saveLocal —— 配额满时先扔掉崩溃快照再重试；仍写不进返回 false（不再静默当成功）',
+    (function () {
+      const s = srcOf('js/store.js');
+      const i0 = s.indexOf('  function saveLocal(content) {');
+      if (i0 < 0) return false;
+      let i = s.indexOf('{', i0), d = 0, end = -1;
+      for (; i < s.length; i++) { if (s[i] === '{') d++; else if (s[i] === '}') { d--; if (!d) { end = i + 1; break; } } }
+      if (end < 0) return false;
+      const mkLS = function (mode) {
+        const m = { lm_snap_v1: '["big"]', lm_content_v1: 'old' };
+        const has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
+        return {
+          _m: m,
+          getItem: function (k) { return has(m, k) ? m[k] : null; },
+          setItem: function (k, v) {
+            if (mode === 'always') throw new Error('QuotaExceededError');
+            if (k === 'lm_content_v1' && has(m, 'lm_snap_v1')) throw new Error('QuotaExceededError');
+            m[k] = v;
+          },
+          removeItem: function (k) { delete m[k]; }
+        };
+      };
+      const fnOf = function (ls) {
+        return new Function('localStorage', 'LS_KEY', 'return ' + s.slice(i0, end))(ls, 'lm_content_v1');
+      };
+      const lsA = mkLS('snap');
+      const okA = fnOf(lsA)({ a: 1 });
+      const gone = !Object.prototype.hasOwnProperty.call(lsA._m, 'lm_snap_v1');
+      const saved = lsA._m.lm_content_v1 === JSON.stringify({ a: 1 });
+      const okB = fnOf(mkLS('always'))({ a: 1 });
+      return okA === true && gone && saved && okB === false;
+    })());
+
+  T('存储3：写盘失败有提示 · 快照体积护栏 · 远端坏包拦截 · 图片体积预判（四处都不再静默）',
+    (function () {
+      const appSrc2 = srcOf('js/app.js'), col2 = srcOf('js/collab.js'), edt3 = srcOf('js/editor.js');
+      return appSrc2.indexOf('const okSaved = LMStore.saveLocal(state.content) !== false;') > 0
+        && appSrc2.indexOf('if (!okSaved) warnSaveFailed();') > 0
+        && appSrc2.indexOf('本机存储已写满，这次改动没存进浏览器（刷新会丢）') > 0
+        && appSrc2.indexOf('if (!opts.silent && okSaved) toast(opts.msg ||') > 0
+        && appSrc2.indexOf("if (snapText.length > 1200 * 1024) { localStorage.removeItem('lm_snap_v1'); return; }") > 0
+        && appSrc2.indexOf('const keepMax = snapText.length > 500 * 1024 ? 1 : 3;') > 0
+        && col2.indexOf('if (!v || !v.ok) { warnBadPack(v && v.why); return false; }') > 0
+        && col2.indexOf('if (v.repaired) { c = v.content; warnBadPack(') > 0
+        && edt3.indexOf('if (cur + add > 4 * 1024 * 1024) {') > 0
+        && edt3.indexOf('LMStore.validateContent(data)') > 0;
+    })());
+
+  T('网络1：对外请求全部带超时 —— 卡死的连接不再让云同步 / 手动存盘永久转圈',
+    (function () {
+      const col3 = srcOf('js/collab.js'), sto3 = srcOf('js/store.js'), fb3 = srcOf('js/fbsync.js');
+      const oneBare = 'return fetch(url, o).then(function (r) { clearTimeout(t); return r; },';
+      /* 除 fetchT 内部那一次，文件里不应再有裸 fetch( —— 否则就是漏了超时 */
+      const noBareFetch = function (src) {
+        if (src.indexOf(oneBare) < 0) return false;
+        const s = src.replace(oneBare, '')
+          .replace("if (typeof AbortController === 'undefined') return fetch(url, opt);", '');
+        return s.indexOf('fetch(') < 0;
+      };
+      return col3.indexOf('function fetchT(url, opt, ms)') > 0
+        && col3.indexOf('ctl.abort()') > 0
+        && col3.indexOf('fetchT(url, opt, 15000)') > 0
+        && col3.indexOf("return fetchT(ghApi(), { method: 'PUT', headers: H, body: JSON.stringify(body) }, 30000);") > 0
+        && col3.indexOf('GH.inFlightAt = Date.now()') > 0
+        && col3.indexOf('if (now - GH.inFlightAt < 60000) return false;') > 0
+        && sto3.indexOf('function fetchT(url, opt, ms)') > 0
+        && fb3.indexOf('function fetchT(url, opt, ms)') > 0
+        && noBareFetch(sto3) && noBareFetch(fb3);
+    })());
+
   /* ★ 修复121：协同字段级合并 + 删页二次确认 */
   T('合并1（真跑）：字段级三向合并 —— A 改文字、B 改字号两边都保住；都改同一字段才按后写优先',
     (function () {
@@ -2674,6 +2776,12 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       if (!(m4.text === '远端改的' && m4.extra === '我加的')) return false;
       /* ⑤ 合并结果的 _ts 取两边较大，且不写空键 */
       if (m4._ts !== 260) return false;
+      /* ⑥ 时钟错的设备（_ts 写到了明年）不会把未来时间戳带进合并结果、也不会长期霸占字段 */
+      const farTs = Date.now() + 86400000 * 365;
+      const m6 = merge(base,
+        { type: 'paragraph', text: '本机', size: 'normal', _ts: Date.now() - 3600000 },
+        { type: 'paragraph', text: '远端', size: 'normal', _ts: farTs });
+      if (!(m6._ts <= Date.now())) return false;
       const m5 = merge({}, { a: 1 }, {});
       return m5.a === 1 && !('b' in m5);
     })());
@@ -3274,10 +3382,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=121 · LM_ASSET_VER=121',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=122 · LM_ASSET_VER=122',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=120/g) || []).length === 0 && /\?v=121/.test(html)
-      && /LM_ASSET_VER = '121'/.test(appJs));
+      && (html.match(/\?v=121/g) || []).length === 0 && /\?v=122/.test(html)
+      && /LM_ASSET_VER = '122'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3630,10 +3738,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 121（?v=121 共 21 处 · v120 无残留 · LM_ASSET_VER=121）',
-    (html.match(/\?v=121/g) || []).length === 21 && (html.match(/\?v=120/g) || []).length === 0
-      && /LM_ASSET_VER = '121'/.test(appJs),
-    'v121=' + (html.match(/\?v=121/g) || []).length + ' v120=' + (html.match(/\?v=120/g) || []).length);
+  T('版本已升到 122（?v=122 共 21 处 · v121 无残留 · LM_ASSET_VER=122）',
+    (html.match(/\?v=122/g) || []).length === 21 && (html.match(/\?v=121/g) || []).length === 0
+      && /LM_ASSET_VER = '122'/.test(appJs),
+    'v122=' + (html.match(/\?v=122/g) || []).length + ' v121=' + (html.match(/\?v=121/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

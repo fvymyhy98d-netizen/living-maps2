@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '121';
+var LM_ASSET_VER = '122';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -80,7 +80,8 @@ window.LMApp = (function () {
     while (p > 0 && stripTsSnap(hist.arr[p]) === cur) p--; /* 跳过「看着一样」的步（仅 _ts / 空拍差异） */
     if (p < 0 || stripTsSnap(hist.arr[p]) === cur) return;
     hist.ptr = p;
-    state.content = JSON.parse(hist.arr[hist.ptr]);
+    try { state.content = JSON.parse(hist.arr[hist.ptr]); }   /* ★ 修复122：历史条目损坏不再炸掉整页 */
+    catch (eU) { toast('这一步的撤销记录已损坏，已跳过（内容未改动）'); hist.ptr = p + 1; return; }
     LMStore.saveLocal(state.content);
     /* ★ 撤销结果立即写入 Y.Doc（IDB 持久化 + 远端设备同步收敛）。旧版漏了这一步：
        ymap 里还留着重撤销前的内容，任何 applyKeys 重放（重连 / 离线恢复 / 对端广播 /
@@ -99,7 +100,8 @@ window.LMApp = (function () {
     while (p < hist.arr.length - 1 && stripTsSnap(hist.arr[p]) === cur) p++; /* 跳过「看着一样」的步 */
     if (stripTsSnap(hist.arr[p]) === cur) return;
     hist.ptr = p;
-    state.content = JSON.parse(hist.arr[hist.ptr]);
+    try { state.content = JSON.parse(hist.arr[hist.ptr]); }   /* ★ 修复122：同 undo，坏条目只跳过不炸 */
+    catch (eU2) { toast('这一步的重做记录已损坏，已跳过（内容未改动）'); hist.ptr = p - 1; return; }
     LMStore.saveLocal(state.content);
     try { if (window.LMYCollab && LMYCollab.pushLocal) LMYCollab.pushLocal(state.content); } catch (eY2) { /* noop */ } /* 同 undo：重做结果也要全网收敛 */
     const y = window.scrollY;
@@ -1191,17 +1193,37 @@ window.LMApp = (function () {
     }
   }
 
+  /* ★ 修复122：写盘失败必须说出来 —— 以前 LMStore.saveLocal 的返回值没人看，
+     存储写满（多半是贴了大图）时用户照样看到「已保存」，刷新才发现改动没了。
+     20 秒内只提示一次，避免连续编辑时刷屏。 */
+  let _saveFailAt = 0;
+  function warnSaveFailed() {
+    const t = Date.now();
+    if (t - _saveFailAt < 20000) return;
+    _saveFailAt = t;
+    try {
+      toast('⚠️ 本机存储已写满，这次改动没存进浏览器（刷新会丢）。请删掉大图或先「导出备份」再清理');
+    } catch (eT) { /* noop */ }
+    try {
+      let used = 0;
+      try { used = (localStorage.getItem('lm_content_v1') || '').length; } catch (eL) { used = 0; }
+      console.warn('[LM] 本机存储写入失败（当前内容约 ' + Math.round(used / 1024) + 'KB，配额通常约 5MB）'
+        + ' —— 内容里的大图最占地方；已自动清掉崩溃快照，仍失败说明主内容本身超限');
+    } catch (eC) { /* noop */ }
+  }
+
   /* 统一保存入口：写浏览器 + 记入历史 + （可选）重绘。默认无动画重绘（不闪屏）；传 anim:true 才重放入场动画 */
   function commit(opts) {
     opts = opts || {};
-    LMStore.saveLocal(state.content);
+    const okSaved = LMStore.saveLocal(state.content) !== false;   /* ★ 修复122：真正看返回值 */
+    if (!okSaved) warnSaveFailed();
     hPush(opts.msg); /* ★ 修复77：历史版本里显示这次操作是什么 */
     if (window.LMCollab) { try { LMCollab.publish(state.content); } catch (e) { /* 协同广播失败不影响本地保存 */ } }
-    if (opts.rerender === false) { if (!opts.silent) toast(opts.msg || '已保存'); return; }
+    if (opts.rerender === false) { if (!opts.silent && okSaved) toast(opts.msg || '已保存'); return; }
     const y = window.scrollY;
     render(!opts.anim);
     window.scrollTo(0, y);
-    if (!opts.silent) toast(opts.msg || '已保存（本浏览器）');
+    if (!opts.silent && okSaved) toast(opts.msg || '已保存（本浏览器）');
   }
   function applyEdit(msg) { commit({ msg: msg }); }
   /* ★ 修复㉝（协同局部刷新）：远端整包到达时不再整页重建 —— 整页 innerHTML 替换会重放入场动画
@@ -3016,7 +3038,7 @@ window.LMApp = (function () {
         + (ev && ev.filename ? String(ev.filename).split('/').pop() : '?') + ':' + (ev && ev.lineno)
         + (ev && ev.error && ev.error.stack ? '\n' + ev.error.stack : ''));
     } catch (e0) { /* noop */ }
-    softErrToast('⚠ 页面出现一个小问题，已自动跳过（内容已保存）');
+    softErrToast('⚠ 页面出现一个小问题，已自动跳过（改动仍在本机，若提示存储已满请先导出备份）');
   });
   window.addEventListener('unhandledrejection', function () { softErrToast('⚠ 一个后台任务失败了，已自动跳过'); });
   function setupResilience() {
@@ -3025,9 +3047,15 @@ window.LMApp = (function () {
       setInterval(function () {
         try {
           if (!state.content) return;
+          /* ★ 修复122：快照是「可再生的副本」，不能反过来把主内容挤掉配额 ——
+             大内容留 3 份会把 localStorage 吃满，导致真正的内容写不进去（本末倒置）。
+             规则：单份 >1.2MB 干脆不存；>500KB 只留 1 份；正常内容留 3 份。 */
+          const snapText = JSON.stringify({ ts: Date.now(), c: state.content });
+          if (snapText.length > 1200 * 1024) { localStorage.removeItem('lm_snap_v1'); return; }
+          const keepMax = snapText.length > 500 * 1024 ? 1 : 3;
           const arr = JSON.parse(localStorage.getItem('lm_snap_v1') || '[]');
-          arr.push(JSON.stringify({ ts: Date.now(), c: state.content }));
-          while (arr.length > 3) arr.shift();
+          arr.push(snapText);
+          while (arr.length > keepMax) arr.shift();
           localStorage.setItem('lm_snap_v1', JSON.stringify(arr));
         } catch (e2) { /* 存储满 / 隐私模式 → 静默跳过 */ }
       }, 60000);

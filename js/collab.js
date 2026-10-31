@@ -175,6 +175,7 @@ window.LMCollab = (function () {
   /* 纯函数（可单测）：base / local / remote 三份块对象 → 合并结果 */
   function mergeBlockFields(bb, lb, rb) {
     const b0 = bb || {}, l0 = lb || {}, r0 = rb || {};
+    const nowT = Date.now();   /* ★ 修复122：设备时钟快的那个会把 _ts 写成「未来」，此后它的字段永远赢 */
     const out = {}, keys = {};
     [b0, l0, r0].forEach(function (o) { Object.keys(o).forEach(function (k) { keys[k] = 1; }); });
     Object.keys(keys).forEach(function (k) {
@@ -184,11 +185,15 @@ window.LMCollab = (function () {
       if (L === R) v = l0[k];                        /* 两边一致（含都没动）→ 用它 */
       else if (L === B) v = r0[k];                   /* 只有远端改了 → 用远端 */
       else if (R === B) v = l0[k];                   /* 只有本地改了 → 用本地 */
-      else v = (+l0._ts || 0) > (+r0._ts || 0) ? l0[k] : r0[k];  /* 都改了 → 后写优先 */
+      else {
+        /* 都改了 → 后写优先；未来时间戳按「此刻」算，避免时钟错的设备长期霸占同一字段 */
+        const lt = Math.min(+l0._ts || 0, nowT), rt = Math.min(+r0._ts || 0, nowT);
+        v = lt > rt ? l0[k] : r0[k];
+      }
       if (v === undefined) return;                   /* 两边都没这个字段 → 不写空键 */
       out[k] = v;
     });
-    out._ts = Math.max(+l0._ts || 0, +r0._ts || 0);
+    out._ts = Math.min(Math.max(+l0._ts || 0, +r0._ts || 0), nowT);   /* ★ 修复122：未来戳不外溢 */
     return out;
   }
   function mergeBlocks(c) {
@@ -341,9 +346,28 @@ window.LMCollab = (function () {
         + (lastTs > now + 60000 ? ' ← 本机 lastTs 在未来：两台设备时钟差太多，请在控制台执行 LMCollab.diag() 对比' : ''));
     } catch (eW) { /* noop */ }
   }
+  /* ★ 修复122：坏包诊断（5 秒最多一条） */
+  var _warnBadAt = 0;
+  function warnBadPack(why) {
+    const now = Date.now();
+    if (now - _warnBadAt < 5000) return;
+    _warnBadAt = now;
+    try {
+      console.warn('[协同·坏包] 已拒绝一份结构不合法的远端内容（' + (why || '缺少 pages / 页面结构不对')
+        + '），本机内容未改动 —— 若反复出现，说明某台设备的内容已损坏，请在那台设备上「恢复初始内容」后重新编辑');
+    } catch (e) { /* noop */ }
+  }
   function applyRemote(msg) {
-    const c = msg.content;
+    let c = msg.content;
     if (!validContent(c)) return false;
+    /* ★ 修复122：远端内容先过结构校验。缺 blocks / 缺 id 的包会把本机渲染打崩，
+       而且会被当成正常内容落盘 → 刷新后本机也坏了（局域网 / MQTT / GitHub 任一条通道都能带进来） */
+    if (window.LMStore && LMStore.validateContent) {
+      let v = null;
+      try { v = LMStore.validateContent(c); } catch (eV0) { v = null; }
+      if (!v || !v.ok) { warnBadPack(v && v.why); return false; }
+      if (v.repaired) { c = v.content; warnBadPack('已自动补齐字段'); }
+    }
     /* ★ 修复72：force = Yjs 网状通道专用。Y.Doc 本身就只给出「更新的整包」（因果有序），
        不该再拿墙上时钟挡一道 —— 任一端时钟快一点，更新就被静默丢掉，
        表现正是「徽标上看得到有人在编辑，内容却怎么都不同步」 */
@@ -963,7 +987,7 @@ window.LMCollab = (function () {
      读：管理员走 Contents API（?ref=数据分支，If-None-Match 命中 304 不耗额度）；访客读 raw(数据分支)。
      兜底：数据分支建不出来 / 写不进去（Token 权限不足等）→ 自动回退 main（= 旧行为）并提示一次。 */
   const SNAP_MIN = 30 * 60 * 1000;   /* main 快照最小间隔 → 最多 2 次构建/小时 */
-  const GH = { cfg: null, token: '', etag: '', lastPush: 0, timer: 0, inFlight: false, lastPullTs: 0,
+  const GH = { cfg: null, token: '', etag: '', lastPush: 0, timer: 0, inFlight: false, inFlightAt: 0, lastPullTs: 0,
                useMain: false,      /* 已回退到 main（本页会话内有效） */
                snapAt: 0,           /* 上次写 main 快照的时刻 */
                blockUntil: 0,       /* ★ 修复90：限流/退避到期时刻，到期前一律不写（越撞越死） */
@@ -1041,15 +1065,40 @@ window.LMCollab = (function () {
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new TextDecoder().decode(bytes);
   }
+  /* ★ 修复122：带超时的 fetch —— 旧代码一个超时都没有。手机切网 / 信号盲区 / 运营商黑洞时
+     fetch 可能永远不落定，而 GH.inFlight 只在 promise 落定后复位 → 此后 ghPull / ghPush
+     全部早退，云端同步彻底停摆（徽章也不动），只能刷新页面才恢复。
+     现在：超过时限 abort → promise 落到 catch → inFlight 复位 → 下一轮自动重来。 */
+  function fetchT(url, opt, ms) {
+    if (typeof AbortController === 'undefined') return fetch(url, opt);
+    const ctl = new AbortController();
+    const t = setTimeout(function () { try { ctl.abort(); } catch (eA) { /* noop */ } }, ms || 20000);
+    const o = Object.assign({}, opt || {}, { signal: ctl.signal });
+    return fetch(url, o).then(function (r) { clearTimeout(t); return r; },
+      function (e) { clearTimeout(t); throw e; });
+  }
+  /* ★ 修复122：兜底看门狗 —— 万一某些环境 abort 不生效（旧 WebView / 已断网的内核），
+     inFlight 超过 60 秒就强制复位，宁可多发一次请求也不让同步永久卡死。 */
+  function inFlightStale() {
+    if (!GH.inFlight) { GH.inFlightAt = 0; return false; }
+    const now = Date.now();
+    if (!GH.inFlightAt) { GH.inFlightAt = now; return false; }
+    if (now - GH.inFlightAt < 60000) return false;
+    GH.inFlight = false; GH.inFlightAt = 0;
+    try { console.warn('[协同·云端] 上一次请求 60 秒没返回，已强制复位同步锁（接下来会自动重试）'); } catch (e) { /* noop */ }
+    return true;
+  }
   function ghPull() {
-    if (!GH.cfg || GH.inFlight) return;
-    GH.inFlight = true;
+    if (!GH.cfg) return;
+    inFlightStale();                       /* ★ 修复122 */
+    if (GH.inFlight) return;
+    GH.inFlight = true; GH.inFlightAt = Date.now();
     const useApi = !!GH.token;
     const ref = ghBranch();
     const url = useApi ? (ghApi() + '?ref=' + encodeURIComponent(ref)) : ghRaw();
     const opt = useApi ? { headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json' } } : {};
     if (useApi && GH.etag) opt.headers['If-None-Match'] = GH.etag; /* 条件请求：没更新时返回 304，且不消耗 API 限额 */
-    fetch(url, opt).then(function (r) {
+    fetchT(url, opt, 15000).then(function (r) {
       noteRate(r);                                  /* ★ 修复90：记下剩余额度 */
       if (r.status === 304) return null;             /* 云端没变化（且不耗额度） */
       /* ★ 修复90：访客只读。若数据分支还不存在（管理员尚未落库成功 / Token 无建分支权限），
@@ -1146,11 +1195,11 @@ window.LMCollab = (function () {
       const body = { message: '内容快照（供首屏加载）' + new Date().toLocaleString('zh-CN'), content: b64, branch: main };
       const url = ghApi();
       const getSha = shaOf[main] ? Promise.resolve(shaOf[main])
-        : fetch(url + '?ref=' + encodeURIComponent(main), { headers: H })
+        : fetchT(url + '?ref=' + encodeURIComponent(main), { headers: H }, 15000)
           .then(function (r) { return r.ok ? r.json().then(function (j) { return j.sha; }) : null; });
       getSha.then(function (sha) {
         if (sha) body.sha = sha;
-        return fetch(url, { method: 'PUT', headers: H, body: JSON.stringify(body) });
+        return fetchT(url, { method: 'PUT', headers: H, body: JSON.stringify(body) }, 30000);
       }).then(function (r) {
         if (!r.ok) { delete shaOf[main]; return; }      /* 409 等：下次重新取 sha */
         return r.json().then(function (j) { shaOf[main] = j.content && j.content.sha; });
@@ -1165,6 +1214,7 @@ window.LMCollab = (function () {
     if (GH.lastPullTs > myTs) { ghPull(); return; }
     const now = Date.now();
     if (now < GH.blockUntil) return;   /* ★ 修复90：限流/退避期内不写，避免越撞越死 */
+    inFlightStale();                   /* ★ 修复122：卡死的锁先复位（abort 不生效时兜底） */
     if (GH.inFlight) return;
     /* ★ 修复90：额度紧张时把推送间隔自动拉长（rateGap）；额度充裕时完全不受影响 */
     const wait = Math.max(pushWaitMin(peersHot()), rateGap()) - (now - GH.lastPush); /* ★ 修复88：有人在线 → 2.6s 就推，不再死等 6s */
@@ -1181,19 +1231,19 @@ window.LMCollab = (function () {
     /* ★ 修复90：与上次成功推送的文本完全一致 → 不发 PUT（协同里很多 commit 只动了时间戳，纯白烧额度） */
     if (text === GH.lastText) return;
     GH.lastPush = now;
-    GH.inFlight = true;
+    GH.inFlight = true; GH.inFlightAt = Date.now();   /* ★ 修复122：记时刻，供看门狗判定 */
     const b64 = LMStore.utf8ToBase64 ? LMStore.utf8ToBase64(text) : btoa(unescape(encodeURIComponent(text)));
     const H = { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
     const put = function (br, sha) {
       const body = { message: '协作同步（' + me.name + '）' + new Date().toLocaleString('zh-CN'), content: b64, branch: br };
       if (sha) body.sha = sha;
-      return fetch(ghApi(), { method: 'PUT', headers: H, body: JSON.stringify(body) });
+      return fetchT(ghApi(), { method: 'PUT', headers: H, body: JSON.stringify(body) }, 30000);
     };
     const getSha = function (br) {
       if (shaOf[br]) return Promise.resolve(shaOf[br]);
-      return fetch(ghApi() + '?ref=' + encodeURIComponent(br), {
+      return fetchT(ghApi() + '?ref=' + encodeURIComponent(br), {
         headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json' }
-      }).then(function (r) { return r.ok ? r.json().then(function (j) { return j.sha; }) : null; });
+      }, 15000).then(function (r) { return r.ok ? r.json().then(function (j) { return j.sha; }) : null; });
     };
     const tryPut = function (br) {
       return getSha(br).then(function (sha) {

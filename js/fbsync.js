@@ -18,6 +18,18 @@ W.LMFB = (function () {
   'use strict';
   const FILE_PATH = 'data/feedback.json';
 
+  /* ★ 修复122：带超时的 fetch —— 本文件所有请求原来都没有超时，网络黑洞时会一直挂着：
+     反馈「同步中」永远转圈、云存档拉取永不完结（Promise 不落定，界面就一直等）。
+     默认 15 秒；需要更长的（整包推送）在调用处传第三个参数。 */
+  function fetchT(url, opt, ms) {
+    if (typeof AbortController === 'undefined') return fetch(url, opt);
+    const ctl = new AbortController();
+    const t = setTimeout(function () { try { ctl.abort(); } catch (eA) { /* noop */ } }, ms || 15000);
+    const o = Object.assign({}, opt || {}, { signal: ctl.signal });
+    return fetch(url, o).then(function (r) { clearTimeout(t); return r; },
+      function (e) { clearTimeout(t); throw e; });
+  }
+
   /* ---------- ① 纯函数：规范化 / 合并 / 打包 ---------- */
   function pick(it, a, b) { var v = it[a]; if (v == null || v === '') v = it[b]; return String(v == null ? '' : v).slice(0, 300); }
   function norm(it) {
@@ -148,7 +160,7 @@ W.LMFB = (function () {
     if (!c) return Promise.resolve({ ok: false, list: [], sha: '' });
     const h = headers(c);
     delete h['Content-Type'];
-    return fetch(c.api + '?ref=' + encodeURIComponent(c.ref), { headers: h, cache: 'no-store' })
+    return fetchT(c.api + '?ref=' + encodeURIComponent(c.ref), { headers: h, cache: 'no-store' })
       .then(function (r) {
         if (r.status === 404) { shaCache = ''; return { ok: true, list: [], sha: '' }; }
         if (!r.ok) return { ok: false, list: [], sha: '' };
@@ -172,7 +184,7 @@ W.LMFB = (function () {
       branch: c.ref
     };
     if (shaCache) body.sha = shaCache;
-    return fetch(c.api, { method: 'PUT', headers: headers(c), body: JSON.stringify(body) })
+    return fetchT(c.api, { method: 'PUT', headers: headers(c), body: JSON.stringify(body) }, 30000)
       .then(function (r) {
         if (r.ok) return r.json().then(function (j) { shaCache = (j.content && j.content.sha) || shaCache; return true; });
         if (r.status === 409 || r.status === 422) shaCache = '';
@@ -230,7 +242,7 @@ W.LMFB = (function () {
     function tryNext() {
       if (i >= refs.length) return Promise.resolve({ ok: false, list: [], why: 'raw 读取失败' });
       var ref = refs[i++];
-      return fetch(publicUrl(c, ref), { cache: 'no-store' })
+      return fetchT(publicUrl(c, ref), { cache: 'no-store' })
         .then(function (r) {
           if (!r.ok) return tryNext();
           return r.text().then(function (t) {
@@ -294,7 +306,7 @@ W.LMFB = (function () {
     try {
       if (c.kind === 'webhook') return hookSend(c.url, it);
       if (c.kind === 'supabase') {
-        return fetch(c.url + '/rest/v1/' + encodeURIComponent(c.table), {
+        return fetchT(c.url + '/rest/v1/' + encodeURIComponent(c.table), {
           method: 'POST', cache: 'no-store',
           headers: {
             'Content-Type': 'application/json', apikey: c.key,
@@ -304,7 +316,7 @@ W.LMFB = (function () {
         }).then(function (r) { return !!r && r.ok; }).catch(function () { return false; });
       }
       /* worker 约定：POST 收 { t:'lmfb1', it }，GET 返回数组 */
-      return fetch(c.url, {
+      return fetchT(c.url, {
         method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ t: 'lmfb1', it: it })
       }).then(function (r) { return !!r && r.ok; }).catch(function () { return false; });
@@ -316,7 +328,7 @@ W.LMFB = (function () {
       + '\n' + String(it.text || '').slice(0, 500) + (it.url ? '\n' + it.url : '');
     var body = { msgtype: 'text', text: { content: text } };        /* 钉钉 / 企业微信 */
     if (/feishu|larksuite/i.test(url)) body = { msg_type: 'text', content: JSON.stringify({ text: text }) };
-    return fetch(url, {
+    return fetchT(url, {
       method: 'POST', mode: 'no-cors', cache: 'no-store',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
     }).then(function () { return true; }).catch(function () { return false; });
@@ -366,7 +378,7 @@ W.LMFB = (function () {
       url = c.url; opt = { cache: 'no-store' };
     }
     try {
-      return fetch(url, opt).then(function (r) {
+      return fetchT(url, opt).then(function (r) {
         if (!r || !r.ok) {                          /* ★ 修复97：读出错误体再翻译，别只说「HTTP 404」 */
           var st = (r && r.status) || 0, bad = { ok: false, list: [], why: 'HTTP ' + st, status: st };
           if (!r) return bad;
@@ -435,7 +447,7 @@ W.LMFB = (function () {
     if (!c || !arr.length) return Promise.resolve(false);
     if (c.kind !== 'supabase') return Promise.resolve(false);   /* 讨论区只支持 Supabase */
     try {
-      return fetch(c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?on_conflict=id', {
+      return fetchT(c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?on_conflict=id', {
         method: 'POST', cache: 'no-store',
         headers: {
           'Content-Type': 'application/json', apikey: c.key,
@@ -454,7 +466,7 @@ W.LMFB = (function () {
     var url = c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?select=*&order=ts.asc&limit=1000';
     var opt = { cache: 'no-store', headers: { apikey: c.key, Authorization: 'Bearer ' + c.key } };
     try {
-      return fetch(url, opt).then(function (r) {
+      return fetchT(url, opt).then(function (r) {
         if (!r || !r.ok) {
           var st = (r && r.status) || 0, bad = { ok: false, list: [], why: 'HTTP ' + st, status: st };
           if (!r) return bad;
