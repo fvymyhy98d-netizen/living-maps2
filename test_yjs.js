@@ -1681,6 +1681,9 @@ T('旧实现已清除：freeJump（整格移动）与 swapWith（放回流再换
       /* ⑦ 列内偏移：colTop=40、A 顶 80 → 框的 y 应为 40（不是 80） */
       const b7 = [{ id: 'A' }, { id: 'F', free: { y: 210 } }];
       const r7 = run([[0, 80, 180], [1, 210, 260]], b7, 1, true, 40);
+      /* ⑧ 两个自由框相邻：↑ 时双方 y 互换（否则会重叠在一起） */
+      const b8 = [{ id: 'F1', free: { y: 100 } }, { id: 'F2', free: { y: 300 } }];
+      const r8 = run([[0, 100, 160], [1, 300, 360]], b8, 1, true);
       const ids = function (r) { return r.blocks.map(function (x) { return x.id; }).join(''); };
       okA = ids(r1) === 'AFB' && r1.blocks[1].free.y === 200
         && ids(r2) === 'ABF' && r2.blocks[2].free.y === 350
@@ -1690,12 +1693,13 @@ T('旧实现已清除：freeJump（整格移动）与 swapWith（放回流再换
         && ids(r5) === 'AF' && r5.blocks[1].free.y === 200 && r5.toasts.join('|').indexOf('并排') >= 0
         && ids(r6) === 'FA' && r6.blocks[0].free.y === 300
         && ids(r7) === 'FA' && r7.blocks[0].free.y === 40
+        && ids(r8) === 'F2F1' && r8.blocks[0].free.y === 100 && r8.blocks[1].free.y === 300
         && r1.msgs.join('|').indexOf('已与上面的模块互换位置') >= 0
         && r3.msgs.join('|').indexOf('已与下面的模块互换位置') >= 0;
-      if (!okA) dA = JSON.stringify({ r1: ids(r1) + '/' + (r1.blocks[1].free || {}).y, r2: ids(r2), r3: ids(r3) + '/' + (r3.blocks[1].free || {}).y, r4: ids(r4), r5: ids(r5), r6: ids(r6) + '/' + (r6.blocks[0].free || {}).y, r7: (r7.blocks[0].free || {}).y });
+      if (!okA) dA = JSON.stringify({ r1: ids(r1) + '/' + (r1.blocks[1].free || {}).y, r2: ids(r2), r3: ids(r3) + '/' + (r3.blocks[1].free || {}).y, r4: ids(r4), r5: ids(r5), r6: ids(r6) + '/' + (r6.blocks[0].free || {}).y, r7: (r7.blocks[0].free || {}).y, r8: ids(r8) + '/' + (r8.blocks[0].free || {}).y + '/' + (r8.blocks[1].free || {}).y });
     } catch (eA) { okA = false; dA = '抛出 ' + eA.message; }
   }
-  T('真跑换位：只和视觉相邻那一块换 · 自由框保持自由并落到对方 top · 触底只提示 · 并排组不参与 · 下标≠视觉时也对', okA, dA);
+  T('真跑换位：只和视觉相邻那一块换 · 自由框保持自由并落到对方 top · 两个自由框互相换 y · 触底只提示 · 并排组不参与 · 下标≠视觉时也对', okA, dA);
 })();
 
 

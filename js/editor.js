@@ -601,13 +601,15 @@ window.LMEditor = (function () {
       LMApp.toast('并排的块不参与上下换位（整行一起动会拆散行）：请在本行内左右拖动微调，或先「取消并排」');
       return;
     }
-    /* 自由框要换到的 y（列内像素）= 对方此刻所在的位置 */
+    /* 位置互换：自由框拿对方原来的 top（列内像素）；两个都是自由框就互相换 y */
     const colTop = col.getBoundingClientRect().top;
-    const freeB = mine.free ? mine : (other.free ? other : null);
-    const yNew = Math.max(0, Math.round((freeB === mine ? nb.r.top : items[at].r.top) - colTop));
+    const myTop = Math.max(0, Math.round(items[at].r.top - colTop));
+    const otherTop = Math.max(0, Math.round(nb.r.top - colTop));
     /* 交换数据位置（顺序与视觉保持一致） */
     page.blocks[i] = other; page.blocks[j] = mine;
-    if (freeB) freeB.free.y = yNew;
+    if (mine.free && other.free) { mine.free.y = otherTop; other.free.y = myTop; }
+    else if (mine.free) mine.free.y = otherTop;
+    else if (other.free) other.free.y = myTop;
     /* 工具条跟着被移动的块走（数组已换位，否则 ↑↓ 会作用到"换过来的那一块"） */
     if (tb.active === i) tb.active = j; else if (tb.active === j) tb.active = i;
     if (tb.pressBi === i) tb.pressBi = j; else if (tb.pressBi === j) tb.pressBi = i;
