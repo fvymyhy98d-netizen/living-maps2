@@ -365,7 +365,7 @@ T('⤓ 归位：自由框操作栏新增按钮（isFree 才显示），unfreeBlo
   edt2.indexOf('data-act="unfree"') > 0
     && edt2.indexOf("e.target.closest('[data-act=\"unfree\"]')") > 0
     && appSrc.indexOf('function unfreeBlock(i)') > 0
-    && appSrc.indexOf("commit({ msg: '已归位：模块回到文档流（随内容自动排版）' })") > 0
+    && appSrc.indexOf("commit({ msg: '已归位：模块回到文档流原来的位置（随内容自动排版）' })") > 0
     && appSrc.indexOf('unfreeBlock: unfreeBlock') > 0);
 T('padB 钳制：自由框占位上限 4000px（防损坏数据撑出天文空白）',
   appSrc.indexOf('padB = Math.min(padB, 4000);') > 0);
@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '84';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '85';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -1547,6 +1547,54 @@ T('editor.js：收起/展开（tbSetOpen）立即重算垫高，不等下一帧�
     } catch (eA) { okA = false; dA = '抛出 ' + eA.message; }
   }
   T('真跑垫高：展开 68（110+10-52）· 收起 0 · 访客 0 · 手机端封顶 34%vh（900→204）· 无工具条 0', okA, dA);
+})();
+/* ---------- 9.50) 修复85：取消自由摆放（⌂ 归位）留在原位，不再掉到页面最下方 ---------- */
+console.log('【9.50】修复85：归位先按「此刻压在哪个文档流块之间」把数组位置挪过去，再摘 free');
+T('app.js：unfreeBlock 先算目标位置再摘 free，并按「摘出自己后下标前移」修正',
+  appSrc.indexOf('function unfreeTargetIndex(blocks, rects, i) {') > 0
+    && appSrc.indexOf('function unfreeFlowIndex(i) {') > 0
+    && appSrc.indexOf('try { pos = unfreeFlowIndex(i); } catch (e) { pos = i; }') > 0
+    && appSrc.indexOf('let at = pos > i ? pos - 1 : pos;') > 0
+    && appSrc.indexOf('unfreeTargetIndex: unfreeTargetIndex, /* ★ 修复85') > 0);
+T('app.js：锚点只认文档流块（自由框不占位）· 压住长块按中线判前后 · 上方无流块则排到最前',
+  appSrc.indexOf('if (!b || b.free) continue; /* 自由框不占位，不能当锚点 */') > 0
+    && appSrc.indexOf('if (owner >= 0) return top >= ownerMid ? owner + 1 : owner;') > 0
+    && appSrc.indexOf('return firstFlow < 0 ? i : firstFlow;') > 0);
+
+/* 真跑：执行 unfreeTargetIndex 纯函数（数组下标 + 各块实测矩形） */
+(function () {
+  const srcLF = appSrc.replace(/\r\n/g, '\n');
+  const aA = srcLF.indexOf('  function unfreeTargetIndex(blocks, rects, i) {');
+  const bA = srcLF.indexOf('\n  }\n', aA);
+  const codeA = (aA >= 0 && bA > aA) ? srcLF.slice(aA, bA + 5) : '';
+  let okA = false, dA = '切片不可用';
+  if (codeA) {
+    try {
+      const F = new Function(codeA + '\nreturn unfreeTargetIndex;')();
+      const R = function (top, bottom) { return { top: top, bottom: bottom }; };
+      const flow = function (id) { return { id: id }; };
+      const freeB = function (id) { return { id: id, free: { y: 0 } }; };
+      /* ① 数组末尾的自由框，视觉上在 A 与 B 之间 → 插到 A 后面（原下标 1） */
+      const c1 = F([flow('A'), flow('B'), freeB('F')], [R(0, 100), R(400, 460), R(150, 250)], 2);
+      /* ② 压住一个长块的上半 → 排到它前面（0） */
+      const c2 = F([flow('A'), freeB('F')], [R(0, 1000), R(200, 300)], 1);
+      /* ③ 压住同一个长块的下半（过中线）→ 排到它后面（1） */
+      const c3 = F([flow('A'), freeB('F')], [R(0, 1000), R(700, 800)], 1);
+      /* ④ 最上面的自由框（上方没有流块）→ 排到第一个流块之前（1，摘出后即 0） */
+      const c4 = F([freeB('F'), flow('A')], [R(0, 50), R(100, 200)], 0);
+      /* ⑤ 页面只有它自己 → 原地不动（0） */
+      const c5 = F([freeB('F')], [R(0, 50)], 0);
+      /* ⑥ 视觉与数据都在最后 → 不动（1） */
+      const c6 = F([flow('A'), freeB('F')], [R(0, 100), R(200, 300)], 1);
+      /* ⑦ 掉到最后一个流块之下 → 插到它后面（3） */
+      const c7 = F([flow('A'), freeB('F'), flow('B')], [R(0, 100), R(300, 400), R(200, 260)], 1);
+      /* ⑧ 量不到矩形（没渲染）→ 保持原下标 */
+      const c8 = F([flow('A'), freeB('F')], [R(0, 100), null], 1);
+      okA = c1 === 1 && c2 === 0 && c3 === 1 && c4 === 1 && c5 === 0 && c6 === 1 && c7 === 3 && c8 === 1;
+      if (!okA) dA = JSON.stringify({ c1: c1, c2: c2, c3: c3, c4: c4, c5: c5, c6: c6, c7: c7, c8: c8 });
+    } catch (eA) { okA = false; dA = '抛出 ' + eA.message; }
+  }
+  T('真跑归位落点：中部自由框插回原位 · 长块上半→前/下半→后 · 最上方→最前 · 只有自己/在最后→不动 · 无矩形→原下标', okA, dA);
 })();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

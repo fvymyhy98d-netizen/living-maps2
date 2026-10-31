@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '84';
+var LM_ASSET_VER = '85';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1398,11 +1398,62 @@ window.LMApp = (function () {
   /* ★ 修复㉞「⤓ 归位」：自由框的位置是固定像素（并排/拖动当时的快照），页面内容一变就容易
      错位/漂移 —— 之前界面上没有任何「解除自由摆放」的操作。现在选中自由框 → 操作栏 ⤓
      一键摘掉 free 回归文档流（随内容自动排版），这是修「并排一下就乱」的用户侧出口 */
+  /* ★ 修复85：解除自由摆放（⌂ 归位）必须「留在原位」。
+     自由框是不占位的浮层：数据里它常常排在页面末尾（后来才加的块），所以只摘 free 会让它
+     瞬间掉到页面最下方（用户：「这个图表我取消自由摆放就跑到下面去了，不在原位」）。
+     做法：先量出每块的实际矩形，算出这个框此刻压在哪两个文档流块之间，把它的数组位置挪过去，
+     再摘 free —— 排版引擎随后让它落在文档流里的「原位」。
+     unfreeTargetIndex 是纯函数（只吃 blocks 与各块矩形），便于单测真跑。 */
+  function unfreeTargetIndex(blocks, rects, i) {
+    const me = rects[i];
+    if (!me) return i;
+    const top = me.top;
+    let owner = -1, ownerMid = 0, above = -1, aboveBottom = -Infinity, firstFlow = -1;
+    for (let k = 0; k < blocks.length; k++) {
+      if (k === i) continue;
+      const b = blocks[k];
+      if (!b || b.free) continue; /* 自由框不占位，不能当锚点 */
+      const r = rects[k];
+      if (!r) continue;
+      if (firstFlow < 0) firstFlow = k;
+      const mid = (r.top + r.bottom) / 2;
+      if (top >= r.top && top <= r.bottom) { owner = k; ownerMid = mid; } /* 框顶压在这个块上 */
+      else if (r.bottom <= top && r.bottom > aboveBottom) { aboveBottom = r.bottom; above = k; } /* 完全在它下面 */
+    }
+    if (owner >= 0) return top >= ownerMid ? owner + 1 : owner; /* 压住长块：过了中线就排到它后面 */
+    if (above >= 0) return above + 1;                           /* 落在两块之间的空隙：跟在上面的块后面 */
+    return firstFlow < 0 ? i : firstFlow;                       /* 在最上面：排到第一个文档流块之前 */
+  }
+  /* 把 DOM 实测矩形喂给上面那个纯函数（自由框自身也有矩形，作为「我」的参照） */
+  function unfreeFlowIndex(i) {
+    const p = pageById(state.pageId);
+    const col = app.querySelector('.blocks');
+    if (!p || !col || !p.blocks[i]) return i;
+    const rects = p.blocks.map(function () { return null; });
+    col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
+      const k = +w.getAttribute('data-idx');
+      if (!(k >= 0) || !p.blocks[k]) return;
+      const r = w.getBoundingClientRect();
+      rects[k] = { top: r.top, bottom: r.bottom };
+    });
+    if (!rects[i]) return i;
+    return unfreeTargetIndex(p.blocks, rects, i);
+  }
   function unfreeBlock(i) {
     const p = state.content.pages.find(function (x) { return x.id === state.pageId; });
     if (!p || !p.blocks[i] || !p.blocks[i].free) { toast('此模块不是自由摆放'); return; }
+    /* ★ 修复85：先记住它此刻在视觉上的位置，摘 free 后把数组位置挪到那里（不再掉到页面最下方） */
+    let pos = i;
+    try { pos = unfreeFlowIndex(i); } catch (e) { pos = i; }
     delete p.blocks[i].free;
-    commit({ msg: '已归位：模块回到文档流（随内容自动排版）' });
+    if (pos !== i && pos >= 0) {
+      const moved = p.blocks.splice(i, 1)[0];
+      let at = pos > i ? pos - 1 : pos; /* 先摘出自己 → 目标下标在它后面时要前移一位 */
+      if (at < 0) at = 0;
+      if (at > p.blocks.length) at = p.blocks.length;
+      p.blocks.splice(at, 0, moved);
+    }
+    commit({ msg: '已归位：模块回到文档流原来的位置（随内容自动排版）' });
   }
   /* 在某个内容块后插入新块（afterIdx 为空则加到末尾），返回新位置 */
   function insertBlock(nb, afterIdx) {
@@ -2453,7 +2504,7 @@ window.LMApp = (function () {
     takeAdminSnap: takeAdminSnap, /* ★ 修复㉜：进入管理模式时拍「退回管理前」基准（不再被上传覆盖） */
     takePushSnap: takePushSnap, snapInfo: snapInfo, /* ★ 修复83：上传成功只重拍「最近上传版」+ 弹窗摘要 */
     syncTbOffset: syncTbOffset, watchTbOffset: watchTbOffset, /* ★ 修复84：工具条与面包屑错开（--lm-tb-h） */
-    unfreeBlock: unfreeBlock,
+    unfreeBlock: unfreeBlock, unfreeTargetIndex: unfreeTargetIndex, /* ★ 修复85：归位按视觉位置插回文档流 */
     applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,
     adjustImages: adjustImages,
