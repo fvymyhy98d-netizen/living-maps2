@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '82';
+var LM_ASSET_VER = '83';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1186,8 +1186,36 @@ window.LMApp = (function () {
      （相当于 Word 关闭时选「不保存」）。恢复走统一 commit：写本机 + 记历史 + 协同广播全网收敛。
      注意：恢复的是「进入管理模式那一刻」的整包 —— 协同期间其他设备同步来的修改也会一并回退，
      确认弹窗里已写明。退出管理模式即弃快照 */
-  let adminSnap = null;
-  function takeAdminSnap() { try { adminSnap = JSON.parse(JSON.stringify(state.content)); } catch (e) { adminSnap = null; } }
+  /* ★ 修复83：快照拆成两份，各管一件事 ——
+       adminSnap = 进入管理模式那一刻（**永不**被上传覆盖，这就是「退回管理前」那一版）
+       pushSnap  = 最近一次成功上传到 GitHub 的版本（修复62 的语义）
+     旧实现只有一个 adminSnap，且「上传成功」回调每次都把它重拍成刚上传的内容；而 commit
+     每一次编辑都会 publish → ghPush，于是基准几乎每写一笔就被重拍一次，「放弃修改」退化成
+     「退回上一次保存前」—— 用户感受：只退一步，而且退多退少全看推送时序，完全不确定。 */
+  let adminSnap = null, adminSnapAt = 0;
+  let pushSnap = null, pushSnapAt = 0;
+  function snapCopy(c) { try { return JSON.parse(JSON.stringify(c)); } catch (e) { return null; } }
+  function takeAdminSnap() {
+    adminSnap = snapCopy(state.content); adminSnapAt = adminSnap ? Date.now() : 0;
+  }
+  function takePushSnap() {
+    pushSnap = snapCopy(state.content); pushSnapAt = pushSnap ? Date.now() : 0;
+  }
+  /* 给「↩ 放弃修改」弹窗用的摘要（时间 + 体量）；两份基准内容相同则只显示一个 */
+  function snapInfo() {
+    const sum = function (c) {
+      if (!c) return '';
+      const pages = (c.pages || []).filter(function (p) { return p && p.id !== 'home'; });
+      const blocks = (c.pages || []).reduce(function (n, p) { return n + (((p && p.blocks) || []).length); }, 0);
+      return pages.length + ' 个条目 / ' + blocks + ' 个内容块';
+    };
+    let same = false;
+    try { same = !!adminSnap && !!pushSnap && JSON.stringify(adminSnap) === JSON.stringify(pushSnap); } catch (e) { same = false; }
+    return {
+      entryTs: adminSnapAt, pushTs: pushSnapAt,
+      entry: sum(adminSnap), push: sum(pushSnap), same: same
+    };
+  }
   /* ★ 修复64：「🩺 整理布局」一键自愈 —— 深压让位（margin-top）在调宽/调高/换位/协同收敛的
      复杂序列后可能残留（块间出现巨大空隙、两块叠在一起）。这里把本页所有文档流块的
      margin-top 清零、脱离让位会话，再在无动画环境下全量重算一次 —— 引擎按当前框位
@@ -1291,11 +1319,21 @@ window.LMApp = (function () {
     } catch (eD) { toast('已打印布局体检结果到控制台'); }
     return rows;
   }
-  function discardChanges() {
+  /* ★ 修复83：which = 'entry'（默认，进入管理模式时）| 'push'（最近一次上传版） */
+  function discardChanges(which) {
     if (!state.admin) return;
-    if (!adminSnap) { toast('没有可恢复的基准（请退出管理模式重新登录后再试）'); return; }
-    state.content = JSON.parse(JSON.stringify(adminSnap));
-    commit({ msg: '已放弃本次修改：内容恢复到进入管理模式时的版本' });
+    const usePush = which === 'push';
+    const snap = usePush ? pushSnap : adminSnap;
+    const at = usePush ? pushSnapAt : adminSnapAt;
+    if (!snap) {
+      toast(usePush
+        ? '还没有成功上传过，只能回到「进入管理模式时」那一版'
+        : '没有可恢复的基准（退出管理模式重新登录一次即可）');
+      return;
+    }
+    state.content = JSON.parse(JSON.stringify(snap));
+    commit({ msg: '已放弃本次修改：内容恢复到' + (usePush ? '最近一次上传的版本' : '进入管理模式时的版本')
+      + (at ? '（' + new Date(at).toLocaleString('zh-CN') + '）' : '') });
   }
   /* ★ 修复㉞「⤓ 归位」：自由框的位置是固定像素（并排/拖动当时的快照），页面内容一变就容易
      错位/漂移 —— 之前界面上没有任何「解除自由摆放」的操作。现在选中自由框 → 操作栏 ⤓
@@ -1816,7 +1854,7 @@ window.LMApp = (function () {
       closeGearPop();
       if (state.admin) {
         state.admin = false; state.root = false;
-        adminSnap = null; /* ★ 修复㉜：退出管理模式即弃快照 */
+        adminSnap = null; pushSnap = null; /* ★ 修复㉜/83：退出管理模式即弃两份快照 */
         try { sessionStorage.removeItem('lm_admin'); sessionStorage.removeItem('lm_root'); } catch (e5) { /* noop */ }
         render(); toast('已退出管理模式');
       } else loginModal();
@@ -2351,7 +2389,8 @@ window.LMApp = (function () {
     fixLayout: fixLayout, /* ★ 修复64：一键整理布局（清残留让位边距 + 全量重算，用户自救重叠/大空隙） */
     navBack: navBack, backTarget: backTarget, navHist: navHist, /* ★ 修复80：浏览历史栈 + 左上角返回键 */
     dumpLayout: dumpLayout, /* ★ 修复67：控制台布局体检（打印每块摆放方式/位置/让位量并复制到剪贴板） */
-    takeAdminSnap: takeAdminSnap, /* ★ 修复62：推送云端成功后由 collab 回调重拍快照（放弃更改=回到最近上传版） */
+    takeAdminSnap: takeAdminSnap, /* ★ 修复㉜：进入管理模式时拍「退回管理前」基准（不再被上传覆盖） */
+    takePushSnap: takePushSnap, snapInfo: snapInfo, /* ★ 修复83：上传成功只重拍「最近上传版」+ 弹窗摘要 */
     unfreeBlock: unfreeBlock,
     applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,

@@ -981,9 +981,16 @@ window.LMCollab = (function () {
       }
       if (r.ok) return r.json().then(function (j) {
         GH.sha = j.content && j.content.sha;
-        /* ★ 修复62：上传成功 → 重拍「放弃更改」基准快照。语义：放弃 = 回到最近一次上传给 Hub 的
-           版本（上传后又改的那些被丢弃，已上传的内容不丢）；未同步过则仍是进入管理模式时的版本 */
-        try { if (window.LMApp && LMApp.takeAdminSnap && validContent(LMApp.state.content)) LMApp.takeAdminSnap(); } catch (eSnap) { /* noop */ }
+        /* ★ 修复62：上传成功 → 重拍「最近上传版」基准快照（放弃 = 回到最近一次上传给 Hub 的版本）。
+           ★ 修复83：只拍 pushSnap，**绝不再动** adminSnap（进入管理模式那一刻）——
+           因为 commit 每改一笔都会 publish → ghPush，若这里重拍 adminSnap，
+           「放弃修改」就被压成「退回上一次保存前」（用户：只退一步，甚至退一步都不确定） */
+        try {
+          if (window.LMApp && validContent(LMApp.state.content)) {
+            if (LMApp.takePushSnap) LMApp.takePushSnap();
+            else if (LMApp.takeAdminSnap) LMApp.takeAdminSnap(); /* 旧版兜底 */
+          }
+        } catch (eSnap) { /* noop */ }
       });
     }).catch(function () { GH.inFlight = false; });
   }

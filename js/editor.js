@@ -957,7 +957,7 @@ window.LMEditor = (function () {
         '收拢', function () { LMApp.tidyGaps(40); });
     }
     else if (k === 'backup') backupModal();
-    else if (k === 'discard') confirmModal('放弃修改', '把内容恢复到最近一次「同步到 GitHub」上传的版本（从未同步过则回到进入管理模式时的版本）？此后的一切改动会被撤销（包括协同期间其他设备同步来的修改），恢复后不可通过撤销找回来。', '放弃修改', function () { LMApp.discardChanges(); });
+    else if (k === 'discard') discardModal();
     else if (k === 'password') passwordModal();
   });
   /* ★ 修复㉝：手机端格式工具条把手（⌨️）点击开合 —— 事件委托挂在 document，renderToolbar 重建 DOM 也不丢。
@@ -1610,6 +1610,43 @@ window.LMEditor = (function () {
         });
       });
     });
+  }
+  /* ---------- ↩ 放弃修改（★ 修复83：两个基准二选一）----------
+     旧实现只有一个基准，而且「上传成功」时会被重拍 —— 可 commit 每写一笔都会推送云端，
+     于是基准几乎每改一笔就前移一次，「放弃修改」退化成「退回上一次保存前」。
+     现在：adminSnap（进入管理模式那一刻，永不被覆盖）为默认，pushSnap（最近上传版）可选。 */
+  function discardModal() {
+    const info = (LMApp.snapInfo && LMApp.snapInfo()) || {};
+    const when = function (ts) { return ts ? new Date(ts).toLocaleString('zh-CN') : '—'; };
+    const row = function (mode, title, ts, bulk, primary) {
+      const has = !!bulk;
+      return '<div class="snap-opt">'
+        + '<div class="snap-main">'
+        + '<div class="snap-t">' + LMApp.esc(title) + (primary ? '<span class="snap-badge">推荐</span>' : '') + '</div>'
+        + '<div class="snap-d">' + LMApp.esc(has ? when(ts) + ' · ' + bulk : '（没有可恢复的基准）') + '</div>'
+        + '</div>'
+        + '<button type="button" class="btn ' + (primary ? 'btn-primary' : 'btn-ghost') + '" data-dsnap="' + mode + '"'
+        + (has ? '' : ' disabled') + '>恢复到这一版</button>'
+        + '</div>';
+    };
+    modal('<h3>↩ 放弃修改</h3>'
+      + '<p class="modal-note">恢复到哪一版？恢复会走一次正常提交（写本机 + 记历史 + 协同广播全网收敛），'
+      + '可用 Ctrl+Z 撤回这一次恢复。</p>'
+      + row('entry', '进入管理模式时', info.entryTs, info.entry, true)
+      + (info.same ? '' : row('push', '最近一次同步到 GitHub', info.pushTs, info.push, false))
+      + '<p class="modal-note">' + (info.same
+        ? '两个基准当前是同一版（进入管理模式后还没有成功上传过）。'
+        : '「最近一次同步」只回退上传之后又改的内容，已上传的内容不丢。')
+      + '协同期间其他设备同步来的修改也会一并回退。</p>'
+      + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button></div>',
+      function (root) {
+        root.addEventListener('click', function (e) {
+          const b = e.target && e.target.closest ? e.target.closest('[data-dsnap]') : null;
+          if (!b || b.disabled) return;
+          closeModal();
+          LMApp.discardChanges(b.getAttribute('data-dsnap'));
+        });
+      });
   }
   /* ---------- 修改管理密码 ---------- */
   function passwordModal() {

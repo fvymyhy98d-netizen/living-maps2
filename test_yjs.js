@@ -281,14 +281,14 @@ T('手机端工具栏限高可滚（max-height 42vh，展开不吞屏）',
 /* ---------- 9.8) 修复㉜：放弃修改 / 密码云端重验 / 手机操作栏浮现淡出+双击编辑 / 并排重叠兜底 ---------- */
 console.log('【9.8】修复㉜：放弃修改 · 密码云端重验 · 手机操作栏 · 并排重叠');
 T('放弃修改：登录成功与刷新恢复两处拍快照，discardChanges 整包恢复走 commit（本机+历史+协同广播）',
-  appSrc.indexOf('function takeAdminSnap()') > 0 && appSrc.indexOf('function discardChanges()') > 0
+  appSrc.indexOf('function takeAdminSnap()') > 0 && appSrc.indexOf('function discardChanges(which)') > 0
     && appSrc.indexOf('takeAdminSnap(); /* ★ 修复㉜：进入管理模式的瞬间拍内容快照') > 0
     && appSrc.indexOf('if (state.admin) takeAdminSnap();') > 0
-    && appSrc.indexOf('adminSnap = null; /* ★ 修复㉜：退出管理模式即弃快照 */') > 0
+    && appSrc.indexOf('adminSnap = null; pushSnap = null; /* ★ 修复㉜/83：退出管理模式即弃两份快照 */') > 0
     && appSrc.indexOf('discardChanges: discardChanges') > 0);
 T('管理条新增「↩ 放弃修改」按钮（确认弹窗写明协同回退影响）',
   edt2.indexOf('data-panel="discard"') > 0 && edt2.indexOf("k === 'discard'") > 0
-    && edt2.indexOf('LMApp.discardChanges();') > 0);
+    && edt2.indexOf("LMApp.discardChanges(b.getAttribute('data-dsnap'));") > 0);
 T('密码云端重验：本地失败自动拉云端 content.js 用最新密码数据重验，命中才合入本机 admin 配置',
   appSrc.indexOf('function fetchRemoteContent()') > 0
     && appSrc.indexOf("fetch('data/content.js?lmnc='") > 0
@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '82';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '83';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -525,11 +525,10 @@ T('hl 色板无选区时提示且 return（⊘ 清除除外），不再落 apply
     && edt2.indexOf("return; /* ★ 修复61：无选区不整块上色（确认路径同提示逻辑） */") > 0);
 
 /* ---------- 9.27) 修复62：放弃更改 = 回到最近一次上传到 Hub 的版本 ---------- */
-console.log('【9.27】修复62：ghPush 成功重拍基准快照 · takeAdminSnap 导出 · 确认弹窗文案更新');
-T('GitHub 上传成功回调 LMApp.takeAdminSnap() 重拍基准 + app 导出 takeAdminSnap + discard 弹窗写明新语义',
-  col.indexOf('try { if (window.LMApp && LMApp.takeAdminSnap && validContent(LMApp.state.content)) LMApp.takeAdminSnap(); } catch (eSnap) { /* noop */ }') > 0
-    && appSrc.indexOf('takeAdminSnap: takeAdminSnap, /* ★ 修复62：推送云端成功后由 collab 回调重拍快照') > 0
-    && edt2.indexOf('把内容恢复到最近一次「同步到 GitHub」上传的版本（从未同步过则回到进入管理模式时的版本）') > 0);
+console.log('【9.27】修复62：放弃修改的「最近上传版」基准（★ 修复83 起改为可选的第二项，细节见 9.48）');
+T('修复62 语义保留：上传成功 → 重拍「最近上传版」基准（= pushSnap，不再影响「进入管理模式时」）',
+  col.indexOf('if (LMApp.takePushSnap) LMApp.takePushSnap();') > 0
+    && appSrc.indexOf('takePushSnap: takePushSnap, snapInfo: snapInfo,') > 0);
 
 
 /* ---------- 9.28) 修复63：调宽/调高挂让位会话（不再抖动）+ 对齐不改宽度 ---------- */
@@ -1400,5 +1399,103 @@ T('css：分类清单样式（整行可点勾选 + ↑↓ 按钮，手机端加�
   }
   T('真跑读表单：勾选顺序进 only · 全不勾等于显示全部（不写空数组）· 标题/版式/列数照旧', okB47, dB47);
 })();
+/* ---------- 9.48) 修复83：放弃修改 = 完整退回「进入管理模式时」（不再只退一步） ---------- */
+console.log('【9.48】修复83：放弃修改拆成两份基准 —— 进入管理模式时（默认）/ 最近上传版');
+T('app.js：adminSnap 与 pushSnap 分开存 + 各自时间戳 · takePushSnap / snapInfo 新增',
+  appSrc.indexOf('let adminSnap = null, adminSnapAt = 0;') > 0
+    && appSrc.indexOf('let pushSnap = null, pushSnapAt = 0;') > 0
+    && appSrc.indexOf('function takePushSnap() {') > 0
+    && appSrc.indexOf('function snapInfo() {') > 0);
+T('app.js：discardChanges(which) 按参数选基准，历史/toast 里写明恢复了哪一版',
+  appSrc.indexOf('function discardChanges(which) {') > 0
+    && appSrc.indexOf('const snap = usePush ? pushSnap : adminSnap;') > 0
+    && appSrc.indexOf("'已放弃本次修改：内容恢复到' + (usePush ? '最近一次上传的版本' : '进入管理模式时的版本')") > 0);
+T('app.js：退出管理模式两份快照一起清掉 + 导出 takePushSnap / snapInfo',
+  appSrc.indexOf('adminSnap = null; pushSnap = null; /* ★ 修复㉜/83：退出管理模式即弃两份快照 */') > 0
+    && appSrc.indexOf('takePushSnap: takePushSnap, snapInfo: snapInfo, /* ★ 修复83') > 0);
+T('collab.js：上传成功只重拍「最近上传版」——绝不再动「进入管理模式时」的基准',
+  col.indexOf('if (LMApp.takePushSnap) LMApp.takePushSnap();') > 0
+    && col.indexOf('if (window.LMApp && LMApp.takeAdminSnap && validContent(LMApp.state.content)) LMApp.takeAdminSnap();') < 0);
+T('editor.js：↩ 放弃修改 → discardModal 两个基准二选一（旧的单按钮 confirmModal 已移除）',
+  edt2.indexOf("else if (k === 'discard') discardModal();") > 0
+    && edt2.indexOf('function discardModal() {') > 0
+    && edt2.indexOf("row('entry', '进入管理模式时', info.entryTs, info.entry, true)") > 0
+    && edt2.indexOf("row('push', '最近一次同步到 GitHub', info.pushTs, info.push, false)") > 0
+    && edt2.indexOf('把内容恢复到最近一次「同步到 GitHub」上传的版本') < 0);
+T('css：双基准选项样式（.snap-opt / .snap-badge / 手机端整行按钮）',
+  cssSrc.indexOf('.snap-opt{') > 0 && cssSrc.indexOf('.snap-badge{') > 0
+    && cssSrc.indexOf('body.mobile-view .snap-opt .btn{width:100%}') > 0);
+
+/* 真跑 A：执行 app.js 的 discardChanges 源码（默认 entry / 显式 push / 无基准 / 访客 / 深拷贝） */
+(function () {
+  const appLF = appSrc.replace(/\r\n/g, '\n');
+  const aA = appLF.indexOf('  function discardChanges(which) {');
+  const bA = appLF.indexOf('\n  }\n', aA);
+  const codeA = (aA >= 0 && bA > aA) ? appLF.slice(aA, bA + 5) : '';
+  let okA = false, dA = '切片不可用';
+  if (codeA) {
+    try {
+      const ENTRY = { pages: [{ id: 'home' }, { id: 'p1', blocks: [{ id: 'b1', text: '管理前' }] }] };
+      const PUSH = { pages: [{ id: 'home' }, { id: 'p1', blocks: [{ id: 'b1', text: '已上传' }] }] };
+      const mk = function (snap) {
+        const S = { entry: snap.entry, entryAt: snap.entryAt, push: snap.push, pushAt: snap.pushAt };
+        const state = { admin: snap.admin !== false, content: { pages: [{ id: 'home' }] } };
+        const out = { commits: [], toasts: [] };
+        const F = new Function('S', 'state', 'toast', 'commit',
+          'let adminSnap = S.entry, adminSnapAt = S.entryAt, pushSnap = S.push, pushSnapAt = S.pushAt;\n'
+          + codeA + '\nreturn { discardChanges: discardChanges, state: state };');
+        const r = F(S, state,
+          function (m) { out.toasts.push(m); },
+          function (o) { out.commits.push(o.msg); });
+        return { r: r, out: out };
+      };
+      const t1 = mk({ entry: ENTRY, entryAt: 1700000000000, push: PUSH, pushAt: 1700000600000 });
+      t1.r.discardChanges();
+      const got1 = JSON.stringify(t1.r.state.content);
+      const t2 = mk({ entry: ENTRY, entryAt: 1700000000000, push: PUSH, pushAt: 1700000600000 });
+      t2.r.discardChanges('push');
+      const got2 = JSON.stringify(t2.r.state.content);
+      const t3 = mk({ entry: ENTRY, entryAt: 1700000000000, push: null, pushAt: 0 });
+      const before3 = JSON.stringify(t3.r.state.content);
+      t3.r.discardChanges('push');
+      const t4 = mk({ entry: ENTRY, entryAt: 1, push: PUSH, pushAt: 2, admin: false });
+      t4.r.discardChanges();
+      const t5 = mk({ entry: ENTRY, entryAt: 1700000000000, push: PUSH, pushAt: 0 });
+      t5.r.discardChanges();
+      t5.r.state.content.pages[1].blocks[0].text = '事后又改';
+      t5.r.discardChanges();
+      okA = got1 === JSON.stringify(ENTRY)
+        && got2 === JSON.stringify(PUSH)
+        && t1.out.commits.length === 1 && t1.out.commits[0].indexOf('进入管理模式时的版本') > 0
+        && t2.out.commits.length === 1 && t2.out.commits[0].indexOf('最近一次上传的版本') > 0
+        && JSON.stringify(t3.r.state.content) === before3
+        && t3.out.commits.length === 0 && t3.out.toasts.length === 1
+        && t4.out.commits.length === 0
+        && JSON.stringify(t5.r.state.content) === JSON.stringify(ENTRY);
+      if (!okA) dA = JSON.stringify({ got1: got1.slice(0, 90), got2: got2.slice(0, 90), c1: t1.out.commits, c2: t2.out.commits, t3c: t3.out.commits, t3t: t3.out.toasts, t4c: t4.out.commits });
+    } catch (eA) { okA = false; dA = '抛出 ' + eA.message; }
+  }
+  T('真跑放弃修改：默认退回整包「进入管理模式时」· push 只退到上传版 · 无基准/访客不动内容 · 深拷贝不污染基准', okA, dA);
+  /* 真跑 B：snapInfo 摘要（两份基准相同 → same=true，弹窗只显示一行） */
+  const aB = appLF.indexOf('  function snapInfo() {');
+  const bB = appLF.indexOf('\n  }\n', aB);
+  const codeB = (aB >= 0 && bB > aB) ? appLF.slice(aB, bB + 5) : '';
+  let okB = false, dB = '切片不可用';
+  if (codeB) {
+    try {
+      const F2 = new Function('S', 'let adminSnap = S.entry, adminSnapAt = S.entryAt, pushSnap = S.push, pushSnapAt = S.pushAt;\n' + codeB + '\nreturn snapInfo;');
+      const C = { pages: [{ id: 'home', blocks: [{ id: 'h1' }] }, { id: 'p1', blocks: [{ id: 'b1' }, { id: 'b2' }] }] };
+      const same = F2({ entry: C, entryAt: 111, push: C, pushAt: 222 })();
+      const diff = F2({ entry: C, entryAt: 111, push: { pages: [{ id: 'home' }, { id: 'p1', blocks: [{ id: 'b1' }] }] }, pushAt: 222 })();
+      const none = F2({ entry: C, entryAt: 5, push: null, pushAt: 0 })();
+      okB = same.same === true && same.entry === '1 个条目 / 3 个内容块' && same.entryTs === 111
+        && diff.same === false && diff.push === '1 个条目 / 1 个内容块'
+        && none.same === false && none.push === '' && none.pushTs === 0;
+      if (!okB) dB = JSON.stringify({ same: same, diff: diff, none: none });
+    } catch (eB) { okB = false; dB = '抛出 ' + eB.message; }
+  }
+  T('真跑基准摘要：条目/块计数 + 时间戳 · 两份相同 same=true · 没上传过则为空', okB, dB);
+})();
+
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
