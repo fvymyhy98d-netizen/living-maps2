@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793449238082,
+      "syncTs": 1793449317650,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -348,7 +348,7 @@ window.SITE_CONTENT = {
           ],
           "rows": [
             [
-              "系统拆解是不是",
+              "系统拆解",
               "一次回答错误，是模型、提示词还是知识缺失？",
               "先查输入与提示，再怀疑模型（推断）"
             ],
@@ -363,7 +363,7 @@ window.SITE_CONTENT = {
               "长尾知识与实时信息上容易失败"
             ]
           ],
-          "_ts": 1793449238076
+          "_ts": 1793449317649
         },
         {
           "type": "heading",
