@@ -159,10 +159,38 @@ window.LMCollab = (function () {
     if (lastKeyAt && Date.now() - lastKeyAt < BUSY_KEY_WIN) return true;
     return false;
   }
-  /* ---------- 冲突保护②：块级后写优先 ----------
-     编辑保存时给被改的块打 _ts（editor.js touchBlock）。应用远端整包前逐块比较：
-     页结构 / 块数一致时，「谁改这个块更晚谁赢」——A 改第 3 块、B 改第 5 块，两边都不丢；
-     结构不一致（插入/删除/调序）时退回提交级后写优先（整包），与历史版本兼容 */
+  /* ---------- 冲突保护②：字段级三向合并（修复121，取代旧的纯块级后写优先） ----------
+     旧规则：逐个块比 _ts，后保存的一方**整块**覆盖 → A 改了文字、B 只改了字号，谁后保存另一个人的改动就没了。
+     新规则：以「上一次双方收敛的内容」为共同祖先（noteBase 记录），按**字段**做三向合并：
+       ▸ 只有一方改过该字段 → 用改过的那一方（两边都不丢）；
+       ▸ 两边都改了同一字段 → 按块级 _ts 后写优先（行为可预期，不会出现「字段被劈成两半」）；
+       ▸ 一方删掉该字段、另一方没动 → 尊重删除。
+     页结构 / 块数不一致（插入/删除/调序）仍整包取远端，与历史版本兼容。
+     ⚠ 祖先只在「真正应用成功」之后才推进（doApply 内 noteBase），
+        否则被挂起（本机正在输入）的包会把祖先顶到前面，下一轮就会把自己的改动判成"本地改动"而压掉远端。 */
+  var _base = null;
+  function noteBase(content) {   /* 收敛后记下共同祖先（深拷贝，避免被后续编辑就地污染） */
+    try { _base = content ? JSON.parse(JSON.stringify(content)) : null; } catch (eB) { _base = null; }
+  }
+  /* 纯函数（可单测）：base / local / remote 三份块对象 → 合并结果 */
+  function mergeBlockFields(bb, lb, rb) {
+    const b0 = bb || {}, l0 = lb || {}, r0 = rb || {};
+    const out = {}, keys = {};
+    [b0, l0, r0].forEach(function (o) { Object.keys(o).forEach(function (k) { keys[k] = 1; }); });
+    Object.keys(keys).forEach(function (k) {
+      let B, L, R;
+      try { B = JSON.stringify(b0[k]); L = JSON.stringify(l0[k]); R = JSON.stringify(r0[k]); } catch (eS) { L = R = null; B = '~'; }
+      let v;
+      if (L === R) v = l0[k];                        /* 两边一致（含都没动）→ 用它 */
+      else if (L === B) v = r0[k];                   /* 只有远端改了 → 用远端 */
+      else if (R === B) v = l0[k];                   /* 只有本地改了 → 用本地 */
+      else v = (+l0._ts || 0) > (+r0._ts || 0) ? l0[k] : r0[k];  /* 都改了 → 后写优先 */
+      if (v === undefined) return;                   /* 两边都没这个字段 → 不写空键 */
+      out[k] = v;
+    });
+    out._ts = Math.max(+l0._ts || 0, +r0._ts || 0);
+    return out;
+  }
   function mergeBlocks(c) {
     try {
       const base = window.LMApp ? LMApp.state.content : null;
@@ -171,16 +199,22 @@ window.LMCollab = (function () {
       for (let i = 0; i < base.pages.length; i++) {
         if ((base.pages[i] && base.pages[i].id) !== (c.pages[i] && c.pages[i].id)) return c;
       }
+      const anc = _base;
       c.pages.forEach(function (rp, i) {
         const bp = base.pages[i];
         if (!bp || !rp || !Array.isArray(bp.blocks) || !Array.isArray(rp.blocks)) return;
         if (bp.blocks.length !== rp.blocks.length) return; /* 该页结构变了 → 整页取远端 */
+        /* 祖先里的同一页：页 id 与块数都必须对得上，否则这次不用祖先（退回块级后写优先） */
+        const pid = rp.id || bp.id;
+        const ap = (anc && Array.isArray(anc.pages)) ? anc.pages.filter(function (p) { return p && p.id === pid; })[0] : null;
+        const ancOk = !!(ap && Array.isArray(ap.blocks) && ap.blocks.length === rp.blocks.length);
         rp.blocks.forEach(function (rb, j) {
           const bb = bp.blocks[j];
           if (!bb || !rb) return;
           if (JSON.stringify(bb) === JSON.stringify(rb)) return;
+          if (ancOk) { rp.blocks[j] = mergeBlockFields(ap.blocks[j], bb, rb); return; }  /* ★ 字段级 */
           const bt = +bb._ts || 0, rt = +rb._ts || 0;
-          if (bt > rt) rp.blocks[j] = bb; /* 本机这个块改得更晚 → 保留本机（后写优先到块级） */
+          if (bt > rt) rp.blocks[j] = bb; /* 没有祖先：退回块级后写优先（旧规则） */
         });
       });
     } catch (e) { /* 任何异常都退回整包 */ }
@@ -282,7 +316,7 @@ window.LMCollab = (function () {
       }
     } catch (e0) { /* noop */ }
     rosterFromRemote(c);           /* 设备名单双向可见 */
-    c = mergeBlocks(c);            /* 块级后写优先（见上方注释） */
+    c = mergeBlocks(c);            /* 字段级三向合并（见上方注释；无祖先时退回块级后写优先） */
     const before = LMApp.state.content;
     let same = false;              /* 内容一模一样（重复帧 / 别人保存但没改东西）→ 不重绘不提示：
                                       协作模式下对方每次保存不再引发本机整页重绘，这是“开协作就卡”的主因之一 */
@@ -290,6 +324,7 @@ window.LMCollab = (function () {
     if (same) return;
     structConflictWarn(c, by); /* ★ 修复88：被整页覆盖前先提醒一句（见函数注释） */
     try { LMApp.applyRemoteContent(c); } catch (e) { return; }
+    noteBase(c);   /* ★ 修复121：真正应用成功后才推进共同祖先（被挂起的包不能推进） */
     try { pushFeedFrom(before, c, by); } catch (eF0) { /* noop */ }
     setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
     LMApp.toast('🔄 已同步「' + (by || '其他设备') + '」的修改');
@@ -1074,6 +1109,7 @@ window.LMCollab = (function () {
       if (localBusy() || !verifyBanList(c)) return;
       try {
         LMApp.applyRemoteContent(mergeBlocks(c));
+        noteBase(LMApp.state.content);   /* ★ 修复121：应用后本机内容即新的共同祖先（与 doApply 保持一致） */
         if (window.LMStore) LMStore.saveLocal(LMApp.state.content);
       } catch (eD) { return; }
       setTimeout(function () { repaintLocks(); enforceBans(); }, 60);

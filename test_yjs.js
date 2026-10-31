@@ -2636,6 +2636,71 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && s.indexOf('if (isNew) page.blocks.push(nb); else page.blocks[idx] = nb;') > 0;
     })());
 
+  /* ★ 修复121：协同字段级合并 + 删页二次确认 */
+  T('合并1（真跑）：字段级三向合并 —— A 改文字、B 改字号两边都保住；都改同一字段才按后写优先',
+    (function () {
+      const s = srcOf('js/collab.js');
+      const i0 = s.indexOf('function mergeBlockFields(');
+      if (i0 < 0) return false;
+      let i = s.indexOf('{', i0), d = 0, end = -1;
+      for (; i < s.length; i++) {
+        if (s[i] === '{') d++;
+        else if (s[i] === '}') { d--; if (!d) { end = i + 1; break; } }
+      }
+      if (end < 0) return false;
+      let merge;
+      try { merge = new Function('return ' + s.slice(i0, end))(); } catch (e) { return false; }
+      if (typeof merge !== 'function') return false;
+      const base = { type: 'paragraph', text: '原文', size: 'normal', _ts: 100 };
+      /* ① 各改各的字段 → 两边的改动都要在 */
+      const m1 = merge(base,
+        { type: 'paragraph', text: '我改的文字', size: 'normal', _ts: 200 },
+        { type: 'paragraph', text: '原文', size: 'large', _ts: 300 });
+      if (!(m1.text === '我改的文字' && m1.size === 'large' && m1.type === 'paragraph')) return false;
+      /* ② 都改了 text → _ts 大的赢（本地后写） */
+      const m2 = merge(base,
+        { type: 'paragraph', text: '本地', size: 'normal', _ts: 500 },
+        { type: 'paragraph', text: '远端', size: 'normal', _ts: 300 });
+      if (m2.text !== '本地') return false;
+      /* ③ 同一冲突、远端后写 → 远端赢 */
+      const m3 = merge(base,
+        { type: 'paragraph', text: '本地', size: 'normal', _ts: 100 },
+        { type: 'paragraph', text: '远端', size: 'normal', _ts: 900 });
+      if (m3.text !== '远端') return false;
+      /* ④ 远端只改 text、本地只加了个新字段 → 两者都保留 */
+      const m4 = merge(base,
+        { type: 'paragraph', text: '原文', size: 'normal', extra: '我加的', _ts: 150 },
+        { type: 'paragraph', text: '远端改的', size: 'normal', _ts: 260 });
+      if (!(m4.text === '远端改的' && m4.extra === '我加的')) return false;
+      /* ⑤ 合并结果的 _ts 取两边较大，且不写空键 */
+      if (m4._ts !== 260) return false;
+      const m5 = merge({}, { a: 1 }, {});
+      return m5.a === 1 && !('b' in m5);
+    })());
+
+  T('合并2：共同祖先只在「应用成功」后推进 —— 挂起的包不会把祖先顶到前面（否则会压掉远端改动）',
+    (function () {
+      const s = srcOf('js/collab.js');
+      return s.indexOf('var _base = null;') > 0
+        && s.indexOf('function noteBase(content)') > 0
+        && s.indexOf('noteBase(c);   /* ★ 修复121：真正应用成功后才推进共同祖先') > 0
+        && s.indexOf('const ancOk = !!(ap && Array.isArray(ap.blocks) && ap.blocks.length === rp.blocks.length);') > 0
+        && s.indexOf('rp.blocks[j] = mergeBlockFields(ap.blocks[j], bb, rb);') > 0;
+    })());
+
+  T('页面1：pushLocal 删页前二次确认 —— 本机页数不到云端一半 / 一次删掉过半时先问，未确认不删',
+    (function () {
+      const s = srcOf('js/ycollab.js');
+      return s.indexOf('var pruneConfirmed = false;') > 0
+        && s.indexOf('var stale = [];') > 0
+        && s.indexOf('var risky = (docPages > 0) && (stale.length * 2 > docPages || minePages * 2 < docPages);') > 0
+        && s.indexOf('okDel = window.confirm(') > 0
+        && s.indexOf("已跳过删除 ' + stale.length + ' 个页面") > 0
+        && s.indexOf('confirmPrune: function () { pruneConfirmed = true; }') > 0
+        && s.indexOf('stale.forEach(function (k) { ymap.delete(k); });') > 0;
+    })());
+
+
   T('触屏1：手机「单击弹操作栏 / 双击进编辑」的两个真 bug —— 双击 key 用块、同块连点不重建工具栏',
     (function () {
       const s = srcOf('js/editor.js');
@@ -3209,10 +3274,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=120 · LM_ASSET_VER=120',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=121 · LM_ASSET_VER=121',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=119/g) || []).length === 0 && /\?v=120/.test(html)
-      && /LM_ASSET_VER = '120'/.test(appJs));
+      && (html.match(/\?v=120/g) || []).length === 0 && /\?v=121/.test(html)
+      && /LM_ASSET_VER = '121'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3565,10 +3630,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 120（?v=120 共 21 处 · v119 无残留 · LM_ASSET_VER=120）',
-    (html.match(/\?v=120/g) || []).length === 21 && (html.match(/\?v=119/g) || []).length === 0
-      && /LM_ASSET_VER = '120'/.test(appJs),
-    'v120=' + (html.match(/\?v=120/g) || []).length + ' v119=' + (html.match(/\?v=119/g) || []).length);
+  T('版本已升到 121（?v=121 共 21 处 · v120 无残留 · LM_ASSET_VER=121）',
+    (html.match(/\?v=121/g) || []).length === 21 && (html.match(/\?v=120/g) || []).length === 0
+      && /LM_ASSET_VER = '121'/.test(appJs),
+    'v121=' + (html.match(/\?v=121/g) || []).length + ' v120=' + (html.match(/\?v=120/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

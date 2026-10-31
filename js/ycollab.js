@@ -7,7 +7,7 @@
      信令（signaling-worker/ 目录留档）因国内运营商全面 DNS 污染已弃用；TURN 自动兜底；
    ▸ 在线人数 / 谁在编辑哪一块：Yjs Awareness（无中心服务器计数）；
    ▸ 通道状态机：getStats() 判定 P2P直连(IPv6/IPv4)/TURN中继/离线，左下角徽章实时显示；
-   ▸ 集成：远端更新走「同一个漏斗」LMCollab.applyExternal → 块级后写优先合并，
+   ▸ 集成：远端更新走「同一个漏斗」LMCollab.applyExternal → 字段级三向合并（修复121），
      讨论区/花名册/屏蔽校验/防打断逻辑全部复用；单人编辑回传 GitHub 与本层完全解耦；
    ▸ 降级：库加载失败 / 信令不可达 → 自动回退原有通道（本机互连 + 云端），失败可见不静默。
    ========================================================= */
@@ -100,6 +100,7 @@
 
   var ydoc = null, ymap = null, provider = null, myEditing = null, lastChannel = '';
   var applying = false;
+  var pruneConfirmed = false;   /* ★ 修复121：本会话内是否已确认过「大批删页」 */
 
   /* 本地保存 → 写入 Y.Doc（diff 后只写有变化的键；origin='lm-local' 防止回灌自己） */
   function pushLocal(content) {
@@ -111,17 +112,48 @@
         var ms = JSON.stringify(meta);
         if (ymap.get('meta') !== ms) ymap.set('meta', ms);
         var seen = {};
+        var stale = [];   /* ★ 修复121：本地没见到的 page:* 键（必须删，但删之前要先确认） */
         content.pages.forEach(function (p) {
           if (!p || !p.id) return;
           var key = 'page:' + p.id; seen[key] = 1;
           var ps = JSON.stringify(p);
           if (ymap.get(key) !== ps) ymap.set(key, ps);
         });
-        ymap.keys().forEach(function (k) { if (k.indexOf('page:') === 0 && !seen[k]) ymap.delete(k); });
+        ymap.keys().forEach(function (k) {
+          if (k.indexOf('page:') === 0 && !seen[k]) stale.push(k);
+        });
+        /* ★ 修复121：删页前先判断「本机内容是不是本来就不完整」
+           —— 本地只加载到几页（拉取失败 / 旧缓存 / 刚清过站点数据）时，
+           一次保存就会把别人的页从协同文档里全删掉，而且会传染给所有设备。
+           判定：要删的页超过云端页数的一半，或本机页数不到云端的一半 → 必须二次确认；
+           没确认就这一轮只同步改动、不删页（不阻断保存，下次保存会再问）。 */
+        if (stale.length) {
+          var docPages = 0;
+          ymap.keys().forEach(function (k) { if (k.indexOf('page:') === 0) docPages++; });
+          var minePages = Object.keys(seen).length;
+          var risky = (docPages > 0) && (stale.length * 2 > docPages || minePages * 2 < docPages);
+          if (risky && !pruneConfirmed) {
+            var okDel = false;
+            try {
+              okDel = window.confirm('⚠ 这次保存会删掉 ' + stale.length + ' 个页面'
+                + '（本机 ' + minePages + ' 页，协同里共 ' + docPages + ' 页）。\n\n'
+                + '如果这台设备的内容本来就不完整（比如刚才没拉取成功、或清过站点数据），'
+                + '请点「取消」—— 这一轮只同步改动、不删页。');
+            } catch (eC1) { okDel = false; }
+            if (!okDel) {
+              try {
+                if (window.LMApp && LMApp.toast) LMApp.toast('⚠ 已跳过删除 ' + stale.length + ' 个页面（本机内容可能不完整）');
+              } catch (eT) { /* noop */ }
+              return;   /* 改动已写入，只是不删页 */
+            }
+            pruneConfirmed = true;
+          }
+          stale.forEach(function (k) { ymap.delete(k); });
+        }
       }, 'lm-local');
     } catch (e) { /* noop */ }
   }
-  /* 远端更新 → 走与旧通道同一个漏斗（applyExternal → 块级后写优先 + 防打断 + 讨论区合并） */
+  /* 远端更新 → 走与旧通道同一个漏斗（applyExternal → 字段级三向合并 + 防打断 + 讨论区合并） */
   function applyKeys(keys, by) {
     if (!window.LMApp || !window.LMCollab || !keys.length) return;
     try {
@@ -283,7 +315,9 @@
         },
         /* ★ 修复88：手机切回前台时立刻重播 presence（否则要等 15 秒心跳，别人那边才重新看到「你在编辑」） */
         wake: function () { try { setAw(); if (window.LMCollab && LMCollab.paintChip) LMCollab.paintChip(); } catch (eWk) { /* noop */ } },
-        pushLocal: pushLocal
+        pushLocal: pushLocal,
+        /* ★ 修复121：管理端「确实要删掉这些页」时可直接确认，避免每次保存都被问一遍 */
+        confirmPrune: function () { pruneConfirmed = true; }
       };
       try { if (window.LMCollab && LMCollab.paintChip) LMCollab.paintChip(); } catch (e7) { /* noop */ }
       toast('🟢 实时协同已就绪（Yjs Mesh）：自动直连 / TURN 兜底 / 离线可用');
