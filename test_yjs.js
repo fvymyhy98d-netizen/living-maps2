@@ -3389,10 +3389,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=122 · LM_ASSET_VER=122',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=123 · LM_ASSET_VER=123',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=121/g) || []).length === 0 && /\?v=122/.test(html)
-      && /LM_ASSET_VER = '122'/.test(appJs));
+      && (html.match(/\?v=122/g) || []).length === 0 && /\?v=123/.test(html)
+      && /LM_ASSET_VER = '123'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3745,10 +3745,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 122（?v=122 共 21 处 · v121 无残留 · LM_ASSET_VER=122）',
-    (html.match(/\?v=122/g) || []).length === 21 && (html.match(/\?v=121/g) || []).length === 0
-      && /LM_ASSET_VER = '122'/.test(appJs),
-    'v122=' + (html.match(/\?v=122/g) || []).length + ' v121=' + (html.match(/\?v=121/g) || []).length);
+  T('版本已升到 123（?v=123 共 21 处 · v122 无残留 · LM_ASSET_VER=123）',
+    (html.match(/\?v=123/g) || []).length === 21 && (html.match(/\?v=122/g) || []).length === 0
+      && /LM_ASSET_VER = '123'/.test(appJs),
+    'v123=' + (html.match(/\?v=123/g) || []).length + ' v122=' + (html.match(/\?v=122/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

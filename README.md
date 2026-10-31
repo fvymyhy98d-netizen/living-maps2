@@ -1195,3 +1195,9 @@ node tools/train_lm.js 5          # 指定阶数（1-5）
 - `lib/` 里 Yjs/MQTT 自身的内部请求不受 `fetchT` 管控（它们走 WebSocket + IndexedDB）。
 
 **回归（修复122）**：`node --check`（store / collab / app / editor / fbsync）通过；`test_yjs.js` **425/425**（新增 4 条：`存储1` 把 `validateContent` 截出来真跑 6 组用例、`存储2` 用假 localStorage 真跑「配额满 → 清快照 → 重试成功」「始终写不进 → false」、`存储3`/`网络1` 护栏与「除 fetchT 外无裸 fetch」断言；`合并1` 追加时钟漂移用例）；`test_comments.js` 9/9、`test_collab.js` 9/9、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS。资源版本升至 `?v=122` / `LM_ASSET_VER='122'`。
+
+**v123（v122 的复查补丁，两处 + 版本号）**
+
+- **校验器不得改写健康内容**：`validateContent` 原来对「没有 `title` 字段」的页面补了 `title: ''` —— 看起来无害，实际每次启动内容字符串都会变一点（`commit` 的「内容是否真的变了」判断、协同的 `JSON.stringify` 比较都会因此误判），可能把无意义的 `title:''` 推给其他设备。现在**只在类型不对时**才 `String()` 修正，对正常内容零改写；`test_yjs.js` 存储1 新增第 ⑦ 条：健康内容过校验后 `JSON.stringify` 必须与输入完全一致（用真实 `data/content.js` + 假 `localStorage` 端到端跑了 14 项烟测才发现这条）。
+- **替换图片被误拦**：体积预算原为 `cur + 新增`，把被替换的旧图也算进去了 —— 内容已接近 4MB 时，把 3.9MB 的大图换成 200KB 小图会被判「太大」。改成 `cur - 旧图 + 新增`，提示里的「已占」也同步扣掉旧图。
+- 资源版本再升一档到 `?v=123` / `LM_ASSET_VER='123'`：让已经缓存了 v122 那一版 JS 的浏览器重新拉取（否则上面两处修复对老访客不生效）。
