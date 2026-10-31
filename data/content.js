@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793415232397,
+      "syncTs": 1793415612554,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -206,7 +206,8 @@ window.SITE_CONTENT = {
             "y": 1177,
             "w": 94.4,
             "ride": 0
-          }
+          },
+          "_ts": 1793415612554
         }
       ],
       "heroAlign": ""
@@ -276,18 +277,6 @@ window.SITE_CONTENT = {
             10
           ],
           "unit": "个"
-        },
-        {
-          "type": "paragraph",
-          "size": "normal",
-          "text": "",
-          "style": {},
-          "free": {
-            "x": 31.5,
-            "y": 823,
-            "w": 44,
-            "ride": 0
-          }
         },
         {
           "type": "heading",
