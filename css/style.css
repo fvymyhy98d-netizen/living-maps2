@@ -1127,3 +1127,38 @@ body.mobile-view .kid-mv{width:32px;height:32px;font-size:14px}
 body.mobile-view .kid-own{display:none}
 body.mobile-view .kid-pick{max-height:34vh}
 
+
+/* ---------- 本地 AI 提炼面板（修复91） ---------- */
+.lm-ai-fab{position:fixed;right:22px;bottom:22px;z-index:120;display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.82);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);box-shadow:0 8px 30px rgba(0,0,0,.16);border:1px solid rgba(0,0,0,.06);color:var(--text);font-size:14px;font-weight:600;transition:transform .18s ease,box-shadow .18s ease}
+.lm-ai-fab:hover{transform:translateY(-1px);box-shadow:0 12px 34px rgba(0,0,0,.2)}
+.lm-ai-fab:active{transform:scale(.96)}
+.lm-ai-fab[hidden]{display:none}
+.lm-ai-panel{position:fixed;right:22px;bottom:78px;z-index:121;width:min(380px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:auto;border-radius:20px;background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);box-shadow:0 18px 60px rgba(0,0,0,.22);border:1px solid rgba(0,0,0,.06);padding:14px 16px 16px}
+.lm-ai-panel[hidden]{display:none}
+.lm-ai-head{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.lm-ai-badge{font-size:11px;color:#007a55;background:rgba(0,170,120,.12);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.lm-ai-x{margin-left:auto;font-size:20px;line-height:1;color:var(--text2);padding:2px 6px}
+.lm-ai-cur{font-size:13px;color:var(--text2);margin:10px 0 2px}
+.lm-ai-h{font-size:13px;margin:12px 0 6px;color:var(--text)}
+.lm-ai-list{margin:0 0 0 18px;font-size:14px;line-height:1.55}
+.lm-ai-list li{margin:4px 0}
+.lm-ai-kw{display:flex;flex-wrap:wrap;gap:6px}
+.lm-ai-chip{font-size:12px;padding:3px 9px;border-radius:999px;background:var(--bg2);color:var(--text)}
+.lm-ai-rel{display:flex;flex-direction:column;gap:6px}
+.lm-ai-rel a{display:flex;align-items:center;gap:8px;font-size:14px;padding:7px 10px;border-radius:10px;background:var(--bg2);color:var(--text)}
+.lm-ai-rel a:hover{background:#ececf1}
+.lm-ai-score{margin-left:auto;font-size:12px;color:var(--text2)}
+.lm-ai-ask{display:flex;gap:8px}
+.lm-ai-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px;font-family:inherit;background:#fff;color:var(--text)}
+.lm-ai-go{padding:8px 14px;border-radius:10px;flex:none}
+.lm-ai-a{margin-top:10px;border-left:3px solid var(--blue);padding:2px 0 2px 10px}
+.lm-ai-a p{font-size:14px;line-height:1.55}
+.lm-ai-src{display:inline-block;margin-top:4px;font-size:12px;color:var(--text2)}
+.lm-ai-tip{font-size:13px;color:var(--text2);margin:6px 0}
+@media (max-width:640px){
+  .lm-ai-panel{right:8px;left:8px;width:auto;bottom:70px;max-height:72vh}
+  .lm-ai-fab{right:12px;bottom:16px;padding:9px 13px;font-size:13px}
+}
+/* ★ 修复91：管理条(#adminBar)在底部居中，手机上和右下角 AI 浮标会叠在一起（浮标 z-index 更高会挡住点击）→ 管理态整体让位 */
+body.admin .lm-ai-fab{bottom:80px}
+body.admin .lm-ai-panel{bottom:136px}

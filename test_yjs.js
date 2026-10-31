@@ -466,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '90';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '91';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -2111,6 +2111,104 @@ console.log('【9.56】修复90：403 不再误降级 · 快照窗口跨刷新 �
   T('README 记录修复90（403 不误降级 / 快照跨刷新 / 去重 / 额度降挡）',
     readme.indexOf('修复90') > 0 && readme.indexOf('403') > 0
       && readme.indexOf('lm_gh_snap_ts') > 0 && readme.indexOf('X-RateLimit-Remaining') > 0);
+})();
+
+
+/* ---------- 9.57) 修复91：本地 AI 能力（要点 / 关键词 / 相关条目 / 站内问答，离线、零额度） ---------- */
+console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 · 语义相关 · 抽取式问答（可 require、可复现）');
+(function () {
+  const ai = require(path.join(DIR, 'js/ai.js'));
+  const contentSrc = srcOf('data/content.js');
+  const pages = (function () {
+    const win = {};
+    /* data/content.js 是 window.SITE_CONTENT = {...} 形式 → 在沙箱里 eval 出来 */
+    try { new Function('window', 'var module={};' + contentSrc)(win); } catch (e) { /* noop */ }
+    return (win.SITE_CONTENT && win.SITE_CONTENT.pages) || [];
+  })();
+  const ix = ai.buildIndex(pages);
+  const has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
+
+  T('模块可 require（测试能真跑）：8 个 API 齐全 · 版本号可见',
+    !!ai && typeof ai.plain === 'function' && typeof ai.pageText === 'function'
+      && typeof ai.tokens === 'function' && typeof ai.buildIndex === 'function'
+      && typeof ai.related === 'function' && typeof ai.keywords === 'function'
+      && typeof ai.summarize === 'function' && typeof ai.ask === 'function'
+      && typeof ai.mount === 'function' && !!ai.version);
+
+  T('文本清洗：剥掉本项目的行内标记（加粗 / 颜色 / 渐变 / 链接 / 代码），只留文字',
+    ai.plain('**粗**与==#ff0000,红色==、@@grad2,渐变@@、[链接](https://x.y)、`code`')
+      === '粗与红色、渐变、链接、code',
+    JSON.stringify(ai.plain('**粗**与==#ff0000,红色==、@@grad2,渐变@@')));
+
+  T('分词：英文保留单词、中文切 2-gram，纯虚 2-gram（如「是什」）被丢弃',
+    (function () {
+      const tk = ai.tokens('Transformer 是什么 模型 结构');
+      return tk.indexOf('transformer') >= 0 && tk.indexOf('模型') >= 0 && tk.indexOf('结构') >= 0
+        && tk.indexOf('是什') < 0 && tk.indexOf('什么') < 0;
+    })(), JSON.stringify(ai.tokens('Transformer 是什么 模型 结构')));
+
+  T('块 → 文本：表格单元格 / 图表标签数值 / 附件与来源 / 标题与正文都进索引（8 种块全覆盖）',
+    (function () {
+      const t = ai.blockText({ type: 'table', title: 'T', headers: ['概念'], rows: [['Token 分词']] });
+      const c = ai.blockText({ type: 'chart', title: '热度', labels: ['RAG'], data: [72], unit: '票' });
+      const f = ai.blockText({ type: 'files', title: '资料', items: [{ name: 'MDN 文档' }] });
+      const s = ai.blockText({ type: 'sources', title: '来源', items: [{ label: 'Attention Is All You Need' }] });
+      return t.indexOf('Token 分词') >= 0 && c.indexOf('RAG') >= 0 && c.indexOf('72') >= 0
+        && f.indexOf('MDN') >= 0 && s.indexOf('Attention') >= 0;
+    })());
+
+  T('全站索引：docs 数 = 页面数 · 每页有 tf 与正文 · IDF 表非空',
+    ix.docs.length === pages.length && ix.docs.every(function (d) { return d.text.length > 0 && Object.keys(d.tf).length > 0; })
+      && Object.keys(ix.idf).length > 50,
+    'docs=' + ix.docs.length + ' idf=' + Object.keys(ix.idf).length);
+
+  T('分句 + 长段切块：单句 ≤150 字（表格/图表被连成一句时切块而不是整段丢弃）',
+    (function () {
+      const all = ix.docs.reduce(function (a, d) { return a.concat(ai.sentences(d.text)); }, []);
+      const maxLen = all.reduce(function (m, s) { return Math.max(m, s.length); }, 0);
+      return all.length > 20 && maxLen <= 150 && all.every(function (s) { return s.length >= 8; });
+    })());
+
+  T('智能提炼：真实页面能出 3 条要点（≤3 条 · 每条 ≤150 字 · 不重复）',
+    (function () {
+      const r = ai.summarize(ix, 'domain', 3);
+      return r.length === 3 && r.every(function (s) { return s.length >= 8 && s.length <= 150; })
+        && new Set(r).size === r.length;
+    })(), JSON.stringify(ai.summarize(ix, 'domain', 3).map(function (s) { return s.slice(0, 18); })));
+
+  T('关键词：真实页面出 ≥6 个词 · 全部 ≥2 字（单字噪声如「票」被过滤）',
+    (function () {
+      const k = ai.keywords(ix, 'domain', 8);
+      return k.length >= 6 && k.every(function (w) { return w.length >= 2; });
+    })(), JSON.stringify(ai.keywords(ix, 'domain', 8)));
+
+  T('语义相关条目：与本页最像的页排前面 · 分数 0~1 · 绝不含自己',
+    (function () {
+      const r = ai.related(ix, 'domain', 3);
+      return r.length >= 2 && r.every(function (x) { return x.id !== 'domain' && x.score > 0 && x.score <= 1; })
+        && r[0].score >= r[r.length - 1].score;
+    })(), JSON.stringify(ai.related(ix, 'domain', 3).map(function (r) { return r.id + ':' + r.score; })));
+
+  T('站内问答：问「RAG」能定位到写了它的页且给出原文句子（不编造）· 问站外话题返回空',
+    (function () {
+      const hit = ai.ask(ix, 'RAG 是什么', 2);
+      const none = ai.ask(ix, '紫砂壶怎么养', 2);
+      return hit.length >= 1 && hit[0].answer.length >= 8 && none.length === 0;
+    })(), JSON.stringify(ai.ask(ix, 'RAG 是什么', 1).map(function (r) { return r.pageId + '|' + r.answer.slice(0, 24); })));
+
+  T('零成本：ai.js 无任何网络请求（不 fetch / 不 XHR · 不引 CDN），CSP 不用改',
+    (function () {
+      const s = srcOf('js/ai.js');
+      return s.indexOf('fetch(') < 0 && s.indexOf('XMLHttpRequest') < 0
+        && s.indexOf('api.github.com') < 0 && /https?:\/\//.test(s) === false;
+    })());
+
+  T('接入完毕：index.html 引入 js/ai.js（带版本号）· 样式有浮标与面板 · README 把 AI 能力标成已完成',
+    (function () {
+      const html = srcOf('index.html'), css = srcOf('css/style.css'), readme = srcOf('README.md');
+      return /js\/ai\.js\?v=\d+/.test(html) && css.indexOf('.lm-ai-fab') > 0 && css.indexOf('.lm-ai-panel') > 0
+        && readme.indexOf('修复91') > 0 && readme.indexOf('✅ AI 能力') > 0;
+    })());
 })();
 
 
