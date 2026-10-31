@@ -397,14 +397,19 @@ W.LMFB = (function () {
     var t = String(f.dcTable || '').trim();
     return t || 'lm_discuss';
   }
-  /* 只留同步需要的字段；del 统一成时间戳（0 / 空 = 未删除） */
+  /* 只留同步需要的字段；del 统一成时间戳（0 / 空 = 未删除）
+     ★ 修复102（安全）：云端的行是**别人写的**，进来时一律截断到页面允许的长度 ——
+     RLS 只限制「谁能写」，不限制「写多大」，一条 5 MB 的 text / 畸形 id 就能把页面拖垮。
+     截断放在 dcSlim 里，读写两条路都经过它，所以本机也不会存下超长数据。 */
   function dcSlim(m) {
     if (!m || !m.id) return null;
+    var clip = function (v, n) { return String(v == null ? '' : v).slice(0, n); };
     var o = {
-      id: String(m.id), pid: String(m.pid || ''), dev: String(m.dev || ''),
-      nick: String(m.nick || ''), text: String(m.text || ''), ts: +(m.ts || 0)
+      id: clip(m.id, 40), pid: clip(m.pid, 40), dev: clip(m.dev, 24),
+      nick: clip(m.nick, 40), text: clip(m.text, 2000), ts: +(m.ts || 0)
     };
-    if (m.rto) o.rto = String(m.rto);
+    if (!o.id) return null;
+    if (m.rto) o.rto = clip(m.rto, 60);
     if (m.del) o.del = +(m.del) || 1;
     if (m.updatedAt) o.updatedAt = +m.updatedAt;
     return o;

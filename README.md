@@ -21,6 +21,8 @@ living-maps/
 │   ├── charts.js       图表（柱状图 / 折线图 / 饼图，纯 SVG）
 │   └── store.js        数据保存（浏览器本地 / GitHub 云端）
 ├── data/content.js     网站内容数据（管理员同步时会自动更新此文件）
+├── tools/keepalive.js  ★ 云存档保活（每天发 2 条只读请求，防 Supabase 免费项目因 7 天无活动被暂停）
+├── .github/workflows/keepalive.yml  ★ 定时跑上面那个脚本（cron 每天两次 + 可手动触发）
 └── images/             放你自己的图片（引用方式：images/xxx.png）
 ```
 
@@ -453,6 +455,8 @@ living-maps/
 - **修复100（讨论区也上云存档：`lm_discuss`）**：① **问题**：讨论区的跨设备同步只靠协作 WebSocket 的 `dcommit` 帧（`collab.js:408 dcSend`），而**访客态根本不连协作通道**（`registerAdminTransports` 非管理员直接 return，`app.js` 也写着"管理员登录后才启动实时协同"）→ 同学发的帖**只写进他自己的 localStorage**，别人看不到、管理员也收不到；「谁都没开网页就丢」的问题比反馈更严重（反馈还有 MQTT + 云存档双通道）。② **写**：`dcPersist()` 在本地落盘后顺手 `LMFB.dcSave(changed)`（fire-and-forget，失败静默），走 `POST /rest/v1/lm_discuss?on_conflict=id` + `Prefer: resolution=merge-duplicates,return=minimal`（同 id 覆盖，删除墓碑与昵称修改才能更新上去）。③ **读**：打开讨论区即 `dcCloudPull()`（内部 30 秒节流，配合下面修复101 的 15 秒自检）→ `dcList()` 全量拉回 → `dcMerge()` **并集合并**：按 `id` 去重、**删除墓碑优先**、已有正文不被覆盖（发言不可变，只允许"删"）；补齐成功会在页面上提示「☁ 讨论区从云存档补齐 N 条」。④ **离线自愈**：拉取后把「本机有、云端没有」的条目（当时离线、上次写失败、或刚换表）补推一次（一次最多 30 条，含墓碑），所以手机在地铁里发的帖、回家再开页面也会自己上去。⑤ **边界**：讨论区只支持 Supabase（Worker / 群机器人没有约定的读回格式）；未配置云存档时 `dcCloudPull()` 直接 return，界面一个字都不变；缺表 / 没权限时静默（不影响发帖）。资源版本升至 `?v=100` / `LM_ASSET_VER='100'`。
 - **修复101（「别人删了帖 / 发了帖，我这边半天不更新」）**：现象是**放在讨论区页面不动时，别人的新增与删除永远不出现**，必须手动切页重进。三个原因一起修：① `dcCloudPull()` 以前只在「打开讨论区那一刻」被调用，页面上没有任何定时器 → 新增 `setInterval(…, 15000)` 自检：**浏览器后台（`document.hidden`）或不在讨论区页（没有 `#dcMount`）时一次请求都不发**，真拉取仍受 `dcCloudPull()` 内部节流约束；② 节流从 60 秒收紧到 **30 秒**（配合 15 秒自检 → 别人的删除/新帖最多 30 秒内出现）；③ 以前只有「补齐了云端新帖」才 `mountDiscuss()` 重绘，**删除（墓碑）就算并进来了也不重绘** → 改成 `if (res.changed) mountDiscuss()`。顺手修一个真 bug：`LMApp.refreshDiscuss` 被错接成 `mountFeedback`，导致协作 `dcommit` 帧到达后数据合了却没重绘讨论区（要切页才看到）——现在是 `function(){ mountFeedback(); if (dcMount) mountDiscuss(); }`。时效汇总：自己这边**发出是立即的**（Supabase upsert ≈0.2–1 秒进库）；管理员设备之间走 `dcommit` **近乎实时**；访客之间靠云存档轮询，**最多 30 秒**。资源版本升至 `?v=101` / `LM_ASSET_VER='101'`。
 - **回归（修复101）**：`node --check js/app.js / test_yjs.js` 通过；`test_yjs.js` **356/356**（新增 3 条：15 秒自检且不在讨论区页/后台不发请求、`res.changed` 就重绘（删除也刷新）、`refreshDiscuss` 必须重绘讨论区；节流断言同步改成 30000；版本断言 100 → 101（`?v=101` 共 20 处、v100 必须为 0））；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
+- **修复102（「7 天不用会被关掉」的真相 + 保活 + 安全审计落地）**：① **被关掉的不是 GitHub，是 Supabase 免费版项目**（详见「三·补14」）：官方 *Project Pausing* 写明「一周内数据库活动太少就会被暂停」，并说 `a few user requests to the database each day over the previous week is enough`。② **保活**：新增 `.github/workflows/keepalive.yml` + `tools/keepalive.js`，每天 03:17 / 15:17 UTC 各发 **2 条只读请求**（`?select=id&limit=1` 打 `lm_feedback` 与 `lm_discuss`）—— 就是官方说的「每天几个请求」，**不写数据、不留垃圾行**；脚本直接读 `data/content.js` 里已公开的云存档配置（改配置不用动脚本、也不用往 GitHub Secrets 塞东西），`--dry` 只打印地址不联网。比「定时发一条再删掉」干净：那种做法要在库里留测试帖、依赖 delete 权限（与「删除=只写墓碑」的设计冲突），删失败还会被访客看见。③ **自动刷新不许吞掉正在输入的草稿**：修复101 的 15 秒自检在别人发帖/删帖后会 `mountDiscuss()` 重建整段 HTML，正在写的「发帖框 / 回复框」会被清空 → 新增 `dcBusy()`（判断 `document.activeElement` 是否落在 `#dcMount` 内的 `textarea/input`）+ `_dcDirty` 记账 + `dcRepaint()`：**打字中只记账不重绘**，离开输入框后的下一次自检补刷；`refreshDiscuss`（协作 `dcommit` 路径）也统一走 `dcRepaint()`。④ **云端来的行一律就地截断**（`dcSlim`）：RLS 只管「谁能写」不管「写多大」，一条 5 MB 的 `text` 或畸形 id 能把页面拖垮 → 读回时裁到 `id≤40 / dev≤24 / nick≤40 / text≤2000 / rto≤60`。资源版本升至 `?v=102` / `LM_ASSET_VER='102'`。
+- **回归（修复102）**：`node --check js/app.js / js/fbsync.js / test_yjs.js` 通过；`node tools/keepalive.js --dry` 打印两条目标地址、真跑对两张表各发一条只读请求均为 **HTTP 200**（`lm_feedback` → `F-01`，`lm_discuss` → `D-03-engd`）；`test_yjs.js` **361/361**（新增 5 条：`dcBusy()` + `_dcDirty` 草稿保护、`dcRepaint()` 三处接线、`dcSlim` 长度截断真跑、保活工作流 cron/`contents: read` + `tools/keepalive.js` 的 `pickCfg()`/`endpoints()` 真跑（抠配置、剥 `/rest/v1`、双表地址、webhook 模式不发请求）、`PBKDF2_ITERS=210000`；版本断言 101 → 102）；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
 - **回归（修复100）**：`node --check js/fbsync.js / js/app.js / test_yjs.js` 通过；`test_yjs.js` **353/353**（新增 12 条：接口齐全；`dcTableName()` 默认 `lm_discuss` 且支持 `config.fbCloud.dcTable` 覆盖；`dcSlim()` 只留同步字段且 `del` 归一 / 空 id 返回 null；`dcMerge()` 三条真跑 —— 并集去重、删除墓碑落到本机、已有正文不被云端覆盖；`dcSave()` 真跑断言 URL `…/rest/v1/lm_discuss?on_conflict=id` + `Prefer: resolution=merge-duplicates,return=minimal` + body 是数组；`dcList()` 真跑断言 `select=*&order=ts.asc&limit=1000` + apikey 头；源码守护 —— `dcPersist` 必须调 `LMFB.dcSave`、`mountDiscuss` 必须调 `dcCloudPull`、节流 60000 与补推上限 30、提示文案；README 必须含 `lm_discuss` 建表 SQL（`"updatedAt" bigint`）与 `grant select, insert, update`；版本断言 99 → 100（`?v=100` 共 20 处、v99 必须为 0））；`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` 全 PASS（A–G）、`test_collab.js` 9/9、`test_comments.js` 9/9。
 
 
@@ -724,6 +728,115 @@ export default {
    > 协同保存的内容默认写到**数据分支 `lm-data`**（不触发 Pages 构建），不需要任何额外设置；若还想让「发代码」也不受 10 次/小时限制，可改用 Actions 发布（`deploy/pages-actions.yml` 有现成模板 + 三步操作），详见「三·补12」末。
 4. 等 1-2 分钟，得到网址：`https://你的用户名.github.io/living-maps/`
 5. 用**同学的手机（非校园网）**实测能不能打开（作业要求国内普通网络可访问）
+
+## 三·补14、7 天不用会被关掉吗？保活 + 安全总审计（2026-10-31 · 修复102）
+
+### 1) 「被自动关掉」的是 Supabase 免费项目，**不是 GitHub**
+
+官方文档 *Project Pausing* 原话：
+
+> Supabase pauses Free Plan projects that show **low activity over a 7-day period** to save server resources.
+> A Free plan project is considered inactive if it does not receive **sufficient user database activity** over the past week.
+> **Typically a few user requests to the database each day** over the previous week is enough to keep the project from being paused.
+> You can restore a paused project for up to **1 year**… The project will return to its previous state, including data and configurations.
+
+翻译：**一周里几乎没人碰数据库 → 项目被暂停**。暂停后网页照样能打开（静态站不受影响），但**云存档写不进、也读不回来**，讨论区/反馈退回「只有本机可见」，要进 Dashboard 点 **Resume**（数据不丢，恢复窗口 1 年）。
+
+GitHub 那边**不会**关你的仓库；唯一相关的是「仓库 60 天完全没有提交 → 定时工作流被自动停用」，到 Actions 页面点一下 **Enable workflow** 就恢复（本站有内容快照自动提交，正常不会发生）。
+
+| 应对办法 | 成本 | 说明 |
+| --- | --- | --- |
+| **保活工作流（已内置）** | 0 元 | 每天两次各发 2 条**只读**请求，等价于「有人来看了一眼」 |
+| 升级 Pro | $25/月 | 付费项目不会被暂停（`Projects under a paid plan cannot be paused`） |
+| 什么都不做 | 0 元 | 暂停后 1 年内可 Resume，数据一条不丢；只是期间云存档不可用 |
+
+**「让网站隔 7 天自动发一条再删掉」可行吗？** 技术上可行，但没必要、而且更差：
+
+1. 库里会周期性出现测试行；万一「删」没成功（网络、权限、客户端关页），访客下次打开就看见一条 `test`；
+2. 本站的删除是**写墓碑**（`del=时间戳`），**故意不给 delete 权限**（这样记录可追溯）——想真删就得再开 `delete` 权限，等于自己拆掉一层保护；
+3. 官方要的只是「a few user requests to the database」，一条 `select` 就够 —— **只读请求同样算数据库活动**，所以根本不用写数据。
+
+已内置的保活（`修复102`）：
+
+- `.github/workflows/keepalive.yml`：cron `17 3,15 * * *`（每天 UTC 03:17 / 15:17 = 北京 11:17 / 23:17），另有 `workflow_dispatch` 可手动点。
+- `tools/keepalive.js`：从 `data/content.js` 里取出**已经公开**的云存档配置（只有 anon key，本来就要给访客用），对 `lm_feedback` / `lm_discuss` 各发一条 `?select=id&limit=1`。
+  - 改配置不用动脚本、也不用往 GitHub Secrets 塞东西；
+  - `node tools/keepalive.js --dry` 只打印地址不联网；
+  - 只有「两张表全都连不上」才判失败（表还没建只算 ⚠，因为请求已经到达 Supabase，活动照样算数）。
+- 手动验证：仓库 → **Actions** → 左侧「云存档保活」→ **Run workflow**；日志里应看到 `✅ lm_feedback → HTTP 200`、`✅ lm_discuss → HTTP 200`。
+
+### 2) 源码公开会不会被攻破？——逐项说清（不吹）
+
+先给三句结论：
+
+1. **anon key 出现在公开代码里是设计如此**，它不是「数据库钥匙」，真正的锁是 Postgres 的 **RLS 策略**；
+2. 别人拿到全部源码，**改不了你的网站内容、冒充不了你发布、看不到你的 GitHub Token**；
+3. 他们**能做**的只有这些（诚实列出）：往两张表里灌垃圾帖、把别人的帖标记成「已删除」、读到全部公开留言。
+
+| 资产 | 现在靠什么保护 | 风险 |
+| --- | --- | --- |
+| 网站内容 `data/content.js` | 只有带 GitHub Token 的浏览器能写；Token 用 **PBKDF2 + AES-GCM 加密**存 localStorage，**从不进仓库** | 低 |
+| GitHub 仓库 / Pages | 只有仓库主人能 push；Pages 只读 | 低 |
+| 管理密码 | PBKDF2-SHA256 **60000 轮 + 独立随机盐**，只存哈希；明文不出现在任何文件里 | 中：60000 轮偏低（OWASP 现建议 ~600k），弱口令可离线爆破 → **用 12 位以上随机串** |
+| Supabase `anon key` | 公开（设计） | 低（前提是 RLS 对） |
+| `lm_feedback` / `lm_discuss` | RLS + `grant`：反馈只 `select, insert`（连 update 都撤了）；讨论区需要 `update` 才能写删除墓碑 | 中 → 见下面加固 SQL |
+| 访客浏览器 | 所有留言渲染前经 `esc()` 转义；CSP `script-src 'self'`（注入的 `<script>`、`onerror=` 一律不执行）、`object-src 'none'`、`base-uri 'none'`、`form-action 'none'` | 低 |
+
+**关于「把 key 加密一下」**：这条路是**假安全**，不做。理由很直白 —— 前端能解密的东西，密钥也必须在前端；访客浏览器必须**自己**直接调 Supabase（否则留言就发不出去），所以任何「加密 / 混淆」只是把明文换成另一段明文，挡不住会看代码的人，却会让配置和排错变麻烦。真正能提高安全性的是**数据库侧的规则**（RLS + 约束 + 触发器），下面就是。
+
+### 3) 建议跑一次的加固 SQL（可选，但推荐）
+
+在 Supabase → **SQL Editor** 里整段执行（重复执行也安全）：
+
+```sql
+-- ① 字段长度封顶：RLS 只管「谁能写」，不管「写多大」—— 一条 5MB 的 text 就能把页面拖垮
+alter table lm_discuss drop constraint if exists lm_dc_len;
+alter table lm_discuss add constraint lm_dc_len check (
+      char_length(id)                      between 1 and 40
+  and char_length(coalesce(dev,  ''))     <= 24
+  and char_length(coalesce(nick, ''))     <= 40
+  and char_length(coalesce(text, ''))     <= 2000
+  and char_length(coalesce(pid,  ''))     <= 40
+  and char_length(coalesce(rto,  ''))     <= 60
+);
+
+-- ② 禁止硬删除：删除只能写「墓碑」（del = 时间戳），记录留档可追溯
+revoke delete on lm_discuss from anon, authenticated;
+
+-- ③ 正文写入后锁死：update 只允许改 del（墓碑）/ nick（改昵称）/ rto
+--    正文、时间、归属、父帖一律不可修改 —— 挡住「改掉别人说过的话」这种最恶劣的篡改
+create or replace function lm_dc_guard() returns trigger
+language plpgsql as $$
+begin
+  if coalesce(new.id,  '') is distinct from coalesce(old.id,  '')
+     or coalesce(new.text, '') is distinct from coalesce(old.text, '')
+     or coalesce(new.ts, 0)    is distinct from coalesce(old.ts, 0)
+     or coalesce(new.dev, '')  is distinct from coalesce(old.dev, '')
+     or coalesce(new.pid, '')  is distinct from coalesce(old.pid, '')
+  then
+    raise exception 'lm_discuss: 正文与归属写入后不可修改（只允许写删除墓碑 / 改昵称）';
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists lm_dc_guard_trg on lm_discuss;
+create trigger lm_dc_guard_trg before update on lm_discuss
+  for each row execute function lm_dc_guard();
+
+-- ④ 确认加固生效（应各返回 1 行）
+select conname from pg_constraint where conrelid = 'lm_discuss'::regclass and contype = 'c';
+select tgname  from pg_trigger     where tgrelid = 'lm_discuss'::regclass and not tgisinternal;
+```
+
+跑完的效果：即使有人拿 anon key 直接调 API，也**改不了别人发过的正文、冒充不了别人、删不掉任何一行**；剩下的只有「能发垃圾帖」和「能把帖子标记为已删除」。
+
+> 想彻底堵住「标记别人的帖为已删除 / 灌水」，只能引入**真正的身份**：开启 Supabase Auth 的 Anonymous sign-in，写入时带上 JWT，RLS 改成 `using (auth.uid()::text = author_id)`。那是另一次改造（要引入 supabase-js、改写入路径），当前不做，但路是通的。
+
+### 4) 真的被人恶意灌水时的处置顺序
+
+1. Dashboard → **Table Editor** → `lm_discuss` → 按 `dev` 过滤 → 删掉该身份码的行（或 SQL：`delete from lm_discuss where dev = 'xxx';`）；
+2. **Project Settings → API → Rotate anon key** → 把新 key 填回「反馈页 → ☁ 云存档」→ 保存 → 顶部「☁️ 同步到 GitHub」（旧 key 立刻失效，作恶者手里的 key 变废纸；站点会短暂读不到，重填即可）；
+3. 页面自带的「🚫 屏蔽身份码 / 禁言」只作用于**界面显示**（同浏览器/同设备），**挡不住直接调 API 的人** —— 前两步才是真拦。
 
 ## 五、配置"网站上直接改内容"（云端保存）
 

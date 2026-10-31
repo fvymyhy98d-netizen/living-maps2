@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '101';
+var LM_ASSET_VER = '102';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -24,8 +24,9 @@ window.LMApp = (function () {
   const app = document.getElementById('app');
   const state = { content: null, admin: false, root: false, pageId: 'home', view: 'auto', ready: false };
 
-  /* 专有通道（v2 密钥拉伸）：只存 PBKDF2-SHA256（60000 轮 + 固定盐）的结果，
-     明文不出现在任何页面/代码/文档里；「修改密码」不会改动这条通道的凭据，忘记管理密码时仍可用它进入。
+  /* 登录凭据（v2 密钥拉伸）：只存 PBKDF2-SHA256 的结果 —— 本通道 60000 轮 + 固定盐，
+     团队密码 21 万轮 + 独立随机盐（★ 修复102）。明文不出现在任何页面/代码/文档里；
+     「修改密码」不会改动这条通道的凭据，忘记管理密码时仍可用它进入。
      即使整份代码被公开，从这份拉伸哈希反推密码的成本也被放大了数万倍 */
   const MASTER_AUTH = {
     v: 2, iters: 60000,
@@ -2322,6 +2323,24 @@ window.LMApp = (function () {
     try { LMStore.saveLocal(state.content); } catch (e2) { /* noop */ }
     return { added: added, changed: true };
   }
+  /* ★ 修复102：自动刷新不许吞掉正在输入的草稿
+     —— 重绘会重建整段 HTML，正在写的「发帖 / 回复」文本会一起消失。
+     有人正在讨论区的输入框里打字时先记个账（_dcDirty），等他离开输入框后的下一次自检再重绘。 */
+  var _dcDirty = false;
+  function dcBusy() {
+    const a = document.activeElement;
+    if (!a || !a.tagName) return false;
+    const tag = String(a.tagName).toLowerCase();
+    if (tag !== 'textarea' && tag !== 'input') return false;
+    const host = document.getElementById('dcMount');
+    return !!(host && host.contains(a));
+  }
+  function dcRepaint() {
+    if (!document.getElementById('dcMount')) return;
+    if (dcBusy()) { _dcDirty = true; return; }   /* 打字中：只记账，不动 DOM */
+    _dcDirty = false;
+    mountDiscuss();
+  }
   function dcCloudPull() {
     if (!window.LMFB || !LMFB.dcList || !LMFB.cloudCfg) return;
     let cfg = null;
@@ -2337,7 +2356,7 @@ window.LMApp = (function () {
       r.list.forEach(function (m) { if (m && m.id) cloudIds[m.id] = 1; });
       if (r.list.length) {
         const res = dcCloudApply(r.list);
-        if (res.changed) mountDiscuss();   /* ★ 修复101：不再只在「补齐新帖」时重绘 —— 别人的删除也要立刻消失 */
+        if (res.changed) dcRepaint();   /* ★ 修复101/102：删除也要重绘；但正在打字时不打断 */
         if (res.added && document.getElementById('dcMount')) {
           toast('☁ 讨论区从云存档补齐 ' + res.added + ' 条');
         }
@@ -2350,10 +2369,12 @@ window.LMApp = (function () {
   /* ★ 修复101：讨论区页面开着不动时也要自己刷新
      —— 以前 dcCloudPull 只在「打开讨论区那一刻」调用，于是别人发的帖 / 删的帖要等你自己重进页面才看得到
      （而且 60 秒节流还会再挡一次）。现在每 15 秒看一眼：不在讨论区页 / 浏览器后台时一次请求都不发，
-     真拉取仍按 dcCloudPull 内部 30 秒节流，所以最多 30 秒后别人的删除与新增就会出现在你眼前。 */
+     真拉取仍按 dcCloudPull 内部 30 秒节流，所以最多 30 秒后别人的删除与新增就会出现在你眼前。
+     ★ 修复102：顺手补一次「记账中的重绘」—— 你刚才在打字、我压着没刷的那次，等你不打字了就补上。 */
   setInterval(function () {
     if (document.hidden) return;
-    if (!document.getElementById('dcMount')) return;
+    if (!document.getElementById('dcMount')) { _dcDirty = false; return; }
+    if (_dcDirty) dcRepaint();
     dcCloudPull();
   }, 15000);
   function dcHtml() {
@@ -2974,10 +2995,11 @@ window.LMApp = (function () {
   return {
     state: state, render: render, applyEdit: applyEdit, toast: toast,
     /* ★ 修复101：对方 dcommit 到达后要重绘「讨论区」——以前错接成 mountFeedback，
-       结果数据合进来了、页面还不刷新（要手动切页才看到别人的发言/删除） */
+       结果数据合进来了、页面还不刷新（要手动切页才看到别人的发言/删除）。
+       ★ 修复102：走 dcRepaint()，正在打字时不打断输入。 */
     refreshDiscuss: function () {
       mountFeedback();
-      if (document.getElementById('dcMount')) mountDiscuss();
+      dcRepaint();
     },
     historyList: historyList, restoreVersion: restoreVersion,
     esc: esc, md: md, currentId: currentId, ensureConfig: ensureConfig,

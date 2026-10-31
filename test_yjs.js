@@ -2631,10 +2631,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=101 · LM_ASSET_VER=101',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=102 · LM_ASSET_VER=102',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=100/g) || []).length === 0 && /\?v=101/.test(html)
-      && /LM_ASSET_VER = '101'/.test(appJs));
+      && (html.match(/\?v=101/g) || []).length === 0 && /\?v=102/.test(html)
+      && /LM_ASSET_VER = '102'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -2857,14 +2857,57 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
 
   /* ★ 修复101：「停在讨论区不动」也要能看到别人的新帖与删除 */
   T('讨论区定时自动刷新：每 15 秒瞄一眼，不在讨论区页或后台时一次请求都不发（拉取仍按 30 秒节流）',
-    appJs.indexOf('setInterval(function () {\r\n    if (document.hidden) return;\r\n    if (!document.getElementById(\'dcMount\')) return;\r\n    dcCloudPull();\r\n  }, 15000);') > 0);
+    /setInterval\(function \(\) \{\s*if \(document\.hidden\) return;\s*if \(!document\.getElementById\('dcMount'\)\) \{ _dcDirty = false; return; \}\s*if \(_dcDirty\) dcRepaint\(\);\s*dcCloudPull\(\);\s*\}, 15000\);/.test(appJs));
 
   T('别人的删除也要立刻消失：res.changed 就重绘（以前只在「补齐新帖」时重绘，删除不刷新）',
-    appJs.indexOf('if (res.changed) mountDiscuss();') > 0);
+    appJs.indexOf('if (res.changed) dcRepaint();') > 0);
 
   T('协作 dcommit 到达后重绘讨论区（refreshDiscuss 以前错接成 mountFeedback，数据合了页面不刷）',
     appJs.indexOf('refreshDiscuss: function () {') > 0
-      && appJs.indexOf('if (document.getElementById(\'dcMount\')) mountDiscuss();') > 0);
+      && /refreshDiscuss: function \(\) \{\s*mountFeedback\(\);\s*dcRepaint\(\);/.test(appJs));
+
+  /* ★ 修复102：草稿保护 + 云端数据截断 + 保活（防 Supabase 7 天暂停） */
+  T('自动刷新不吞草稿：dcBusy() 只认讨论区里的 textarea/input，打字中只记账（_dcDirty）不重绘',
+    appJs.indexOf('function dcBusy()') > 0
+      && appJs.indexOf("if (tag !== 'textarea' && tag !== 'input') return false;") > 0
+      && appJs.indexOf('if (dcBusy()) { _dcDirty = true; return; }') > 0
+      && appJs.indexOf('if (_dcDirty) dcRepaint();') > 0);
+
+  T('三个重绘入口统一走 dcRepaint（云存档变化 / 15 秒自检补刷 / 协作 dcommit）',
+    appJs.indexOf('if (res.changed) dcRepaint();') > 0
+      && /if \(_dcDirty\) dcRepaint\(\);/.test(appJs)
+      && /refreshDiscuss: function \(\) \{\s*mountFeedback\(\);\s*dcRepaint\(\);/.test(appJs));
+
+  T('云端来的行一律截断（dcSlim 真跑）：id≤40 / dev≤24 / nick≤40 / text≤2000 / rto≤60，畸形 id 丢',
+    (function () {
+      const fb = require(path.join(DIR, 'js/fbsync.js'));
+      const s = fb.dcSlim({
+        id: new Array(101).join('x'), dev: new Array(61).join('d'), nick: new Array(61).join('n'),
+        text: new Array(5001).join('t'), rto: new Array(201).join('r'), ts: 1
+      });
+      const bad = fb.dcSlim({ id: '', text: 'x' });
+      return !!s && s.id.length === 40 && s.dev.length === 24 && s.nick.length === 40
+        && s.text.length === 2000 && s.rto.length === 60 && bad === null;
+    })());
+
+  T('保活（Supabase 免费项目 7 天无活动会被暂停）：工作流 cron + 只读 ping，双表都打、剥掉 /rest/v1',
+    (function () {
+      const ka = require(path.join(DIR, 'tools/keepalive.js'));
+      const cfg = ka.pickCfg('window.SITE_CONTENT = {"config":{"fbCloud":{"kind":"supabase",'
+        + '"url":"https://abc.supabase.co/rest/v1/","key":"anon-key","table":"lm_feedback","dcTable":"lm_discuss"}}};');
+      const list = ka.endpoints(cfg);
+      const yml = fs.readFileSync(path.join(DIR, '.github/workflows/keepalive.yml'), 'utf8');
+      const off = ka.endpoints({ kind: 'webhook', url: 'https://example.com/hook' });
+      return !!cfg && cfg.kind === 'supabase' && list.length === 2 && off.length === 0
+        && list[0].url === 'https://abc.supabase.co/rest/v1/lm_feedback?select=id&limit=1'
+        && list[1].url === 'https://abc.supabase.co/rest/v1/lm_discuss?select=id&limit=1'
+        && /cron:\s*'17 3,15 \* \* \*'/.test(yml) && /contents: read/.test(yml)
+        && /node tools\/keepalive\.js/.test(yml);
+    })());
+
+  T('密码拉伸强度已提到 21 万轮（旧记录按各自 iters 校验，不会登不进）',
+    /const PBKDF2_ITERS = 210000;/.test(srcOf('js/store.js'))
+      && srcOf('js/store.js').indexOf('iterations: Math.max(1000, +iterations || PBKDF2_ITERS)') > 0);
 
   T('README 记录修复100：lm_discuss 建表 SQL（含 "updatedAt" bigint）+ grant select, insert, update + upsert 说明',
     readme.indexOf('修复100') > 0 && readme.indexOf('lm_discuss') > 0
@@ -2872,10 +2915,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 101（?v=101 共 20 处 · v100 无残留 · LM_ASSET_VER=101）',
-    (html.match(/\?v=101/g) || []).length === 20 && (html.match(/\?v=100/g) || []).length === 0
-      && /LM_ASSET_VER = '101'/.test(appJs),
-    'v101=' + (html.match(/\?v=101/g) || []).length + ' v100=' + (html.match(/\?v=100/g) || []).length);
+  T('版本已升到 102（?v=102 共 20 处 · v101 无残留 · LM_ASSET_VER=102）',
+    (html.match(/\?v=102/g) || []).length === 20 && (html.match(/\?v=101/g) || []).length === 0
+      && /LM_ASSET_VER = '102'/.test(appJs),
+    'v102=' + (html.match(/\?v=102/g) || []).length + ' v101=' + (html.match(/\?v=101/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

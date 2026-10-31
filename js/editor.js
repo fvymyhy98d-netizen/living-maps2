@@ -1659,7 +1659,7 @@ window.LMEditor = (function () {
   /* ---------- 修改管理密码 ---------- */
   function passwordModal() {
     modal('<form id="pwChange"><h3>修改管理密码</h3>'
-      + '<p class="modal-note">密码以 PBKDF2 密钥拉伸哈希（60000 轮 + 独立随机盐）保存在内容文件里，不存明文；即使内容文件泄露也难以反推密码。修改后请记得「同步到 GitHub」，否则只在本浏览器生效。</p>'
+      + '<p class="modal-note">密码以 PBKDF2 密钥拉伸哈希（21 万轮 + 独立随机盐）保存在内容文件里，不存明文；即使内容文件泄露也难以反推密码。建议用 12 位以上、不含生日/学号的随机串。修改后请记得「同步到 GitHub」，否则只在本浏览器生效。</p>'
       + field('新密码（至少 4 位）', '<input class="input" type="password" name="a" required minlength="4" autocomplete="new-password">')
       + field('再输入一次', '<input class="input" type="password" name="b" required minlength="4" autocomplete="new-password">')
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
