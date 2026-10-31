@@ -1176,6 +1176,12 @@ body.mobile-view .kid-pick{max-height:34vh}
 .lm-ai-rel a{display:flex;align-items:center;gap:8px;font-size:14px;padding:7px 10px;border-radius:10px;background:var(--bg2);color:var(--text)}
 .lm-ai-rel a:hover{background:#ececf1}
 .lm-ai-score{margin-left:auto;font-size:12px;color:var(--text2)}
+.lm-ai-modes{display:flex;gap:6px;margin:10px 0 8px;padding:3px;background:var(--bg2);border-radius:12px}
+.lm-ai-mode{flex:1;display:flex;flex-direction:column;gap:1px;align-items:flex-start;padding:7px 9px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--text2);background:transparent;border:1px solid transparent;line-height:1.25;text-align:left;cursor:pointer;font-family:inherit}
+.lm-ai-mode em{font-style:normal;font-weight:400;font-size:11px;color:var(--text2);opacity:.85}
+.lm-ai-mode:hover{background:rgba(255,255,255,.7)}
+.lm-ai-mode.on{background:#fff;color:var(--text);border-color:var(--line);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.lm-ai-mode.on em{color:#007a55;opacity:1}
 .lm-ai-ask{display:flex;gap:8px}
 .lm-ai-input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px;font-family:inherit;background:#fff;color:var(--text)}
 .lm-ai-go{padding:8px 14px;border-radius:10px;flex:none}

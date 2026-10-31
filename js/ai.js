@@ -124,7 +124,7 @@ W.LMAI = (function () {
       const tk = tokens(text);
       const tf = {};
       tk.forEach(function (t) { tf[t] = (tf[t] || 0) + 1; });
-      return { id: p.id, label: plain(p.label || p.id), kind: p.kind || '', text: text, tf: tf, n: tk.length || 1 };
+      return { id: p.id, label: plain(p.label || p.id), kind: p.kind || '', text: text, tf: tf, n: tk.length || 1, blocks: p.blocks || [] };
     });
     const df = {};
     docs.forEach(function (d) { Object.keys(d.tf).forEach(function (t) { df[t] = (df[t] || 0) + 1; }); });
@@ -257,6 +257,161 @@ W.LMAI = (function () {
     return out.slice(0, k || 3);
   }
 
+  /* ---------- ⑧.2 ★ 修复110：本地「会组织答案」的问答引擎 ----------
+     仍然**只用站里写过的原文**（不联网、不接 API），但不再"只丢回一句"：
+       · 先判断问题类型（是什么 / 区别 / 为什么 / 怎么做 / 举例 / 概览）
+       · 对比题拆成 A、B 两个实体，各取最贴切的一句，做原文对照
+       · 表格题直接定位到某一行（表头 + 该行）
+       · 其余题按页聚合 2–3 句原句，前面加"按《某页》里的说法："这类引导语
+     引导语/连接词都是**模板**（不含事实），事实全部来自原文 —— 会写，但不会编。 */
+  const Q_KIND = [
+    { k: '对比', re: /(区别|差异|对比|相比|不同|哪个好|vs\.?)/i },
+    { k: '原因', re: /(为什么|为何|原因|怎么会|凭什么)/ },
+    { k: '方法', re: /(怎么|如何|怎样|步骤|做法|流程)/ },
+    { k: '例子', re: /(举例|例子|比如|案例)/ },
+    { k: '定义', re: /(是什么|什么叫|什么是|定义|含义|概念|指什么)/ }
+  ];
+  function qKind(q) {
+    const s = plain(q);
+    for (let i = 0; i < Q_KIND.length; i++) if (Q_KIND[i].re.test(s)) return Q_KIND[i].k;
+    return '概览';
+  }
+  /* 「RNN 和 Transformer 有什么区别」→ ['RNN','Transformer'] */
+  function qPair(q) {
+    const s = plain(q).replace(/[？?。!！,，、]/g, ' ');
+    const m = s.match(/([A-Za-z0-9\u4e00-\u9fa5][^\s和与跟]{0,11})\s*(?:和|与|跟|vs\.?)\s*([A-Za-z0-9\u4e00-\u9fa5][^\s和与跟]{0,11})/i);
+    if (!m) return null;
+    const strip = function (x) { return String(x).replace(/^(请问|那么|所以|到底)/, '').trim(); };
+    const a = strip(m[1]), b = strip(m[2]);
+    if (!a || !b || a === b) return null;
+    return [a, b];
+  }
+  function headLead(kind, label) {
+    const pre = {
+      定义: '按《' + label + '》里的说法：',
+      对比: '《' + label + '》里的对照：',
+      原因: '《' + label + '》给出的原因是：',
+      方法: '《' + label + '》里的做法是：',
+      例子: '《' + label + '》举的例子：',
+      概览: '《' + label + '》里相关的说法：'
+    };
+    return pre[kind] || pre['概览'];
+  }
+  /* 句子级打分：与 ask() 同一套权重，但保留页/序号，便于"按页聚合成一段回答" */
+  function rankSent(index, q, limit) {
+    const qt = tokens(q);
+    if (!index || !index.docs || !qt.length) return [];
+    const qset = {};
+    qt.forEach(function (t) { qset[t] = 1; });
+    const qUniq = Object.keys(qset);
+    const out = [];
+    index.docs.forEach(function (d) {
+      const labHas = {};
+      tokens(d.label).forEach(function (t) { labHas[t] = 1; });
+      const labHit = qUniq.filter(function (t) { return labHas[t]; }).length;
+      const labelBoost = 1 + 0.35 * (labHit / qUniq.length);
+      sentences(d.text).forEach(function (s, i) {
+        const st = tokens(s);
+        if (!st.length) return;
+        const has = {};
+        let mass = 0;
+        st.forEach(function (t) { if (has[t]) return; has[t] = 1; mass += (index.idf[t] || 0.1); });
+        let hitN = 0, hitW = 0;
+        qUniq.forEach(function (t) { if (has[t]) { hitN++; hitW += (index.idf[t] || 0.1); } });
+        if (!hitN) return;
+        const cover = hitN / qUniq.length;
+        const bonus = 1 + (i === 0 ? 0.12 : 0) + (/\d/.test(s) ? 0.06 : 0) + (/[a-zA-Z]{3,}/.test(s) ? 0.04 : 0);
+        out.push({
+          s: s, i: i, pageId: d.id, title: d.label, cover: cover,
+          score: Math.round((cover * hitW) * (1 + hitW / (mass || 1)) * labelBoost * bonus * 100) / 100
+        });
+      });
+    });
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out.slice(0, limit || 40);
+  }
+
+  /* 表格里"对得上的那一行"（表头 + 该行）—— 比只丢一句原话更贴近人找资料的方式 */
+  function tableHits(pages, q, limit) {
+    const qt = tokens(q);
+    const qset = {};
+    qt.forEach(function (t) { qset[t] = 1; });
+    const uniq = Object.keys(qset);
+    if (!uniq.length) return [];
+    const out = [];
+    (pages || []).forEach(function (p) {
+      if (!p || !p.blocks) return;
+      p.blocks.forEach(function (b) {
+        if (!b || b.type !== 'table' || !b.rows) return;
+        const head = (b.headers || []).map(function (h) { return plain(h); });
+        b.rows.forEach(function (row) {
+          const cells = (row || []).map(function (c) { return plain(c); });
+          const line = cells.join(' | ');
+          const hay = tokens(line + ' ' + plain(b.title || ''));
+          if (!hay.length) return;
+          let hit = 0;
+          uniq.forEach(function (t) { if (hay.indexOf(t) >= 0) hit++; });
+          if (hit < Math.max(1, Math.ceil(uniq.length * 0.5))) return;
+          out.push({ pageId: p.id, title: plain(p.label || p.id), table: plain(b.title || '表格'), head: head, line: line, hit: hit });
+        });
+      });
+    });
+    out.sort(function (a, b) { return b.hit - a.hit; });
+    return out.slice(0, limit || 2);
+  }
+  /* 对比题：A、B 各取最贴切的一句，做"原文对照" */
+  function compareAnswer(index, q) {
+    const pair = qPair(q);
+    if (!pair) return null;
+    const A = rankSent(index, pair[0], 8).filter(function (x) { return x.cover >= 0.5; });
+    const B = rankSent(index, pair[1], 8).filter(function (x) { return x.cover >= 0.5; });
+    if (!A.length || !B.length) return null;
+    const a = A[0], b = B[0];
+    const tail = (a.pageId === b.pageId)
+      ? '（两句都在《' + a.title + '》里，可以直接对着看）'
+      : '（分别出自《' + a.title + '》和《' + b.title + '》）';
+    return {
+      answer: '①【' + pair[0] + '】' + a.s + '\n②【' + pair[1] + '】' + b.s + '\n③ 差别就看这两句：' + tail,
+      pageId: a.pageId, title: a.title, score: Math.round((a.score + b.score) / 2 * 100) / 100, kind: '对比'
+    };
+  }
+  /* ★ 本地问答主入口：类型判断 → 对比/表格 → 按页聚合成"有结构的回答" */
+  function askSmart(index, q, k) {
+    const want = k || 3;
+    const kind = qKind(q);
+    const res = [];
+    if (kind === '对比') {
+      const c = compareAnswer(index, q);
+      if (c) res.push(c);
+    }
+    tableHits(index.docs, q, 2).forEach(function (r) {
+      res.push({
+        answer: '📊 表格《' + r.table + '》里有一行对得上：\n'
+          + (r.head.length ? r.head.join(' | ') + '\n' : '') + r.line,
+        pageId: r.pageId, title: r.title, score: 8 + r.hit, kind: '表格'
+      });
+    });
+    const ranked = rankSent(index, q, 30).filter(function (x) { return x.cover >= 0.3; });
+    const byPage = {};
+    ranked.forEach(function (x) {
+      if (!byPage[x.pageId]) byPage[x.pageId] = [];
+      if (byPage[x.pageId].length < 3) byPage[x.pageId].push(x);
+    });
+    const order = Object.keys(byPage).sort(function (a, b) { return byPage[b][0].score - byPage[a][0].score; });
+    const room = Math.max(1, want - res.length);
+    order.slice(0, room).forEach(function (pid) {
+      if (res.some(function (r) { return r.pageId === pid; })) return;   /* 这页已经给过对比/表格答案 */
+      const list = byPage[pid];
+      const d = list[0];
+      const pts = list.map(function (x) { return '· ' + x.s; }).join('\n');
+      res.push({
+        answer: headLead(kind, d.title) + '\n' + pts,
+        pageId: pid, title: d.title, score: Math.round(d.score * 100) / 100, kind: kind
+      });
+    });
+    return res.slice(0, want);
+  }
+
   /* ---------- ⑨ 界面：右下角「✨ 智能提炼」浮标 + 面板 ---------- */
   let panel = null, fab = null, idx = null, idxSrc = null;
 
@@ -322,6 +477,14 @@ W.LMAI = (function () {
   const BRIDGE_TAG = 'lm-ds-bridge';
   let bridgeSeen = false;
   let pendingAsk = null;            /* 等扩展回执的那一次提问（扩展不可用时用来退回复制） */
+  /* ★ 修复110：问答模式 —— 默认「本站速答」（免配置），DeepSeek 作为可切换的备选 */
+  const MODE_KEY = 'lm_ai_mode_v1';
+  function aiMode() {
+    try { return localStorage.getItem(MODE_KEY) === 'ds' ? 'ds' : 'local'; } catch (e) { return 'local'; }
+  }
+  function setAiMode(m) {
+    try { localStorage.setItem(MODE_KEY, m === 'ds' ? 'ds' : 'local'); } catch (e) { /* 无痕模式存不了就算了 */ }
+  }
   function bridgeSend(txt, id) {
     try {
       window.postMessage({ ch: 'lm-page', type: 'ask', text: txt, pageId: id }, location.origin);
@@ -452,12 +615,21 @@ W.LMAI = (function () {
         return '<div class="lm-ai-msg ' + cls + '"><span class="lm-ai-who">' + who + '</span><p>'
           + esc(m.t).replace(/\n/g, '<br>') + '</p>' + src + '</div>';
       }).join('')
-      : '<p class="lm-ai-tip">还没有对话。写个问题 → 点「发给 DeepSeek」：会把<b>这一页正文</b>自动附在问题前面并复制好、打开网页版，你按一次 <b>Ctrl/⌘+V</b> 就发出；回来点「📥 粘回回答」，对话就留在这里。</p>';
+      : '<p class="lm-ai-tip">还没有对话。先在下面选一种模式，写个问题按回车：\n<b>⚡ 本站速答</b>＝只在站里找、自己组织成一段话（免配置）；<b>🐋 DeepSeek</b>＝把这页正文附上交给网页版（更全面，但要装扩展或手动粘贴）。</p>';
     h += '</div>';
-    h += '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="问点什么…（会自动附上本页正文）" aria-label="和 DeepSeek 对话">'
-      + '<button class="btn btn-primary lm-ai-go" type="button">发给 DeepSeek</button></div>'
+    const mode = aiMode();
+    /* ★ 修复110：聊天框上方一个切换键 —— 默认「本站速答」 */
+    h += '<div class="lm-ai-modes" role="tablist" aria-label="问答模式">'
+      + '<button type="button" class="lm-ai-mode' + (mode === 'local' ? ' on' : '') + '" data-mode="local" role="tab" aria-selected="' + (mode === 'local') + '">'
+      + '⚡ 本站速答<em>免配置 · 只用站里写过的内容</em></button>'
+      + '<button type="button" class="lm-ai-mode' + (mode === 'ds' ? ' on' : '') + '" data-mode="ds" role="tab" aria-selected="' + (mode === 'ds') + '">'
+      + '🐋 DeepSeek<em>更全面 · 需装扩展或手动粘贴</em></button>'
+      + '</div>';
+    h += '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="'
+      + (mode === 'local' ? '问点什么…（回车即可，只用本站内容）' : '问点什么…（会自动附上本页正文）')
+      + '" aria-label="提问">'
+      + '<button class="btn btn-primary lm-ai-go" type="button">' + (mode === 'local' ? '问一句' : '发给 DeepSeek') + '</button></div>'
       + '<div class="lm-ai-row">'
-      + '<button class="btn lm-ai-local" type="button" title="不离开本站：只用本站已经写过的内容回答（不联网）">⚡ 本站速答</button>'
       + '<button class="btn lm-ai-paste" type="button" title="在 DeepSeek 网页里选中回答复制，粘回这里保存进对话">📥 粘回回答</button>'
       + '<button class="btn lm-ai-clear" type="button" title="清空这一页的对话">🗑 清空</button>'
       + '</div>'
@@ -490,10 +662,24 @@ W.LMAI = (function () {
     const ans = body.querySelector('.lm-ai-ans');
     const chatEl = body.querySelector('.lm-ai-chat');
     if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
-    /* 发送 = 「这一页正文 + 你的问题」整条复制 + 打开网页版（不接 API、不存 Key） */
+    /* ★ 修复110：本地问答（默认模式）—— 判断问法 → 组织成一段回答；仍然只用原文，不编造 */
+    const runLocal = function (q) {
+      const res = askSmart(ix, q, 3);
+      chatPush(id, { r: 'me', t: q });
+      if (!res.length) {
+        chatPush(id, { r: 'local', t: '本站没写过相关内容。换个说法再试；想让它用通用知识回答，把上面的模式切到 🐋 DeepSeek。' });
+      } else {
+        res.forEach(function (r) {
+          chatPush(id, { r: 'local', t: r.answer, src: { pageId: r.pageId, title: r.title, score: r.score } });
+        });
+      }
+      renderPanel();
+    };
+    /* 发送：按模式分流（默认「本站速答」；DeepSeek 是备选） */
     const send = function () {
       const q = String((input && input.value) || '').trim();
       if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，比如「Transformer 和 RNN 有什么区别」。</p>'; return; }
+      if (aiMode() === 'local') { runLocal(q); return; }
       const txt = promptFor(pageById(id), q);
       chatPush(id, { r: 'me', t: q });
       /* 装了扩展 → 全自动：送过去、等回答自己回来（不用复制/粘贴） */
@@ -518,21 +704,20 @@ W.LMAI = (function () {
         renderPanel();
       });
     };
-    /* 本站速答：不联网，只用站里写过的句子（抽取式，绝不编造） */
-    const localAsk = function () {
-      const q = String((input && input.value) || '').trim();
-      if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，再点「⚡ 本站速答」。</p>'; return; }
-      const res = ask(ix, q, 2);
-      if (!res.length) { ans.innerHTML = '<p class="lm-ai-tip">本站没写过相关内容 —— 换个说法，或点「发给 DeepSeek」。</p>'; return; }
-      res.forEach(function (r) {
-        chatPush(id, { r: 'local', t: r.answer, src: { pageId: r.pageId, title: r.title, score: r.score } });
-      });
-      renderPanel();
-    };
     if (go) go.addEventListener('click', send);
     if (input) input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); send(); } });
-    const localBtn = body.querySelector('.lm-ai-local');
-    if (localBtn) localBtn.addEventListener('click', localAsk);
+    /* ★ 修复110：模式切换键（点了就记住，下次打开还是这个模式） */
+    body.querySelectorAll('.lm-ai-mode').forEach(function (b) {
+      b.addEventListener('click', function () {
+        const m = b.getAttribute('data-mode');
+        if (m === aiMode()) return;
+        setAiMode(m);
+        renderPanel();
+        if (m === 'ds' && !bridgeSeen && ans) {
+          ans.innerHTML = '<p class="lm-ai-tip">DeepSeek 模式：装了扩展就全自动；没装也没关系 —— 点「发给 DeepSeek」会自动复制，你去网页按 Ctrl/⌘+V 发送，回来「📥 粘回回答」。</p>';
+        }
+      });
+    });
     /* 📥 把 DeepSeek 的回答粘回来，存进这个对话 */
     const pb = body.querySelector('.lm-ai-pastebox');
     const pta = body.querySelector('.lm-ai-pasteta');
@@ -606,6 +791,8 @@ W.LMAI = (function () {
   return {
     plain: plain, blockText: blockText, pageText: pageText, sentences: sentences, tokens: tokens,
     buildIndex: buildIndex, related: related, keywords: keywords, summarize: summarize, ask: ask,
+    askSmart: askSmart, qKind: qKind, qPair: qPair, rankSent: rankSent, tableHits: tableHits,
+    aiMode: aiMode, setAiMode: setAiMode,
     pageDigest: pageDigest, promptFor: promptFor,
     chatOf: chatOf, chatPush: chatPush, chatClear: chatClear,
     listenBridge: listenBridge, bridgeSeen: function () { return bridgeSeen; },

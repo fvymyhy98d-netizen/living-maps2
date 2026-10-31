@@ -2219,6 +2219,67 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return hit.length >= 1 && hit[0].answer.length >= 8 && none.length === 0;
     })(), JSON.stringify(ai.ask(ix, 'RAG 是什么', 1).map(function (r) { return r.pageId + '|' + r.answer.slice(0, 24); })));
 
+  /* ★ 修复110：本地问答升级（判断问法 / 对比 / 表格行 / 按页组织），仍然只用原文，不联网 */
+  const fx = ai.buildIndex([
+    { id: 'fx-attn', label: '示例页：注意力机制', blocks: [
+      { type: 'text', text: 'Transformer 用自注意力把整个序列一起算，所以能够并行。' },
+      { type: 'text', text: '自注意力的好处是长距离依赖不会被稀释。' }
+    ] },
+    { id: 'fx-rnn', label: '示例页：RNN', blocks: [
+      { type: 'text', text: 'RNN 按顺序一个词一个词地读，靠隐藏状态记住前面的信息，因此不能并行。' }
+    ] }
+  ]);
+
+  T('问答升级1：先判断问法 —— 是什么→定义 · 区别→对比 · 为什么→原因 · 怎么→方法 · 举例→例子',
+    ai.qKind('RAG 是什么') === '定义' && ai.qKind('Transformer 和 RNN 有什么区别') === '对比'
+      && ai.qKind('为什么要分片') === '原因' && ai.qKind('怎么做索引') === '方法'
+      && ai.qKind('举个例子') === '例子',
+    [ai.qKind('RAG 是什么'), ai.qKind('A 和 B 有什么区别'), ai.qKind('为什么'), ai.qKind('怎么做'), ai.qKind('举个例子')].join('/'));
+
+  T('问答升级2：对比题拆出两个实体（和 / 与 / vs 都认），拆不出来返回 null',
+    (function () {
+      const p1 = ai.qPair('Transformer 和 RNN 有什么区别');
+      const p2 = ai.qPair('RAG 与 微调 哪个好');
+      return !!p1 && p1[0] === 'Transformer' && p1[1] === 'RNN'
+        && !!p2 && p2[0] === 'RAG' && p2[1] === '微调'
+        && ai.qPair('这件事怎么弄') === null;
+    })(), JSON.stringify(ai.qPair('Transformer 和 RNN 有什么区别')));
+
+  T('问答升级3：对比题给出 ①A ②B ③差别 三段式（A、B 各引一句原文）',
+    (function () {
+      const r = ai.askSmart(fx, 'Transformer 和 RNN 有什么区别', 3);
+      const a = (r[0] || {}).answer || '';
+      return r.length >= 1 && r[0].kind === '对比'
+        && a.indexOf('①【Transformer】') === 0 && a.indexOf('②【RNN】') > 0 && a.indexOf('③') > 0;
+    })(), JSON.stringify((ai.askSmart(fx, 'Transformer 和 RNN 有什么区别', 1)[0] || {}).answer));
+
+  T('问答升级4：普通题按页聚合成「引导语 + 要点列表」，不再只甩一句',
+    (function () {
+      const a = (ai.askSmart(fx, '自注意力 是什么', 1)[0] || {}).answer || '';
+      return /^按《.+》里的说法：\n· /.test(a) && a.split('\n').length >= 2;
+    })(), JSON.stringify((ai.askSmart(fx, '自注意力 是什么', 1)[0] || {}).answer));
+
+  T('问答升级5：表格题直接给「表头 + 对得上的那一行」（比原句更懂结构）',
+    (function () {
+      const docs = ai.buildIndex([{ id: 't1', label: '表页', blocks: [
+        { type: 'table', title: '模型对比表', headers: ['模型', '能否并行'], rows: [['Transformer', '能'], ['RNN', '不能']] }
+      ] }]).docs;
+      const h = ai.tableHits(docs, '模型 能否并行 Transformer', 2);
+      return h.length >= 1 && h[0].table === '模型对比表'
+        && h[0].head.join('|') === '模型|能否并行' && h[0].line.indexOf('Transformer') === 0;
+    })(), JSON.stringify(ai.tableHits(fx.docs, 'RNN 不能并行', 1)));
+
+  T('问答升级6：站里没写过就问空（宁可不答也不编）—— 与旧版行为一致',
+    ai.askSmart(ix, '紫砂壶怎么养', 2).length === 0);
+
+  T('问答升级7：对话框顶部有模式切换键 · 默认「本站速答」· 选择存 localStorage · 样式已加',
+    (function () {
+      const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
+      return s.indexOf('lm-ai-modes') > 0 && s.indexOf('data-mode="local"') > 0
+        && s.indexOf("localStorage.getItem(MODE_KEY) === 'ds' ? 'ds' : 'local'") > 0
+        && s.indexOf('askSmart(ix, q, 3)') > 0 && c.indexOf('.lm-ai-mode.on') > 0;
+    })());
+
   T('零 API：ai.js 全文 **0 处 fetch**、没有 askDeepSeek、不存任何 Key（lm_ai_key_v1 必须 0 处）',
     (function () {
       const s = srcOf('js/ai.js');
@@ -2313,7 +2374,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       const iRel = s.indexOf('🔗 相关条目');
       return iChat > 0 && iPts > iChat && iRel > iChat
         && s.indexOf('发给 DeepSeek') > 0 && s.indexOf('lm-ai-pastesave') > 0
-        && s.indexOf('lm-ai-local') > 0;
+        && s.indexOf('lm-ai-modes') > 0;   /* ★ 修复110：原来的「⚡ 本站速答」按钮升级成顶部模式切换键 */
     })());
 
   T('接入完毕：index.html 引入 js/ai.js（带版本号）· 样式有浮标与面板 · README 把 AI 能力标成已完成',
@@ -2743,10 +2804,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=109 · LM_ASSET_VER=109',
-    css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=108/g) || []).length === 0 && /\?v=109/.test(html)
-      && /LM_ASSET_VER = '109'/.test(appJs));
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=110 · LM_ASSET_VER=110',
+    css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0
+      && (html.match(/\?v=109/g) || []).length === 0 && /\?v=110/.test(html)
+      && /LM_ASSET_VER = '110'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3099,10 +3160,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 109（?v=109 共 20 处 · v108 无残留 · LM_ASSET_VER=109）',
-    (html.match(/\?v=109/g) || []).length === 20 && (html.match(/\?v=108/g) || []).length === 0
-      && /LM_ASSET_VER = '109'/.test(appJs),
-    'v109=' + (html.match(/\?v=109/g) || []).length + ' v108=' + (html.match(/\?v=108/g) || []).length);
+  T('版本已升到 110（?v=110 共 20 处 · v109 无残留 · LM_ASSET_VER=110）',
+    (html.match(/\?v=110/g) || []).length === 20 && (html.match(/\?v=109/g) || []).length === 0
+      && /LM_ASSET_VER = '110'/.test(appJs),
+    'v110=' + (html.match(/\?v=110/g) || []).length + ' v109=' + (html.match(/\?v=109/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
