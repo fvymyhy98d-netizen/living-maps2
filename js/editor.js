@@ -93,6 +93,15 @@ window.LMEditor = (function () {
     text: function (name, val, ph) {
       return '<input class="input" type="text" name="' + name + '" value="' + LMApp.esc(val || '') + '" placeholder="' + LMApp.esc(ph || '') + '">';
     },
+    /* ★ 修复78：图标字段 —— 点框弹出图标面板、再点收起（与「页面管理」同一套面板）；右侧 ▾ 是同一个开关，
+       两者同属 .icon-field（点哪一个都算同一组，再点一次即收起）；输入框仍可直接键入 emoji */
+    icon: function (name, val, ph) {
+      return '<span class="icon-field">'
+        + '<input class="input icon-inp" type="text" name="' + name + '" data-icopen autocomplete="off" value="' + LMApp.esc(val || '')
+        + '" placeholder="' + LMApp.esc(ph || '图标') + '" title="点一下选图标，再点一下收起；也可以直接键入 emoji">'
+        + '<button type="button" class="icon-more" data-icopen title="点一下选图标，再点一下收起">▾</button>'
+        + '</span>';
+    },
     area: function (name, val, ph, rows) {
       return '<textarea class="input" name="' + name + '" rows="' + (rows || 4) + '" placeholder="' + LMApp.esc(ph || '') + '">' + LMApp.esc(val || '') + '</textarea>';
     },
@@ -1047,7 +1056,61 @@ window.LMEditor = (function () {
     });
   }
   /* ---------- 页面管理 ---------- */
-  const PAGE_ICONS = ['📘', '📗', '📙', '📕', '📚', '🗺️', '🧭', '📍', '🌍', '🌐', '💡', '🔬', '🧪', '⚙️', '🛠️', '📊', '📈', '🧠', '🤖', '💬', '👥', '🎓', '✏️', '📝', '🗓️', '⭐', '🔥', '🚀', '🎯', '🔔', '📎', '🗂️'];
+  const PAGE_ICONS = ['📘', '📗', '📙', '📕', '📚', '🗺️', '🧭', '📍', '🌍', '🌐', '💡', '🔬', '🧪', '⚙️', '🛠️', '📊', '📈', '🧠', '🤖', '💬', '👥', '🎓', '✏️', '📝', '🗓️', '⭐', '🔥', '🚀', '🎯', '🔔', '📎', '🗂️',
+    '🧩', '🌱', '🎨', '🔧', '🔍', '📐', '🧮', '🧬', '🛰️', '📡', '🏷️', '🔖', '📌', '🧾', '🗒️', '🎬'];
+  /* ★ 修复78：图标选择面板（「页面管理」与「新建条目 / 设置条目」共用一套）
+     · 点一下带 data-icopen 的图标框 → 面板弹出（贴在框下方；越界自动夹在卡片内）
+     · 再点同一个框（或它旁边的 ▾）→ 收起 —— 就是「点一下弹出、点一下收回」
+     · 点面板里的图标 → 填入并收起；点面板外 → 收起；输入框始终可以直接键入 emoji
+     面板挂在 .modal-card 上绝对定位，不占文档流，弹窗内容再长也不会被顶开 */
+  function attachIconPicker(root) {
+    const card = root.querySelector('.modal-card');
+    if (!card) return null;
+    if (card.style.position !== 'relative') card.style.position = 'relative';
+    const pick = document.createElement('div');
+    pick.className = 'icon-pick';
+    pick.style.display = 'none';
+    pick.innerHTML = PAGE_ICONS.map(function (ic) { return '<button type="button" data-ic="' + ic + '">' + ic + '</button>'; }).join('');
+    card.appendChild(pick);
+    let curInp = null, curGroup = null;
+    const hide = function () { pick.style.display = 'none'; curInp = null; curGroup = null; };
+    const showFor = function (inp, group) {
+      curInp = inp; curGroup = group;
+      const r = inp.getBoundingClientRect(), cr = card.getBoundingClientRect();
+      pick.style.display = 'grid';
+      pick.style.left = Math.max(8, Math.min(r.left - cr.left, cr.width - pick.offsetWidth - 10)) + 'px';
+      pick.style.top = Math.min(r.bottom - cr.top + 6, cr.height - pick.offsetHeight - 10) + 'px';
+    };
+    root.addEventListener('click', function (e) {
+      const t = e.target.closest ? e.target.closest('[data-icopen]') : null;
+      if (!t) return;
+      const group = (t.closest && t.closest('.icon-field')) || t;
+      /* 同一个框再点一次就收起（同一个 .icon-field 里的输入框与 ▾ 算同一组） */
+      if (curGroup === group && pick.style.display !== 'none') { hide(); return; }
+      const inp = (group.querySelector ? group.querySelector('[data-icopen]') : null) || t;
+      showFor(inp, group);
+    });
+    /* 直接在图标框里打字时把面板收掉，免得挡着核对输入 */
+    root.addEventListener('input', function (e) {
+      if (e.target && e.target.getAttribute && e.target.getAttribute('data-icopen') !== null) hide();
+    });
+    pick.addEventListener('click', function (e) {
+      const b = e.target.closest ? e.target.closest('[data-ic]') : null;
+      if (!b || !curInp) return;
+      curInp.value = b.getAttribute('data-ic'); /* 点一个 = 换成这个图标（想叠两个就直接键入） */
+      hide();
+    });
+    const off = function (e) {
+      if (!pick.isConnected) { document.removeEventListener('mousedown', off); return; }
+      if (pick.style.display === 'none') return;
+      if (pick.contains(e.target)) return;
+      if (e.target.closest && e.target.closest('[data-icopen]')) return; /* 点图标框交给上面的开关去处理 */
+      hide();
+    };
+    document.addEventListener('mousedown', off);
+    return { hide: hide, el: pick };
+  }
+
   function pagesModal() {
     const c = LMApp.state.content;
     const alignSel = function (p) {
@@ -1062,7 +1125,7 @@ window.LMEditor = (function () {
       return '<div class="page-row" data-i="' + i + '">'
         /* ★ 修复75：嵌套条目在页面管理里也列出来（方便批量改字），但要标明它是第 3 层、层级与增删归条目树管 */
         + (p.parent ? '<span class="page-nest" title="嵌套条目：层级与增删在「🗂 条目树」里改">↳ 嵌套</span>' : '')
-        + '<input class="input" type="text" data-k="icon" value="' + LMApp.esc(p.icon || '') + '" placeholder="图标" style="max-width:64px;flex:none;text-align:center" title="点击弹出图标面板，也可以直接键入 emoji">'
+        + '<input class="input" type="text" data-k="icon" data-icopen value="' + LMApp.esc(p.icon || '') + '" placeholder="图标" style="max-width:64px;flex:none;text-align:center" title="点一下弹出图标面板，再点一下收起；也可以直接键入 emoji">'
         + '<input class="input" type="text" data-k="label" value="' + LMApp.esc(p.label || '') + '" placeholder="导航名">'
         + '<input class="input" type="text" data-k="title" value="' + LMApp.esc(p.title || '') + '" placeholder="页面大标题">'
         + '<input class="input" type="text" data-k="description" value="' + LMApp.esc(p.description || '') + '" placeholder="页面说明（可留空）">'
@@ -1071,48 +1134,18 @@ window.LMEditor = (function () {
         + '</div>';
     }).join('');
     modal('<h3>页面管理</h3>'
-      + '<p class="modal-note">修改导航名称、页面标题与说明（<b>留空的行页面上不会显示</b>）；点「图标」框弹出图标面板，<b>点选一个即填入</b>（想再选就再点一次图标框），也可以直接键入 emoji。新增页面：点最下面的虚线框，会多出一个空白模板行，填好后点「保存修改」。</p>'
+      + '<p class="modal-note">修改导航名称、页面标题与说明（<b>留空的行页面上不会显示</b>）；点「图标」框弹出图标面板，<b>点选一个即替换</b>，<b>再点一下图标框就收起</b>，也可以直接键入 emoji。新增页面：点最下面的虚线框，会多出一个空白模板行，填好后点「保存修改」。</p>'
       + '<div class="page-rows">' + rows + '</div>'
       + '<button type="button" class="page-row new-page" id="npAdd" title="点击添加一个空白页面模板，填好后点「保存修改」">＋ 点击新增空白页面模板</button>'
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
       + '<button type="button" class="btn btn-primary" id="pagesSave">保存修改</button></div>', function (root) {
-      /* 图标选择面板：点图标框弹出；点选一个 = 填入并关闭面板（再点图标框可再选）；点面板外关闭；输入框仍可直接键入 */
-      const card = root.querySelector('.modal-card');
-      if (card) card.style.position = 'relative';
-      const pick = document.createElement('div');
-      pick.className = 'icon-pick';
-      pick.style.display = 'none';
-      pick.innerHTML = PAGE_ICONS.map(function (ic) { return '<button type="button" data-ic="' + ic + '">' + ic + '</button>'; }).join('');
-      if (card) card.appendChild(pick);
-      let curIconInput = null;
-      const openPickFor = function (inp) {
-        curIconInput = inp;
-        const r = inp.getBoundingClientRect(), cr = card.getBoundingClientRect();
-        pick.style.display = 'grid';
-        pick.style.left = Math.max(8, r.left - cr.left) + 'px';
-        pick.style.top = Math.min(r.bottom - cr.top + 6, cr.height - pick.offsetHeight - 8) + 'px';
-      };
-      /* 事件委托：模板行是动态加的，图标框统一在这里接管 */
+      /* ★ 修复78：面板改由公用 attachIconPicker 提供（与「新建条目」同一套：点一下弹出、再点收起） */
+      attachIconPicker(root);
+      /* 模板行是动态加的：移除按钮统一在这里接管 */
       root.addEventListener('click', function (e) {
-        const inp = e.target.closest ? e.target.closest('[data-k="icon"]') : null;
-        if (inp) openPickFor(inp);
         const dt = e.target.closest ? e.target.closest('[data-deltpl]') : null;
         if (dt) { const row = dt.closest('.page-row'); if (row) row.remove(); }
       });
-      pick.addEventListener('click', function (e) {
-        const b = e.target.closest('[data-ic]');
-        if (!b || !curIconInput) return;
-        curIconInput.value += b.getAttribute('data-ic');
-        pick.style.display = 'none'; /* 点一个就关：想再选就再点一次图标框 */
-      });
-      const offPick = function (e) {
-        if (pick.style.display === 'none' || !pick.isConnected) {
-          if (!pick.isConnected) document.removeEventListener('mousedown', offPick);
-          return;
-        }
-        if (!pick.contains(e.target) && !(e.target.getAttribute && e.target.getAttribute('data-k') === 'icon')) pick.style.display = 'none';
-      };
-      document.addEventListener('mousedown', offPick);
       root.querySelector('#pagesSave').addEventListener('click', function () {
         root.querySelectorAll('.page-row[data-i]').forEach(function (row) {
           const p = c.pages[+row.getAttribute('data-i')];
@@ -1145,7 +1178,7 @@ window.LMEditor = (function () {
         /* 点虚线框 → 多出一个空白页面模板行（点几次加几个；填好点「保存修改」生效） */
         const div = document.createElement('div');
         div.className = 'page-row page-new';
-        div.innerHTML = '<input class="input" type="text" data-k="icon" placeholder="图标" style="max-width:64px;flex:none;text-align:center" title="点击弹出图标面板，也可以直接键入 emoji">'
+        div.innerHTML = '<input class="input" type="text" data-k="icon" data-icopen placeholder="图标" style="max-width:64px;flex:none;text-align:center" title="点一下弹出图标面板，再点一下收起；也可以直接键入 emoji">'
           + '<input class="input" type="text" data-k="label" placeholder="导航名">'
           + '<input class="input" type="text" data-k="title" placeholder="页面大标题（可留空）">'
           + '<input class="input" type="text" data-k="description" placeholder="页面说明（可留空）">'
@@ -1286,13 +1319,14 @@ window.LMEditor = (function () {
     const par = parId ? LMApp.pageById(parId) : null;
     modal('<form id="pageForm"><h3>' + (isNew ? (par ? '新建子条目' : '新建顶层页面') : '设置条目') + '</h3>'
       + (par ? '<p class="modal-note">上级：<b>' + LMApp.esc(LMApp.pageTitle(par)) + '</b>（保存后会自动出现在它的条目块里）</p>' : '')
-      + field('图标', F.text('icon', base.icon, '任意 emoji，例如 🧠'))
+      + field('图标', F.icon('icon', base.icon), '点一下图标框弹出面板，选一个即填入；再点一下框（或 ▾）就收起。也可以直接键入 emoji。')
       + field('导航名 / 条目名', F.text('label', base.label, '条目卡片与导航上显示的名字'))
       + field('页面大标题（可留空，留空则用上面的名字）', F.text('title', base.title, ''))
       + field('页面说明（可留空）', F.area('description', base.description, '一句话说明这一条讲什么（会显示在条目卡片上）', 2))
       + field('大标题对齐', F.select('heroAlign', [['', '居中'], ['left', '居左'], ['right', '居右']], base.heroAlign || ''))
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
       + '<button class="btn btn-primary" type="submit">保存</button></div></form>', function (root) {
+      attachIconPicker(root); /* ★ 修复78：新建 / 设置条目也能点图标框选图标，再点一下收起 */
       root.querySelector('#pageForm').addEventListener('submit', function (e) {
         e.preventDefault();
         const g = function (k) {

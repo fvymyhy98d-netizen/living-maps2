@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '77';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '78';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -980,6 +980,91 @@ T('app.js：histDiffLabel / histStepNote 存在，historyList 返回 msg+diff+no
       && dSame === '';
   } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
   T('histDiffLabel/historyList 真跑：+1 块（表格）· 正文改动 · 网站信息 · 新增/删除页 · 无变化不出假说明', ok);
+})();
+/* ---------- 9.43) 修复78：图标框点一下弹面板、再点收起（新建/设置条目与页面管理同一套） ---------- */
+console.log('【9.43】修复78：新建条目的图标栏改成「点一下弹出一堆图标，再点一下收起」');
+T('editor.js：抽出公用 attachIconPicker（两处复用），F.icon 图标字段带 data-icopen + ▾ 开关，旧内联面板已删除',
+  edt2.indexOf('function attachIconPicker(root) {') > 0
+    && edt2.split('attachIconPicker(root);').length - 1 === 2
+    && edt2.indexOf('curIconInput') < 0
+    && edt2.indexOf('icon: function (name, val, ph) {') > 0
+    && edt2.indexOf('class="input icon-inp" type="text" name="\' + name + \'" data-icopen') > 0
+    && edt2.indexOf('class="icon-more" data-icopen') > 0
+    && edt2.indexOf("F.icon('icon', base.icon)") > 0
+    && edt2.indexOf('data-k="icon" data-icopen') > 0
+    && edt2.indexOf("'🧩'") > 0);
+T('CSS：.icon-field / .icon-more 样式 + 手机端图标面板收成 6 列（8 列会顶到卡片边）',
+  cssSrc.indexOf('.icon-field{display:flex;align-items:center;gap:8px;max-width:196px}') > 0
+    && cssSrc.indexOf('.icon-more{flex:none;width:36px;height:36px;') > 0
+    && cssSrc.indexOf('body.mobile-view .icon-pick{grid-template-columns:repeat(6,38px)}') > 0);
+/* 真实执行 attachIconPicker：桩 DOM 跑一遍「开 → 再点收起 → 选一个填入并收起 → 组内 ▾ 也算同一开关 → 点外面收起」 */
+(function () {
+  const a6 = edt2.indexOf('function attachIconPicker(root) {');
+  const z6 = edt2.indexOf('\n  }', a6);
+  const code6 = (a6 >= 0 && z6 > a6) ? edt2.slice(a6, z6 + 4) : '';
+  const mkEl = function () {
+    const el = {
+      style: {}, className: '', innerHTML: '', value: '',
+      offsetWidth: 300, offsetHeight: 120, isConnected: true, _h: {},
+      appendChild: function (c) { this.child = c; },
+      addEventListener: function (t, f) { this._h[t] = f; },
+      getBoundingClientRect: function () { return { left: 10, top: 20, right: 90, bottom: 40, width: 80, height: 20 }; },
+      getAttribute: function (n) { return n === 'data-icopen' ? '' : null; },
+      contains: function () { return false; }
+    };
+    return el;
+  };
+  let ok = false;
+  try {
+    const card = mkEl();
+    const root = { _h: {}, querySelector: function () { return card; }, addEventListener: function (t, f) { this._h[t] = f; } };
+    const doc = { _h: {}, createElement: function () { return mkEl(); }, addEventListener: function (t, f) { this._h[t] = f; }, removeEventListener: function () {} };
+    const run6 = new Function('document', 'PAGE_ICONS', code6 + '\nreturn attachIconPicker;')(doc, ['📘', '🧠', '🚀']);
+    const api = run6(root);
+    const pick = api.el;
+    const mkGroup = function () {
+      const g = {};
+      const inp = mkEl();
+      inp.closest = function (s) { return s === '[data-icopen]' ? inp : (s === '.icon-field' ? g : null); };
+      g.querySelector = function (s) { return s === '[data-icopen]' ? inp : null; };
+      const more = mkEl();
+      more.closest = function (s) { return s === '[data-icopen]' ? more : (s === '.icon-field' ? g : null); };
+      g.more = more;
+      return { g: g, inp: inp, more: more };
+    };
+    const G = mkGroup();
+    const click = function (t) { root._h.click({ target: t }); };
+    /* ① 第一次点图标框 → 弹面板；② 再点同一个框 → 收起 */
+    click(G.inp);
+    const open1 = pick.style.display;
+    click(G.inp);
+    const closed1 = pick.style.display;
+    /* ③ 再开一次（从 ▾ 开），点面板里的 🧠 → 填入并收起 */
+    click(G.more);
+    const open2 = pick.style.display;
+    pick._h.click({ target: { closest: function (s) { return s === '[data-ic]' ? { getAttribute: function () { return '🧠'; } } : null; } } });
+    const picked = G.inp.value, closed2 = pick.style.display;
+    /* ④ 组内开关：从输入框打开，再点同组的 ▾ → 收起 */
+    click(G.inp);
+    const open3 = pick.style.display;
+    click(G.more);
+    const closed3 = pick.style.display;
+    /* ⑤ 点面板外（mousedown）→ 收起 */
+    click(G.inp);
+    doc._h.mousedown({ target: { closest: function () { return null; } } });
+    const closed4 = pick.style.display;
+    /* ⑥ 直接在框里打字（input 事件）→ 面板收起，免得挡着核对输入 */
+    click(G.inp);
+    const open4 = pick.style.display;
+    root._h.input({ target: G.inp });
+    const closed5 = pick.style.display;
+    ok = open1 === 'grid' && /px$/.test(String(pick.style.left)) && closed1 === 'none'
+      && open2 === 'grid' && picked === '🧠' && closed2 === 'none'
+      && open3 === 'grid' && closed3 === 'none'
+      && closed4 === 'none' && open4 === 'grid' && closed5 === 'none'
+      && String(card.child && card.child.className) === 'icon-pick';
+  } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
+  T('attachIconPicker 真跑：点一下弹出（贴框定位）· 再点收起 · 选一个填入并收起 · 输入框与 ▾ 属同一开关 · 点外面/打字收起', ok);
 })();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
