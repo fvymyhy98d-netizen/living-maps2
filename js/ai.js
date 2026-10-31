@@ -574,6 +574,36 @@ W.LMAI = (function () {
       return (i % 2) ? '<mark class="lm-ai-hit">' + esc(seg) + '</mark>' : esc(seg);
     }).join('');
   }
+  /* ★ 修复119：引文为了不撑爆 localStorage 只存前 200 字，但「想看完整原句」不该逼人跳页。
+     引文本来就是原文的逐字切片 —— 拿前 40 字去同一页的句子里一找，就能把整句取回来。 */
+  function fullQuote(pageId, short) {
+    const s = String(short || '');
+    if (!s) return s;
+    try {
+      const ix = indexNow();
+      if (!ix || !ix.docs) return s;
+      const doc = ix.docs.filter(function (d) { return d.pageId === pageId; })[0];
+      if (!doc || !Array.isArray(doc.sents)) return s;
+      const bare = s.replace(/…$/, '');
+      const probe = bare.slice(0, 40);
+      if (!probe) return s;
+      for (let i = 0; i < doc.sents.length; i++) {
+        const t = String((doc.sents[i] && doc.sents[i].s) || '');
+        if (t.indexOf(probe) >= 0) return t.length > bare.length ? t.slice(0, 900) : s;
+      }
+    } catch (e) { /* 索引还没好就退回存下来的那一段 */ }
+    return s;
+  }
+  /* 短引文原样显示；能找回更长的原句时，给一个「展开全文」就地看，不用跳页 */
+  function quoteHtml(short, q, pageId) {
+    const full = fullQuote(pageId, short);
+    const bare = String(short || '').replace(/…$/, '');
+    if (!full || full.length <= bare.length + 4) return hiText(short, q);
+    const lbl = esc('展开全文（' + full.length + ' 字）');
+    return '<span class="lm-ai-qshort">' + hiText(short, q) + '</span>'
+      + ' <button type="button" class="lm-ai-more" data-lbl="' + lbl + '">' + lbl + '</button>'
+      + '<span class="lm-ai-qfull" hidden>' + hiText(full, q) + '</span>';
+  }
   /* ---------- ⑨ 界面：右下角「✨ 智能提炼」浮标 + 面板 ---------- */
   let panel = null, fab = null, idx = null, idxSrc = null;
 
@@ -823,7 +853,7 @@ W.LMAI = (function () {
               const body = String(c.text || '');
               return '<div class="lm-ai-quote">'
                 + '<a class="lm-ai-src" href="#/p/' + encodeURIComponent(c.pageId) + '">《' + esc(c.title || c.pageId) + '》</a>'
-                + '<p>' + hiText(body.length > 200 ? body.slice(0, 200) + '…' : body, m.q) + '</p></div>';
+                + '<p>' + quoteHtml(body.length > 200 ? body.slice(0, 200) + '…' : body, m.q, c.pageId) + '</p></div>';
             }).join('')
             + '</details>'
           : '';
@@ -1005,12 +1035,33 @@ W.LMAI = (function () {
       renderPanel();
     });
   }
+  /* ★ 修复119：手机上面板打开时锁住背景滚动。
+     直接给 body 加 overflow:hidden 在 iOS 上会把页面位置顶掉（关掉后跳回顶部），
+     所以用更稳的老办法：body 改 position:fixed + 负 top 记住位置，关面板时把 scrollY 还原。 */
+  let lockY = 0;
+  function isNarrow() {
+    try { return !!(window.matchMedia && window.matchMedia('(max-width:640px)').matches); }
+    catch (e) { return false; }
+  }
+  function lockScroll() {
+    if (typeof document === 'undefined' || !isNarrow()) return;
+    if (document.body.classList.contains('lm-lock')) return;
+    lockY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    document.body.style.top = (-lockY) + 'px';
+    document.body.classList.add('lm-lock');
+  }
+  function unlockScroll() {
+    if (typeof document === 'undefined' || !document.body.classList.contains('lm-lock')) return;
+    document.body.classList.remove('lm-lock');
+    document.body.style.top = '';
+    try { window.scrollTo(0, lockY); } catch (e) { /* noop */ }
+  }
   function toggle(force) {
     if (!panel) return;
     const open = force === true ? true : (force === false ? false : panel.hidden);
     panel.hidden = !open;
     if (fab) fab.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) renderPanel();
+    if (open) { lockScroll(); renderPanel(); } else unlockScroll();
   }
   function mount() {
     if (fab || typeof document === 'undefined') return;
@@ -1036,6 +1087,20 @@ W.LMAI = (function () {
       + '<button type="button" class="lm-ai-x" aria-label="关闭">×</button></div>'
       + '<div class="lm-ai-body"></div>';
     document.body.appendChild(panel);
+    /* ★ 修复119：「展开全文」用事件委托 —— 面板每次都是整段重绘，绑在按钮上重绘一次就失效 */
+    panel.addEventListener('click', function (e) {
+      const b = (e.target && e.target.closest) ? e.target.closest('.lm-ai-more') : null;
+      if (!b) return;
+      e.preventDefault();
+      const box = b.parentNode;
+      const fullEl = box ? box.querySelector('.lm-ai-qfull') : null;
+      const shortEl = box ? box.querySelector('.lm-ai-qshort') : null;
+      if (!fullEl) return;
+      const willOpen = fullEl.hidden;
+      fullEl.hidden = !willOpen;
+      if (shortEl) shortEl.hidden = willOpen;
+      b.textContent = willOpen ? '收起' : (b.getAttribute('data-lbl') || '展开全文');
+    });
     /* ★ 修复116：手机上键盘弹出会把 fixed 面板顶出可视区，导致输入框被盖住。
        用 visualViewport 判断"键盘是否弹起"，弹起时给面板加 .lm-kb 收窄高度。 */
     if (typeof window !== 'undefined' && window.visualViewport) {
@@ -1048,6 +1113,11 @@ W.LMAI = (function () {
       window.visualViewport.addEventListener('resize', fitKb);
       window.visualViewport.addEventListener('scroll', fitKb);
     }
+    /* ★ 修复119：横屏 / 放大到桌面宽度时自动解锁，避免「锁上了忘了关」
+       （必须放在 mount() 里，不能写在模块顶层 —— node 里 require 本文件时没有 window） */
+    window.addEventListener('resize', function () {
+      if (!panel || panel.hidden || !isNarrow()) unlockScroll();
+    });
     const x = panel.querySelector('.lm-ai-x');
     if (x) x.addEventListener('click', function () { toggle(false); });
 

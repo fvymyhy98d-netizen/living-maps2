@@ -2551,7 +2551,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
   T('高亮1：出处引文里的命中词用 <mark class="lm-ai-hit"> 标出，且这一问的关键词会跟着消息存下来',
     (function () {
       const s = srcOf('js/ai.js');
-      return s.indexOf('function hiText(') > 0 && s.indexOf('hiText(body.length > 200') > 0
+      return s.indexOf('function hiText(') > 0 && s.indexOf('quoteHtml(body.length > 200') > 0
         && s.indexOf('<mark class="lm-ai-hit">') > 0 && s.indexOf("rec.q = String(msg.q)") > 0
         && s.indexOf('q: qq,') > 0;
     })());
@@ -2634,6 +2634,34 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return s.indexOf("typeof page.blocks[idx] !== 'object' || page.blocks[idx].type !== type") > 0
         && s.indexOf("请关掉后重新点开再改") > 0
         && s.indexOf('if (isNew) page.blocks.push(nb); else page.blocks[idx] = nb;') > 0;
+    })());
+
+  /* ★ 修复119：引文「展开全文」+ 手机锁滚动 */
+  T('引文1：长引文可就地展开全文 —— 用同页句子把原文找回来，不用跳页（找不到就原样显示）',
+    (function () {
+      const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
+      return s.indexOf('function fullQuote(pageId, short)') > 0
+        && s.indexOf('function quoteHtml(short, q, pageId)') > 0
+        && s.indexOf("d.pageId === pageId") > 0
+        && s.indexOf('class="lm-ai-more"') > 0
+        && s.indexOf('class="lm-ai-qfull" hidden') > 0
+        && s.indexOf("closest('.lm-ai-more')") > 0
+        && s.indexOf('quoteHtml(body.length > 200') > 0
+        && c.indexOf('.lm-ai-qfull{display:block') > 0 && c.indexOf('.lm-ai-more{') > 0;
+    })());
+
+  T('滚动1：手机上面板打开锁背景滚动，关掉还原 scrollY（用 position:fixed + 负 top，不用 overflow:hidden）',
+    (function () {
+      const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
+      return s.indexOf('function lockScroll()') > 0 && s.indexOf('function unlockScroll()') > 0
+        && s.indexOf("document.body.style.top = (-lockY) + 'px';") > 0
+        && s.indexOf('window.scrollTo(0, lockY)') > 0
+        && s.indexOf("matchMedia('(max-width:640px)')") > 0
+        && s.indexOf('lockScroll(); renderPanel();') > 0
+        && s.indexOf('else unlockScroll();') > 0
+        && s.indexOf('|| !isNarrow()) unlockScroll();') > 0
+        && s.indexOf("document.body.style.overflow = 'hidden'") < 0
+        && c.indexOf('body.lm-lock{position:fixed;left:0;right:0;width:100%;overflow:hidden}') > 0;
     })());
 
 
@@ -3169,10 +3197,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=118 · LM_ASSET_VER=118',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=119 · LM_ASSET_VER=119',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=117/g) || []).length === 0 && /\?v=118/.test(html)
-      && /LM_ASSET_VER = '118'/.test(appJs));
+      && (html.match(/\?v=118/g) || []).length === 0 && /\?v=119/.test(html)
+      && /LM_ASSET_VER = '119'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3525,10 +3553,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 118（?v=118 共 21 处 · v117 无残留 · LM_ASSET_VER=118）',
-    (html.match(/\?v=118/g) || []).length === 21 && (html.match(/\?v=117/g) || []).length === 0
-      && /LM_ASSET_VER = '118'/.test(appJs),
-    'v118=' + (html.match(/\?v=118/g) || []).length + ' v117=' + (html.match(/\?v=117/g) || []).length);
+  T('版本已升到 119（?v=119 共 21 处 · v118 无残留 · LM_ASSET_VER=119）',
+    (html.match(/\?v=119/g) || []).length === 21 && (html.match(/\?v=118/g) || []).length === 0
+      && /LM_ASSET_VER = '119'/.test(appJs),
+    'v119=' + (html.match(/\?v=119/g) || []).length + ' v118=' + (html.match(/\?v=118/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
