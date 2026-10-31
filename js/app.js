@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '100';
+var LM_ASSET_VER = '101';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2328,7 +2328,7 @@ window.LMApp = (function () {
     try { cfg = LMFB.cloudCfg(); } catch (e0) { cfg = null; }
     if (!cfg) return;                                   /* 没配云存档：一个字都不提，界面照旧 */
     const now = Date.now();
-    if (now - _dcPullAt < 60000 || _dcPulling) return;
+    if (now - _dcPullAt < 30000 || _dcPulling) return;
     _dcPullAt = now; _dcPulling = true;
     LMFB.dcList().then(function (r) {
       _dcPulling = false;
@@ -2337,8 +2337,8 @@ window.LMApp = (function () {
       r.list.forEach(function (m) { if (m && m.id) cloudIds[m.id] = 1; });
       if (r.list.length) {
         const res = dcCloudApply(r.list);
+        if (res.changed) mountDiscuss();   /* ★ 修复101：不再只在「补齐新帖」时重绘 —— 别人的删除也要立刻消失 */
         if (res.added && document.getElementById('dcMount')) {
-          mountDiscuss();
           toast('☁ 讨论区从云存档补齐 ' + res.added + ' 条');
         }
       }
@@ -2347,6 +2347,15 @@ window.LMApp = (function () {
       if (miss.length) { try { LMFB.dcSave(miss); } catch (e3) { /* noop */ } }
     }).catch(function () { _dcPulling = false; });
   }
+  /* ★ 修复101：讨论区页面开着不动时也要自己刷新
+     —— 以前 dcCloudPull 只在「打开讨论区那一刻」调用，于是别人发的帖 / 删的帖要等你自己重进页面才看得到
+     （而且 60 秒节流还会再挡一次）。现在每 15 秒看一眼：不在讨论区页 / 浏览器后台时一次请求都不发，
+     真拉取仍按 dcCloudPull 内部 30 秒节流，所以最多 30 秒后别人的删除与新增就会出现在你眼前。 */
+  setInterval(function () {
+    if (document.hidden) return;
+    if (!document.getElementById('dcMount')) return;
+    dcCloudPull();
+  }, 15000);
   function dcHtml() {
     const isAdmin = state.admin; /* 被屏蔽的言论所有管理员都能看到（与普通权限一致，看不出谁有特殊通道） */
     const all = dcAll().filter(function (m) { return m && !m.del; });
@@ -2964,7 +2973,12 @@ window.LMApp = (function () {
 
   return {
     state: state, render: render, applyEdit: applyEdit, toast: toast,
-    refreshDiscuss: mountFeedback,
+    /* ★ 修复101：对方 dcommit 到达后要重绘「讨论区」——以前错接成 mountFeedback，
+       结果数据合进来了、页面还不刷新（要手动切页才看到别人的发言/删除） */
+    refreshDiscuss: function () {
+      mountFeedback();
+      if (document.getElementById('dcMount')) mountDiscuss();
+    },
     historyList: historyList, restoreVersion: restoreVersion,
     esc: esc, md: md, currentId: currentId, ensureConfig: ensureConfig,
     commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayoutSafe,

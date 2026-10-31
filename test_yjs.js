@@ -2631,10 +2631,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=100 · LM_ASSET_VER=100',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=101 · LM_ASSET_VER=101',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=99/g) || []).length === 0 && /\?v=100/.test(html)
-      && /LM_ASSET_VER = '100'/.test(appJs));
+      && (html.match(/\?v=100/g) || []).length === 0 && /\?v=101/.test(html)
+      && /LM_ASSET_VER = '101'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -2849,11 +2849,22 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && appJs.indexOf('dcCloudPull();   /* ★ 修复100') > 0
       && appJs.indexOf('window.LMFB.dcMerge(cur, list)') > 0);
 
-  T('离线自愈 + 节流：60 秒节流、本机有云端没有的补推（上限 30 条）、补齐时页面提示',
-    appJs.indexOf('if (now - _dcPullAt < 60000 || _dcPulling) return;') > 0
+  T('离线自愈 + 节流：30 秒节流、本机有云端没有的补推（上限 30 条）、补齐时页面提示',
+    appJs.indexOf('if (now - _dcPullAt < 30000 || _dcPulling) return;') > 0
       && appJs.indexOf('!cloudIds[m.id] && m.dev !== \'import\'' ) > 0
       && appJs.indexOf('.slice(0, 30)') > 0
       && appJs.indexOf('☁ 讨论区从云存档补齐 ') > 0);
+
+  /* ★ 修复101：「停在讨论区不动」也要能看到别人的新帖与删除 */
+  T('讨论区定时自动刷新：每 15 秒瞄一眼，不在讨论区页或后台时一次请求都不发（拉取仍按 30 秒节流）',
+    appJs.indexOf('setInterval(function () {\r\n    if (document.hidden) return;\r\n    if (!document.getElementById(\'dcMount\')) return;\r\n    dcCloudPull();\r\n  }, 15000);') > 0);
+
+  T('别人的删除也要立刻消失：res.changed 就重绘（以前只在「补齐新帖」时重绘，删除不刷新）',
+    appJs.indexOf('if (res.changed) mountDiscuss();') > 0);
+
+  T('协作 dcommit 到达后重绘讨论区（refreshDiscuss 以前错接成 mountFeedback，数据合了页面不刷）',
+    appJs.indexOf('refreshDiscuss: function () {') > 0
+      && appJs.indexOf('if (document.getElementById(\'dcMount\')) mountDiscuss();') > 0);
 
   T('README 记录修复100：lm_discuss 建表 SQL（含 "updatedAt" bigint）+ grant select, insert, update + upsert 说明',
     readme.indexOf('修复100') > 0 && readme.indexOf('lm_discuss') > 0
@@ -2861,10 +2872,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 100（?v=100 共 20 处 · v99 无残留 · LM_ASSET_VER=100）',
-    (html.match(/\?v=100/g) || []).length === 20 && (html.match(/\?v=99/g) || []).length === 0
-      && /LM_ASSET_VER = '100'/.test(appJs),
-    'v100=' + (html.match(/\?v=100/g) || []).length + ' v99=' + (html.match(/\?v=99/g) || []).length);
+  T('版本已升到 101（?v=101 共 20 处 · v100 无残留 · LM_ASSET_VER=101）',
+    (html.match(/\?v=101/g) || []).length === 20 && (html.match(/\?v=100/g) || []).length === 0
+      && /LM_ASSET_VER = '101'/.test(appJs),
+    'v101=' + (html.match(/\?v=101/g) || []).length + ' v100=' + (html.match(/\?v=100/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
