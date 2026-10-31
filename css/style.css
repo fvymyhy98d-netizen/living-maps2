@@ -845,6 +845,28 @@ body.mobile-view #editBar .tb-collapse{display:flex;position:sticky;right:0;z-in
   border:none;border-radius:999px;background:var(--blue);color:#fff;font-size:12px;font-weight:600;
   box-shadow:0 3px 10px rgba(0,113,227,.35);cursor:pointer}
 body.mobile-view #editBar .tb-collapse:active{background:#0077ed}
+/* ★ 修复79：电脑版也能收起格式工具条 —— 管理模式下工具条右端出现蓝色「⌨️ 收起」，
+   点一下整条缩成 0×0、只剩右上角的 ⌨️ 圆钮（想用再点它展开）。
+   默认状态没变：电脑端进入管理模式仍是「展开」的整条，手机端仍默认收起。
+   用 :not(.mobile-view) 收窄作用域，手机端那套（含 sticky 收起钮、把手位置）一个字没动 */
+body.admin:not(.mobile-view) #editBar .tb-collapse{display:flex;position:sticky;right:0;z-index:3;flex:none;
+  align-items:center;justify-content:center;gap:3px;height:26px;padding:0 10px;margin-left:6px;
+  border:none;border-radius:999px;background:var(--blue);color:#fff;font-size:12px;font-weight:600;
+  box-shadow:0 3px 10px rgba(0,113,227,.35);cursor:pointer;opacity:.92;transition:opacity .15s ease,background .15s ease}
+body.admin:not(.mobile-view) #editBar .tb-collapse:hover{opacity:1;background:#0077ed}
+/* 收起态：整条归零、背景/边框/模糊全撤掉（撤掉 backdrop-filter 后，里面的 fixed 把手才是「相对屏幕」定位） */
+body.admin:not(.mobile-view) #editBar:not(.open){left:auto;right:0;top:0;width:0;height:0;min-height:0;overflow:visible;
+  background:transparent;box-shadow:none;border:none;padding:0;margin:0;max-height:none;transform:none;animation:none;
+  backdrop-filter:none;-webkit-backdrop-filter:none}
+body.admin:not(.mobile-view) #editBar:not(.open) > *:not(.eb-toggle){display:none}
+body.admin:not(.mobile-view) #editBar .eb-toggle{display:flex;position:fixed;top:62px;right:16px;z-index:121;
+  width:34px;height:34px;border-radius:50%;background:var(--blue);color:#fff;font-size:15px;
+  align-items:center;justify-content:center;border:none;flex:none;
+  box-shadow:0 4px 14px rgba(0,113,227,.35);cursor:pointer;padding:0}
+body.admin:not(.mobile-view) #editBar .eb-toggle:hover{background:#0077ed}
+/* 展开时就藏掉这个 ⌨️：展开态的收起入口是工具条右端的「⌨️ 收起」 */
+body.admin:not(.mobile-view) #editBar.open .eb-toggle{display:none}
+
 body.mobile-view .tb-btn{height:28px;min-width:28px;padding:0 7px;font-size:12.5px}
 body.mobile-view .tb-lab{font-size:10px}
 body.mobile-view .tb-grp{flex-wrap:nowrap;justify-content:flex-start;flex:0 0 auto;min-width:0}

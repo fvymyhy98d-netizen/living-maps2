@@ -326,9 +326,9 @@ T('手机端入场动画统一只淡入不位移（访客同样受益；桌面�
 
 /* ---------- 9.9) 修复㉝：手机工具条收成把手 / 点块任意位置浮现操作栏 / 协同局部刷新 / 手机排版兜底 ---------- */
 console.log('【9.9】修复㉝：工具条把手 · 点块浮现 · 协同局部刷新 · 排版兜底');
-T('editBar 手机端收成右上角 ⌨️ 把手（默认收起、点开恢复、桌面无把手常展开）',
+T('editBar 手机端收成右上角 ⌨️ 把手（默认收起、点开恢复；桌面默认展开、也可手动收起——修复79）',
   edt2.indexOf('class="eb-toggle"') > 0
-    && edt2.indexOf("tg.closest('#editBar').classList.toggle('open')") > 0
+    && edt2.indexOf("tbSetOpen(!tg.closest('#editBar').classList.contains('open'));") > 0
     && edt2.indexOf("bar.classList.toggle('open', !document.body.classList.contains('mobile-view'))") > 0
     && cssSrc.indexOf('body.admin .eb-toggle{display:none}') > 0
     && cssSrc.indexOf('body.admin.mobile-view #editBar:not(.open) > *:not(.eb-toggle){display:none}') > 0);
@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '78';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '79';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -494,7 +494,7 @@ T('手机 modal-mask 顶部对齐 + 登录弹窗 preLock 预检 + 密码框 ente
 T('⌨️ 把手 pointerdown+pointerup 双确认（触屏隐式捕获下「按下后滑开」不再误触发开合）',
   edt2.indexOf("ebToggleDown = !!(e.target && e.target.closest && e.target.closest('#editBar .eb-toggle'));") > 0
     && edt2.indexOf('if (tg && ebToggleDown)') > 0
-    && edt2.indexOf("tg.closest('#editBar').classList.toggle('open')") > 0);
+    && edt2.indexOf("tbSetOpen(!tg.closest('#editBar').classList.contains('open'));") > 0);
 T('键入态红钮与管理条抬升只作用于手机端（桌面键入无红钮、管理条不跳位）',
   cssSrc.indexOf('body.mobile-view.typing .edit-exit{display:block}') > 0
     && cssSrc.indexOf('body.mobile-view.typing #adminBar{bottom:88px}') > 0
@@ -764,11 +764,11 @@ T('CSS：手机端 sticky 规则不许吞掉 .act 蓝底（否则白底白字看
     && cssSrc.indexOf('body.admin.mobile-view #editBar.open .eb-toggle{display:none}') > 0
     && cssSrc.indexOf('body.mobile-view #editBar .tb-collapse{display:flex;position:sticky;right:0;') > 0
     && cssSrc.indexOf('.tb-collapse{display:none}') > 0);
-T('editor.js：收起钮在「插入」之后（DOM 顺序）+ 点击只收工具条不误触格式按钮 + 桌面端不渲染',
+T('editor.js：收起钮在「插入」之后（DOM 顺序）+ 点击只收工具条不误触格式按钮 + 走统一开合入口',
   edt2.indexOf('data-tbcollapse="1"') > 0
     && edt2.indexOf('>插入</button>') < edt2.indexOf('data-tbcollapse="1"')
     && edt2.indexOf("e.target.closest('[data-tbcollapse]')") > 0
-    && edt2.indexOf("bar0.classList.remove('open')") > 0);
+    && edt2.indexOf('tbSetOpen(false); /* ★ 修复79') > 0);
 
 /* ---------- 9.40) 修复75：第 3 层「嵌套条目」（子页面 + 条目块 + 条目树控制台） ---------- */
 console.log('【9.40】修复75：子页面(parent)不进导航/首页 · 条目块自动列子条目 · 🗂 条目树增删改调序');
@@ -1065,6 +1065,63 @@ T('CSS：.icon-field / .icon-more 样式 + 手机端图标面板收成 6 列（8
       && String(card.child && card.child.className) === 'icon-pick';
   } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
   T('attachIconPicker 真跑：点一下弹出（贴框定位）· 再点收起 · 选一个填入并收起 · 输入框与 ▾ 属同一开关 · 点外面/打字收起', ok);
+})();
+/* ---------- 9.44) 修复79：电脑版也能收起格式工具条（默认仍是展开） ---------- */
+console.log('【9.44】修复79：电脑端工具条右端「⌨️ 收起」→ 整条缩成右上角把手；管理模式下默认展开');
+T('editor.js：开合收进 tbSetOpen（收起钮 / 右上角把手共用），默认态仍按 mobile-view 判定（电脑=展开）',
+  edt2.indexOf('function tbSetOpen(open) {') > 0
+    && edt2.indexOf("bar1.classList.toggle('open', !!open);") > 0
+    && edt2.indexOf('tbSetOpen(false); /* ★ 修复79') > 0
+    && edt2.indexOf("tbSetOpen(!tg.closest('#editBar').classList.contains('open'));") > 0
+    && edt2.indexOf("bar.classList.toggle('open', !document.body.classList.contains('mobile-view'));") > 0
+    && edt2.indexOf('title="收起工具栏（电脑 / 手机通用）') > 0
+    && edt2.indexOf('title="展开 / 收起格式工具条（收起时它就停在右上角）"') > 0);
+T('CSS：电脑端渲染 收起钮 + 右上角把手（:not(.mobile-view) 收窄作用域，手机端原规则一字未动）',
+  cssSrc.indexOf('body.admin:not(.mobile-view) #editBar .tb-collapse{display:flex;position:sticky;right:0;') > 0
+    && cssSrc.indexOf('body.admin:not(.mobile-view) #editBar:not(.open) > *:not(.eb-toggle){display:none}') > 0
+    && cssSrc.indexOf('body.admin:not(.mobile-view) #editBar .eb-toggle{display:flex;position:fixed;top:62px;right:16px;') > 0
+    && cssSrc.indexOf('body.admin:not(.mobile-view) #editBar.open .eb-toggle{display:none}') > 0
+    && cssSrc.indexOf('backdrop-filter:none;-webkit-backdrop-filter:none}') > 0
+    /* 手机端那套必须保持原样（回归） */
+    && cssSrc.indexOf('.tb-collapse{display:none}') > 0
+    && cssSrc.indexOf('body.mobile-view #editBar .tb-collapse{display:flex;position:sticky;right:0;') > 0
+    && cssSrc.indexOf('body.admin.mobile-view #editBar .eb-toggle{display:flex;position:fixed;top:60px;right:8px;') > 0
+    && cssSrc.indexOf('body.admin.mobile-view #editBar.open .eb-toggle{display:none}') > 0);
+/* 真实执行 tbSetOpen：桩 document + classList，验证「收起置 open=false 且关气泡 / 展开置 true 不关 / 无工具条安全返回」 */
+(function () {
+  const a7 = edt2.indexOf('function tbSetOpen(open) {');
+  const z7 = edt2.indexOf('\n  }', a7);
+  const code7 = (a7 >= 0 && z7 > a7) ? edt2.slice(a7, z7 + 4) : '';
+  let ok = false;
+  try {
+    const mkBar = function (startOpen) {
+      const cl = new Set(startOpen ? ['open'] : []);
+      return {
+        cl: cl,
+        classList: {
+          contains: function (c) { return cl.has(c); },
+          toggle: function (c, v) { if (v) cl.add(c); else cl.delete(c); }
+        }
+      };
+    };
+    const bar = mkBar(true);
+    let pops = 0;
+    const setOpen = new Function('document', 'closePop', code7 + '\nreturn tbSetOpen;')(
+      { getElementById: function () { return bar; } }, function () { pops++; });
+    const r1 = setOpen(false);              /* 收起 */
+    const closed = bar.cl.has('open') === false && pops === 1;
+    const r2 = setOpen(true);               /* 再展开（不该关气泡） */
+    const opened = bar.cl.has('open') === true && pops === 1;
+    const r3 = setOpen(false);              /* 再收起 */
+    const closed2 = bar.cl.has('open') === false && pops === 2;
+    const r4 = setOpen(null);               /* 传空也算收起 */
+    const closed3 = bar.cl.has('open') === false && pops === 3;
+    const noBar = new Function('document', 'closePop', code7 + '\nreturn tbSetOpen;')(
+      { getElementById: function () { return null; } }, function () {})(true);
+    ok = r1 === true && r2 === true && r3 === true && r4 === true
+      && closed && opened && closed2 && closed3 && noBar === false;
+  } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
+  T('tbSetOpen 真跑：收起=open 移除且关气泡 · 展开=open 加回不关气泡 · 连续收起幂等 · 没有工具条时安全返回 false', ok);
 })();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

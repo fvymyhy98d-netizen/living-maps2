@@ -846,7 +846,7 @@ window.LMEditor = (function () {
   }, true);
   document.addEventListener('pointerup', function (e) {
     const tg = e.target.closest ? e.target.closest('#editBar .eb-toggle') : null;
-    if (tg && ebToggleDown) { tg.closest('#editBar').classList.toggle('open'); }
+    if (tg && ebToggleDown) { tbSetOpen(!tg.closest('#editBar').classList.contains('open')); } /* ★ 修复79 */
     ebToggleDown = false;
   });
   /* ★ 修复㊶：手机键入时的「✕ 退出键入」红钮 —— 键盘弹出后想收键盘，点空白处极易误触其他块；
@@ -1694,6 +1694,17 @@ window.LMEditor = (function () {
   const HLS = ['', '#fff3b0', '#ffe08a', '#ffd6a5', '#caffbf', '#9bf6ff', '#cdb4f6', '#ffc9de'];
   const GRADS = [['', ''], ['1', ''], ['2', ''], ['3', ''], ['4', ''], ['5', ''], ['6', '']];
 
+  /* ★ 修复79：格式工具条「展开 / 收起」的统一入口（电脑版与手机版共用）
+     · open=true  展开：整条工具条回到顶部（手机与电脑都是同一套样式）
+     · open=false 收起：整条缩成 0×0，只留右上角 ⌨️ 圆钮当把手；顺手关掉格式气泡
+     默认状态仍由 renderToolbar 决定：电脑端进入管理模式默认展开，手机端默认收起 */
+  function tbSetOpen(open) {
+    const bar1 = document.getElementById('editBar');
+    if (!bar1) return false;
+    bar1.classList.toggle('open', !!open);
+    if (!open) closePop();
+    return true;
+  }
   function renderToolbar() {
     /* ★ 修复㊸（彻查回归）：切页后作废跨页残留的选中态 —— tb.active/imgSel 是「页内索引」，
        activeBlock 按「当前页 + 索引」取块，切页不清会把选中框/操作栏挂到新页同位置的块上 */
@@ -1794,8 +1805,8 @@ window.LMEditor = (function () {
       + '<button class="tb-btn wide primary" data-tb="sync" tabindex="-1">☁ 同步</button>'
       /* ★ 修复74：手机端「⌨️ 收起」钮 —— 排在「插入」右边（sticky 钉在工具条右端，滚动也够得着）：
          右上角那个 fixed 的 ⌨️ 展开时会被 #editBar 的 backdrop-filter 裁掉，收不回去 */
-      + '<button class="tb-collapse" type="button" data-tbcollapse="1" tabindex="-1" title="收起工具栏（手机端，等同右上角 ⌨️）">⌨️ 收起</button>'
-      + '<button class="eb-toggle" type="button" tabindex="-1" title="收起 / 展开格式工具（手机端）">⌨️</button>';
+      + '<button class="tb-collapse" type="button" data-tbcollapse="1" tabindex="-1" title="收起工具栏（电脑 / 手机通用）：整条收成右上角的 ⌨️，点它再展开">⌨️ 收起</button>'
+      + '<button class="eb-toggle" type="button" tabindex="-1" title="展开 / 收起格式工具条（收起时它就停在右上角）">⌨️</button>';
     /* 内容没变就不重建工具栏：防止下拉刚点开就被重渲染吞掉，也省下每次保存的重建开销 */
     if (bar.__lmHtml !== tHtml) { bar.__lmHtml = tHtml; bar.innerHTML = tHtml; }
     refreshHandles();
@@ -4729,9 +4740,7 @@ window.LMEditor = (function () {
   document.addEventListener('click', function (e) {
     const t = e.target.closest && e.target.closest('[data-tbcollapse]');
     if (!t || !window.LMApp || !LMApp.state.admin) return;
-    const bar0 = document.getElementById('editBar');
-    if (bar0) bar0.classList.remove('open');
-    closePop();
+    tbSetOpen(false); /* ★ 修复79：电脑 / 手机同一条路：收起整条，只留右上角把手 */
   });
   /* 点工具栏按钮不清空已选中的文字（像 Word 一样：选中 → 点 B/I/U 直接生效） */
   document.addEventListener('mousedown', function (e) {
