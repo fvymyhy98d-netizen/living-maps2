@@ -2547,6 +2547,33 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && c.indexOf('prefers-reduced-motion') > 0 && h.indexOf('viewport-fit=cover') > 0;
     })());
 
+  /* ★ 修复117：出处命中词高亮 / 单层滚动 / 顶部提示 / 圆形浮标 / 气泡与标签细节 */
+  T('高亮1：出处引文里的命中词用 <mark class="lm-ai-hit"> 标出，且这一问的关键词会跟着消息存下来',
+    (function () {
+      const s = srcOf('js/ai.js');
+      return s.indexOf('function hiText(') > 0 && s.indexOf('hiText(body.length > 200') > 0
+        && s.indexOf('<mark class="lm-ai-hit">') > 0 && s.indexOf("rec.q = String(msg.q)") > 0
+        && s.indexOf('q: qq,') > 0;
+    })());
+
+  T('高亮2：高亮只染色不改字 —— 引文仍然是原文切片（escape 后再包 mark，不插入任何新字符）',
+    (function () {
+      const s = srcOf('js/ai.js');
+      /* hiText 必须对「非命中片段」和「命中片段」都调用 esc()，否则 XSS 或改写原文 */
+      return /'<mark class="lm-ai-hit">' \+ esc\(seg\) \+ '<\/mark>' : esc\(seg\)/.test(s);
+    })());
+
+  T('细节117：手机单层滚动 · 提示条移到顶部 · 窄屏圆形浮标 · 气泡收角 · 选中标签下划条',
+    (function () {
+      const c = srcOf('css/style.css');
+      return c.indexOf('.lm-ai-chat{max-height:none;overflow:visible') > 0
+        && /\.toast\{top:calc\(12px \+ env\(safe-area-inset-top/.test(c)
+        && c.indexOf('.lm-ai-fab .lm-ai-fab-t{display:none}') > 0
+        && c.indexOf('.lm-ai-msg.me{border-bottom-right-radius:6px}') > 0
+        && c.indexOf('.lm-ai-mode.on{box-shadow:inset 0 -2px 0 0 currentColor}') > 0
+        && c.indexOf('.lm-ai-hit{background:rgba(255,214,10,.42)') > 0;
+    })());
+
 
   T('问答升级7：对话框顶部有模式切换键 · 默认「本站速答」· 选择存 localStorage · 样式已加',
     (function () {
@@ -3080,10 +3107,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=116 · LM_ASSET_VER=116',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=117 · LM_ASSET_VER=117',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=115/g) || []).length === 0 && /\?v=116/.test(html)
-      && /LM_ASSET_VER = '116'/.test(appJs));
+      && (html.match(/\?v=116/g) || []).length === 0 && /\?v=117/.test(html)
+      && /LM_ASSET_VER = '117'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3436,10 +3463,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 116（?v=116 共 21 处 · v115 无残留 · LM_ASSET_VER=116）',
-    (html.match(/\?v=116/g) || []).length === 21 && (html.match(/\?v=115/g) || []).length === 0
-      && /LM_ASSET_VER = '116'/.test(appJs),
-    'v116=' + (html.match(/\?v=116/g) || []).length + ' v115=' + (html.match(/\?v=115/g) || []).length);
+  T('版本已升到 117（?v=117 共 21 处 · v116 无残留 · LM_ASSET_VER=117）',
+    (html.match(/\?v=117/g) || []).length === 21 && (html.match(/\?v=116/g) || []).length === 0
+      && /LM_ASSET_VER = '117'/.test(appJs),
+    'v117=' + (html.match(/\?v=117/g) || []).length + ' v116=' + (html.match(/\?v=116/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

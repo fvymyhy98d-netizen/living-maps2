@@ -562,6 +562,18 @@ W.LMAI = (function () {
       if (p && typeof p.then === 'function') p.then(function (ok) { if (!ok) lmTried = false; }, function () { lmTried = false; });
     } catch (e) { lmTried = false; }
   }
+  /* ★ 修复117：把「引文里对上你问题的字」标出来 —— 只做高亮，不改一个字（可核对性↑） */
+  function hiText(raw, q) {
+    const body = String(raw == null ? '' : raw);
+    const terms = tokens(q || '').filter(function (t) { return t.length >= 2; })
+      .map(function (t) { return t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); });
+    if (!terms.length) return esc(body);
+    terms.sort(function (a, b) { return b.length - a.length; });
+    const re = new RegExp('(' + terms.slice(0, 8).join('|') + ')', 'gi');
+    return body.split(re).map(function (seg, i) {
+      return (i % 2) ? '<mark class="lm-ai-hit">' + esc(seg) + '</mark>' : esc(seg);
+    }).join('');
+  }
   /* ---------- ⑨ 界面：右下角「✨ 智能提炼」浮标 + 面板 ---------- */
   let panel = null, fab = null, idx = null, idxSrc = null;
 
@@ -612,6 +624,7 @@ W.LMAI = (function () {
     const all = chatAll();
     const arr = Array.isArray(all[id]) ? all[id] : [];
     const rec = { r: msg.r || 'me', t: String(msg.t || '').slice(0, 4000), ts: Date.now(), src: msg.src || null };
+    if (msg.q) rec.q = String(msg.q).slice(0, 120);   /* ★ 修复117：记下这一问，供出处高亮用 */
     /* ★ 修复115：以前这里只存 {r,t,ts,src}，把 cite 悄悄丢了 → 「📄 原文出处」存不进对话、重绘就消失。
        现在把出处一起存（≤4 条 / 每条 ≤200 字），并做长度裁剪防膨胀。 */
     if (Array.isArray(msg.cite) && msg.cite.length) {
@@ -783,7 +796,7 @@ W.LMAI = (function () {
               const body = String(c.text || '');
               return '<div class="lm-ai-quote">'
                 + '<a class="lm-ai-src" href="#/p/' + encodeURIComponent(c.pageId) + '">《' + esc(c.title || c.pageId) + '》</a>'
-                + '<p>' + esc(body.length > 200 ? body.slice(0, 200) + '…' : body) + '</p></div>';
+                + '<p>' + hiText(body.length > 200 ? body.slice(0, 200) + '…' : body, m.q) + '</p></div>';
             }).join('')
             + '</details>'
           : '';
@@ -882,6 +895,7 @@ W.LMAI = (function () {
           chatPush(id, {
             r: 'local', t: r.answer,
             src: { pageId: r.pageId, title: r.title, score: r.score },
+            q: qq,                     /* ★ 修复117：出处里的命中词高亮要用原始提问的关键词 */
             /* ★ 修复114：把"这句答案是从哪段原文来的"一起存进对话（限 4 条、每条 200 字，免得占满 storage） */
             cite: (r.used || []).slice(0, 4).map(function (c) {
               const t = String(c.text || '');

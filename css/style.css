@@ -1228,9 +1228,25 @@ body.admin .lm-ai-panel{bottom:136px}
   .lm-ai-mode{padding:9px 10px;min-height:44px}
   .lm-ai-row .btn,.lm-ai-pastesave{min-height:38px}
   .lm-ai-cite>summary{min-height:34px;display:flex;align-items:center}
-  .lm-ai-chat{max-height:34vh;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
   .lm-ai-fab{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+  /* ★ 修复117：手机端只留「面板」一层滚动，对话区不再自己滚（以前两级滚动容易滚错地方） */
+  .lm-ai-chat{max-height:none;overflow:visible;overscroll-behavior:auto}
+  /* ★ 修复117：提示条挪到顶部，不再压住面板的输入框 */
+  .toast{top:calc(12px + env(safe-area-inset-top,0px));bottom:auto}
 }
+/* ★ 修复117：窄屏把浮标收成圆形图标，别在右上角挤成一长条 */
+@media (max-width:420px){
+  .lm-ai-fab{padding:13px;border-radius:50%;font-size:18px;line-height:1}
+  .lm-ai-fab .lm-ai-fab-t{display:none}
+}
+/* ★ 修复117：气泡更像聊天 —— 自己说的话右下收角，回答左下收角，本站速答加一条绿色左边条 */
+.lm-ai-msg.me{border-bottom-right-radius:6px}
+.lm-ai-msg.ds,.lm-ai-msg.local{border-bottom-left-radius:6px}
+.lm-ai-msg.local{border-left:3px solid rgba(0,170,120,.55)}
+/* ★ 修复117：选中的模式标签加下划条，比纯底色更醒目（对比度也够） */
+.lm-ai-mode.on{box-shadow:inset 0 -2px 0 0 currentColor}
+/* ★ 修复117：引文里的命中词高亮（只染色，不改字） */
+.lm-ai-hit{background:rgba(255,214,10,.42);color:inherit;border-radius:3px;padding:0 1px}
 .lm-ai-panel.lm-kb{max-height:min(56vh,420px)}   /* 键盘弹起时收窄 */
 .lm-ai-panel :focus-visible,.lm-ai-fab:focus-visible{outline:2px solid #0071e3;outline-offset:2px}
 .lm-ai-cite>summary:hover{text-decoration:underline}
