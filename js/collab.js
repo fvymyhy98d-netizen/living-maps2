@@ -366,7 +366,10 @@ window.LMCollab = (function () {
       let v = null;
       try { v = LMStore.validateContent(c); } catch (eV0) { v = null; }
       if (!v || !v.ok) { warnBadPack(v && v.why); return false; }
-      if (v.repaired) { c = v.content; warnBadPack('已自动补齐字段'); }
+      if (v.repaired) {
+        c = v.content;
+        try { console.warn('[协同·坏包] 远端内容缺字段，已按规则补齐后应用（缺 blocks / 缺页面 id 之类），本机不受影响'); } catch (eW1) { /* noop */ }
+      }
     }
     /* ★ 修复72：force = Yjs 网状通道专用。Y.Doc 本身就只给出「更新的整包」（因果有序），
        不该再拿墙上时钟挡一道 —— 任一端时钟快一点，更新就被静默丢掉，

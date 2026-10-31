@@ -2711,7 +2711,8 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && appSrc2.indexOf("if (snapText.length > 1200 * 1024) { localStorage.removeItem('lm_snap_v1'); return; }") > 0
         && appSrc2.indexOf('const keepMax = snapText.length > 500 * 1024 ? 1 : 3;') > 0
         && col2.indexOf('if (!v || !v.ok) { warnBadPack(v && v.why); return false; }') > 0
-        && col2.indexOf('if (v.repaired) { c = v.content; warnBadPack(') > 0
+        && col2.indexOf('if (v.repaired) {') > 0
+        && col2.indexOf('远端内容缺字段，已按规则补齐后应用') > 0
         && edt3.indexOf('if (cur + add > 4 * 1024 * 1024) {') > 0
         && edt3.indexOf('LMStore.validateContent(data)') > 0;
     })());
