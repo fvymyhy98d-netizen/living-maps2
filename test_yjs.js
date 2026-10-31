@@ -211,9 +211,9 @@ T('行内拖动不跳：组框 y 锁定（只在本行左右滑）+ 拖近原始
     && edt2.indexOf('wrap.style.top = b.free.y') > 0);
 T('组内互不推挤：resolveFreeOverlaps 跳过同一并排组的框对（松手不再拆散行、下方不乱跳）',
   edt2.indexOf('A.b.free.g != null && A.b.free.g === B.b.free.g') > 0);
-T('↑↓ 整格移动对并排块拦截（防拆散行），提示用「取消并排」',
-  edt2.indexOf('function freeJump(page, i, dir)') > 0
-    && edt2.indexOf('并排的块请在本行内左右拖动微调') > 0);
+T('↑↓ 换位对并排块拦截（防拆散行），提示用「取消并排」',
+  edt2.indexOf('function swapNeighbor(page, i, up) {') > 0
+    && edt2.indexOf('并排的块不参与上下换位') > 0);
 T('取消并排：pickFullGroup 校验同组且全选（跨组/选不全不可取消）+ doUnarrange 恢复正确宽度 + 末块贴右（wAlign）',
   edt2.indexOf('function pickFullGroup(') > 0 && edt2.indexOf('组没选全') > 0
     && edt2.indexOf('function doUnarrange(') > 0 && edt2.indexOf("b.wAlign = 'right'") > 0
@@ -232,7 +232,8 @@ T('调宽松手 force 互挤：resolveFreeOverlaps 加 force 参数，同组对�
 T('拖动松手不传 force（保持旧行为：拖框不拆散并排行）',
   edt2.indexOf('resolveFreeOverlaps(wrap, b);') > 0 && edt2.indexOf('resolveFreeOverlaps(wrap, b, false, true);') > 0);
 T('新插入文本框 text 置空（占位交给渲染层 data-ph，不再是真文字）',
-  edt2.indexOf("return { type: 'paragraph', size: 'normal', text: '', style: {}, free:") > 0);
+  edt2.indexOf("return { type: 'paragraph', size: 'normal', text: '', style: {} };") > 0
+    && edt2.indexOf('function textBoxDefault() {') > 0);
 T('jumpSpanOf 空白弹性回退：连续空格折叠/nbsp 差异不再导致「定位不到」',
   edt2.indexOf('空白弹性回退') > 0 && edt2.indexOf("join('[\\\\s\\\\u00A0]+')") > 0);
 T('终点绿线宿主匹配空白归一（normSp）：渲染折叠空格后绿线仍挂得上',
@@ -447,12 +448,12 @@ T('非 free 块统一 ⇤⇆⇥（sep 分组）+ halign 处理器（63 起全宽
     && appSrc.indexOf("al === 'center' ? 'margin-left:auto;margin-right:auto;'") > 0);
 /* ---------- 9.19/9.21) 修复52+54：↑↓ 与自由框真互换（自动放回流）+ 拖动克隆块顶贴鼠标 ---------- */
 console.log('【9.19】修复52+54：换位遇自由框 = 放回流再互换 · 拖动统一「块顶贴鼠标」');
-T('↑↓ 邻居为自由框时 delete free 放回流再 swapWith 互换 + 延时重算让位 + 克隆 offX 真实抓取点/offY≤12',
-  edt2.indexOf('function swapWith(j, msg) {') > 0
-    && edt2.indexOf('delete prev.free; /* ★ 修复54：自由框放回文档流（自动归位）参与互换 */') > 0
-    && edt2.indexOf('delete next.free; /* ★ 修复54：自由框放回文档流（自动归位）参与互换 */') > 0
-    && edt2.indexOf('已上移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）') > 0
-    && edt2.indexOf('已下移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）') > 0
+T('↑↓ 按「视觉相邻」换位（★ 修复86 取代修复54 的「放回流再换数组」）+ 延时重算让位 + 克隆 offX/offY≤12',
+  edt2.indexOf('function swapNeighbor(page, i, up) {') > 0
+    && edt2.indexOf("if (act === 'up' || act === 'down') { swapNeighbor(page, i, act === 'up'); return; }") > 0
+    && edt2.indexOf('page.blocks[i] = other; page.blocks[j] = mine;') > 0
+    && edt2.indexOf('delete prev.free') < 0
+    && edt2.indexOf('delete next.free') < 0
     && edt2.indexOf('const offX = e.clientX - r0.left, offY = Math.min(e.clientY - r0.top, 12);') > 0);
 /* ---------- 9.20) 修复53：自由框调高下限 = 内容实际高度（不再硬编码 50px，字不溢出格子） ---------- */
 console.log('【9.20】修复53：调高下限 = 内容实际高度（65 起用 auto 瞬测，不再被自身高度锁死）');
@@ -465,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '85';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '86';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -1596,5 +1597,107 @@ T('app.js：锚点只认文档流块（自由框不占位）· 压住长块按�
   }
   T('真跑归位落点：中部自由框插回原位 · 长块上半→前/下半→后 · 最上方→最前 · 只有自己/在最后→不动 · 无矩形→原下标', okA, dA);
 })();
+/* ---------- 9.51) 修复86：↑↓ = 与视觉上下相邻的那一块「互换位置」（只换一对） ---------- */
+console.log('【9.51】修复86：新建文本框默认进文档流 · ⌂/⤢ 同键双向切换 · ↑↓ 按视觉相邻真换位（不再错标 40 像素）');
+T('工具条：↑↓ 提示改成「与上/下面的模块互换位置（整块换，只换这一对）」，40 像素错标已删净',
+  edt2.indexOf('与上面的模块互换位置（整块换，只换这一对）') > 0
+    && edt2.indexOf('与下面的模块互换位置（整块换，只换这一对）') > 0
+    && edt2.indexOf('框上移 40 像素') < 0 && edt2.indexOf('框下移 40 像素') < 0);
+T('工具条同一个位置双向切换：自由框 ⌂（data-act=unfree）↔ 文档流块 ⤢（data-act=freebox）',
+  edt2.indexOf('data-act="unfree"') > 0 && edt2.indexOf('data-act="freebox"') > 0
+    && edt2.indexOf("LMApp.makeFree(+wrap.getAttribute('data-idx'))") > 0);
+T('新建文本框默认在文档流：boxins → textBoxDefault（无 free 字段），旧的 freeBoxDefault 已删',
+  edt2.indexOf('function textBoxDefault() {') > 0
+    && edt2.indexOf("case 'boxins': closePop(); insertAt(textBoxDefault(), true, '") > 0
+    && edt2.indexOf('function freeBoxDefault() {') < 0
+    && edt2.indexOf('free: { x: 14, y: Math.max(20, y), w: 44 }') < 0);
+T('app.js：makeFree 按此刻视觉位置生成 free 快照（扣掉 .blocks padding），⌂ 归位时还原变自由前的宽度',
+  appSrc.indexOf('function makeFree(i) {') > 0
+    && appSrc.indexOf('const padL = parseFloat(cs.paddingLeft) || 0;') > 0
+    && appSrc.indexOf('const y = Math.max(0, Math.round(r.top - cr.top - padT));') > 0
+    && appSrc.indexOf('if (fz && fz.gw != null && p.blocks[i].width == null) p.blocks[i].width = fz.gw;') > 0
+    && appSrc.indexOf('makeFree: makeFree, /* ★ 修复86') > 0);
+T('旧实现已清除：freeJump（整格移动）与 swapWith（放回流再换数组）都不在了',
+  edt2.indexOf('function freeJump(') < 0 && edt2.indexOf('function swapWith(') < 0);
+
+/* 真跑：用桩 DOM 执行 swapNeighbor —— 看它到底和谁换、换完数据怎么走 */
+(function () {
+  const srcLF = edt2.replace(/\r\n/g, '\n');
+  const aA = srcLF.indexOf('  function swapNeighbor(page, i, up) {');
+  const bA = srcLF.indexOf('\n  }\n', aA);
+  const codeA = (aA >= 0 && bA > aA) ? srcLF.slice(aA, bA + 5) : '';
+  let okA = false, dA = '切片不可用';
+  if (codeA) {
+    try {
+      const NF = new Function('document', 'LMApp', 'tb', 'setTimeout', codeA + '\nreturn swapNeighbor;');
+      const mkCol = function (list, colTop) {
+        const wraps = list.map(function (x) {
+          return {
+            getAttribute: function () { return String(x[0]); },
+            getBoundingClientRect: function () {
+              return { top: x[1], bottom: x[2], left: 0, height: x[2] - x[1], width: 100 };
+            }
+          };
+        });
+        return {
+          getBoundingClientRect: function () { return { top: colTop || 0, bottom: 9000, left: 0 }; },
+          querySelector: function (sel) {
+            const m = /data-idx="(\d+)"/.exec(sel);
+            const k = m ? m[1] : null;
+            return wraps.filter(function (w) { return w.getAttribute() === k; })[0] || null;
+          },
+          querySelectorAll: function () { return wraps; }
+        };
+      };
+      const run = function (list, blocks, i, up, colTop) {
+        const toasts = [], msgs = [];
+        const doc = { querySelector: function (s) { return s === '.blocks' ? mkCol(list, colTop) : null; } };
+        const lm = {
+          toast: function (m) { toasts.push(m); },
+          applyEdit: function (m) { msgs.push(m); },
+          adjustFreeLayout: function () {}
+        };
+        NF(doc, lm, {}, function () {})({ blocks: blocks }, i, up);
+        return { blocks: blocks, toasts: toasts, msgs: msgs };
+      };
+      /* ① 自由框在末尾：↑ 与上方 B 互换，框落到 B 的 top */
+      const b1 = [{ id: 'A' }, { id: 'B' }, { id: 'F', free: { y: 350 } }];
+      const r1 = run([[0, 0, 100], [1, 200, 300], [2, 350, 400]], b1, 2, true);
+      /* ② 已经最下面：只提示，不动数据 */
+      const b2 = [{ id: 'A' }, { id: 'B' }, { id: 'F', free: { y: 350 } }];
+      const r2 = run([[0, 0, 100], [1, 200, 300], [2, 350, 400]], b2, 2, false);
+      /* ③ 自由框在最上面，↓ 与 A 互换 */
+      const b3 = [{ id: 'F', free: { y: 0 } }, { id: 'A' }];
+      const r3 = run([[0, 0, 50], [1, 100, 200]], b3, 0, false);
+      /* ④ 两块都在文档流：只交换数组 */
+      const b4 = [{ id: 'A' }, { id: 'B' }];
+      const r4 = run([[0, 0, 100], [1, 200, 300]], b4, 1, true);
+      /* ⑤ 并排组不参与 */
+      const b5 = [{ id: 'A' }, { id: 'F', free: { y: 200, g: 'g1', gi: 0, gn: 2 } }];
+      const r5 = run([[0, 0, 100], [1, 200, 300]], b5, 1, true);
+      /* ⑥ 关键回归：数组下标 ≠ 视觉顺序（流块 idx0 在自由框下面） */
+      const b6 = [{ id: 'A' }, { id: 'F', free: { y: 100 } }];
+      const r6 = run([[0, 300, 400], [1, 100, 150]], b6, 0, true);
+      /* ⑦ 列内偏移：colTop=40、A 顶 80 → 框的 y 应为 40（不是 80） */
+      const b7 = [{ id: 'A' }, { id: 'F', free: { y: 210 } }];
+      const r7 = run([[0, 80, 180], [1, 210, 260]], b7, 1, true, 40);
+      const ids = function (r) { return r.blocks.map(function (x) { return x.id; }).join(''); };
+      okA = ids(r1) === 'AFB' && r1.blocks[1].free.y === 200
+        && ids(r2) === 'ABF' && r2.blocks[2].free.y === 350
+        && r2.toasts.join('|').indexOf('下面已经没有模块了') >= 0
+        && ids(r3) === 'AF' && r3.blocks[1].free.y === 100
+        && ids(r4) === 'BA'
+        && ids(r5) === 'AF' && r5.blocks[1].free.y === 200 && r5.toasts.join('|').indexOf('并排') >= 0
+        && ids(r6) === 'FA' && r6.blocks[0].free.y === 300
+        && ids(r7) === 'FA' && r7.blocks[0].free.y === 40
+        && r1.msgs.join('|').indexOf('已与上面的模块互换位置') >= 0
+        && r3.msgs.join('|').indexOf('已与下面的模块互换位置') >= 0;
+      if (!okA) dA = JSON.stringify({ r1: ids(r1) + '/' + (r1.blocks[1].free || {}).y, r2: ids(r2), r3: ids(r3) + '/' + (r3.blocks[1].free || {}).y, r4: ids(r4), r5: ids(r5), r6: ids(r6) + '/' + (r6.blocks[0].free || {}).y, r7: (r7.blocks[0].free || {}).y });
+    } catch (eA) { okA = false; dA = '抛出 ' + eA.message; }
+  }
+  T('真跑换位：只和视觉相邻那一块换 · 自由框保持自由并落到对方 top · 触底只提示 · 并排组不参与 · 下标≠视觉时也对', okA, dA);
+})();
+
+
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);

@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '85';
+var LM_ASSET_VER = '86';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1445,7 +1445,9 @@ window.LMApp = (function () {
     /* ★ 修复85：先记住它此刻在视觉上的位置，摘 free 后把数组位置挪到那里（不再掉到页面最下方） */
     let pos = i;
     try { pos = unfreeFlowIndex(i); } catch (e) { pos = i; }
+    const fz = p.blocks[i].free; /* ★ 修复86：记下变自由前的宽度，回归时还回去 */
     delete p.blocks[i].free;
+    if (fz && fz.gw != null && p.blocks[i].width == null) p.blocks[i].width = fz.gw;
     if (pos !== i && pos >= 0) {
       const moved = p.blocks.splice(i, 1)[0];
       let at = pos > i ? pos - 1 : pos; /* 先摘出自己 → 目标下标在它后面时要前移一位 */
@@ -1454,6 +1456,32 @@ window.LMApp = (function () {
       p.blocks.splice(at, 0, moved);
     }
     commit({ msg: '已归位：模块回到文档流原来的位置（随内容自动排版）' });
+  }
+  /* ★ 修复86：文档流块 → 自由摆放（工具条 ⤢）。按「此刻的视觉位置」生成 free 快照，
+     转成浮框后**原地不动**；再点同一位置的 ⌂ 走 unfreeBlock 回到文档流（同样留在原位）。
+     free 的坐标系：left / width 是 .blocks 内沿（padding box）的百分比，top 是相对内沿的像素；
+     流块的 offsetLeft 含 .blocks 的 padding，所以要减掉 padL 才与 left% 对齐 */
+  function makeFree(i) {
+    const p = state.content.pages.find(function (x) { return x.id === state.pageId; });
+    const b = p && p.blocks[i];
+    if (!b) return;
+    if (b.free) { toast('这一块已经是自由摆放'); return; }
+    const col = app.querySelector('.blocks');
+    const w = col ? col.querySelector('.block-wrap[data-idx="' + i + '"]') : null;
+    if (!col || !w) { toast('页面还没就绪，稍后再试'); return; }
+    const cw = col.clientWidth || 1;
+    const cs = window.getComputedStyle(col);
+    const padL = parseFloat(cs.paddingLeft) || 0;
+    const padT = parseFloat(cs.paddingTop) || 0;
+    const cr = col.getBoundingClientRect();
+    const r = w.getBoundingClientRect();
+    const wPct = Math.max(10, Math.min(100, Math.round((w.offsetWidth / cw) * 1000) / 10));
+    let x = Math.round(((w.offsetLeft - padL) / cw) * 1000) / 10;
+    x = Math.max(0, Math.min(x, Math.max(0, 100 - wPct)));
+    const y = Math.max(0, Math.round(r.top - cr.top - padT));
+    b.free = { x: x, y: y, w: wPct, gw: (b.width != null ? +b.width : null) }; /* gw = 变自由前的宽度 */
+    delete b.hAlign; delete b.width; /* 自由框靠 left%/w% 定位，流式的对齐/宽度不再参与 */
+    commit({ msg: '已改为自由摆放（可拖到任意位置；点 ⌂ 回归文档流）' });
   }
   /* 在某个内容块后插入新块（afterIdx 为空则加到末尾），返回新位置 */
   function insertBlock(nb, afterIdx) {
@@ -2505,6 +2533,7 @@ window.LMApp = (function () {
     takePushSnap: takePushSnap, snapInfo: snapInfo, /* ★ 修复83：上传成功只重拍「最近上传版」+ 弹窗摘要 */
     syncTbOffset: syncTbOffset, watchTbOffset: watchTbOffset, /* ★ 修复84：工具条与面包屑错开（--lm-tb-h） */
     unfreeBlock: unfreeBlock, unfreeTargetIndex: unfreeTargetIndex, /* ★ 修复85：归位按视觉位置插回文档流 */
+    makeFree: makeFree, /* ★ 修复86：文档流块 → 自由摆放（工具条 ⤢，与 ⌂ 互为反向） */
     applyRemoteContent: applyRemoteContent, renderBlockAt: renderBlockAt,
     beginFreeDrag: beginFreeDrag, endFreeDrag: endFreeDrag,
     adjustImages: adjustImages,

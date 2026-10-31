@@ -427,7 +427,7 @@ window.LMEditor = (function () {
     let alignBtns = '';
     if (isFree) {
       /* ★ 修复㊿：语义分组（细竖线分隔）—— 拉伸(⇤⇥) / 水平对齐(左中右) / 垂直对齐(⤒顶 ⤓底) /
-         微移(↑↓) / 归位(⌂，原 ⤓ 图标让给底对齐) 各组一眼可辨，不再是五个箭头混一排 */
+         换位(↑↓，★ 修复86 起 = 与视觉上下相邻的那一块互换位置) / 归位(⌂) 各组一眼可辨 */
       alignBtns = '<span class="sep" title=""></span>'
         + '<button type="button" data-act="fsnap" data-side="left"' + pg + ' title="向左拉伸：右边缘不动，左边伸到文档最左（被挡住则停在旁边块右侧，留小缝）">⇤</button>'
         + '<button type="button" data-act="fsnap" data-side="right"' + pg + ' title="向右拉伸：左边缘不动，右边伸到文档最右（被挡住则停在旁边块左侧，留小缝）">⇥</button>'
@@ -452,9 +452,11 @@ window.LMEditor = (function () {
     return '<div class="block-tools">'
       + (isFree ? '' : '<button type="button" data-drag="' + i + '" title="按住拖动调整顺序：其他块自动让路，拖到屏幕上下边缘会自动滚页">⠿</button>')
       + alignBtns
-      + '<button type="button" data-act="up" data-page="' + pageId + '" data-idx="' + i + '" title="' + (isFree ? '框上移 40 像素（只位移）' : '上移（调整文档顺序）') + '">↑</button>'
-      + '<button type="button" data-act="down" data-page="' + pageId + '" data-idx="' + i + '" title="' + (isFree ? '框下移 40 像素（只位移）' : '下移（调整文档顺序）') + '">↓</button>'
-      + (isFree ? '<button type="button" data-act="unfree" data-page="' + pageId + '" data-idx="' + i + '" title="归位：解除自由摆放，回到文档流（★ 自由框位置是固定像素，页面内容变化后容易错位；归位后随内容自动排版）">⌂</button>' : '')
+      + '<button type="button" data-act="up" data-page="' + pageId + '" data-idx="' + i + '" title="与上面的模块互换位置（整块换，只换这一对）">↑</button>'
+      + '<button type="button" data-act="down" data-page="' + pageId + '" data-idx="' + i + '" title="与下面的模块互换位置（整块换，只换这一对）">↓</button>'
+      + (isFree
+        ? '<button type="button" data-act="unfree" data-page="' + pageId + '" data-idx="' + i + '" title="回归文档流（⌂）：解除自由摆放，按内容自动排版，位置尽量留在原处；再点 ⤢ 又能变回自由摆放">⌂</button>'
+        : '<button type="button" data-act="freebox" data-page="' + pageId + '" data-idx="' + i + '" title="自由摆放（⤢）：变成可以拖到页面任意位置的浮框，原地不动；再点 ⌂ 即可回归文档流">⤢</button>')
       + '<button type="button" data-act="edit" data-page="' + pageId + '" data-idx="' + i + '" title="更多设置：颜色 / 图片 / 图表数据 / 表格结构 / 链接">⚙</button>'
       + '<button type="button" data-act="del" data-page="' + pageId + '" data-idx="' + i + '" title="删除此内容块">🗑</button>'
       + '</div>';
@@ -559,40 +561,59 @@ window.LMEditor = (function () {
       });
       return;
     }
-    if (act === 'up' || act === 'down') {
-      const b2 = page.blocks[i];
-      /* 自由框是绝对定位：↑/↓ = 整格移动 —— ↑ 跳到上一模块的上面，↓ 跳到下一模块的下面（带平滑动画） */
-      if (b2 && b2.free) { freeJump(page, i, act === 'up' ? 'up' : 'down'); return; }
-    }
-    /* ★ 修复52/54：↑↓ 换位 —— 自由框是绝对定位、不占文档流高度，与它交换数组顺序视觉零变化。
-       ★ 修复54：邻居是自由框时执行「真互换」——把自由框**放回文档流**（自动归位，解除自由摆放）
-       再交换：本模块上/下移一格，自由框回到流里被顶到另一侧。想保留自由摆放的挪法：
-       选中自由框按 ↑/↓ = 整格移动（freeJump），或直接拖 ⠿ */
-    function swapWith(j, msg) {
-      const t = page.blocks[j]; page.blocks[j] = page.blocks[i]; page.blocks[i] = t;
-      LMApp.applyEdit(msg);
-      /* 自由框被放回流后让位几何全变：下一拍全量重算（渲染已在 applyEdit 内完成） */
-      setTimeout(function () { try { if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout(); } catch (eX) { /* noop */ } }, 30);
-    }
-    if (act === 'up' && i > 0) {
-      const prev = page.blocks[i - 1];
-      if (prev && prev.free) {
-        delete prev.free; /* ★ 修复54：自由框放回文档流（自动归位）参与互换 */
-        swapWith(i - 1, '已上移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）');
-        return;
-      }
-      swapWith(i - 1, '已上移'); return;
-    }
-    if (act === 'down' && i < page.blocks.length - 1) {
-      const next = page.blocks[i + 1];
-      if (next && next.free) {
-        delete next.free; /* ★ 修复54：自由框放回文档流（自动归位）参与互换 */
-        swapWith(i + 1, '已下移并与自由框互换（自由框已放回文档流，可再拖成自由摆放）');
-        return;
-      }
-      swapWith(i + 1, '已下移'); return;
-    }
+    if (act === 'up' || act === 'down') { swapNeighbor(page, i, act === 'up'); return; }
+
   });
+  /* ★ 修复86：↑/↓ = 与「视觉上相邻的那一块」互换位置（只换这一对）。
+     旧实现两个坑：① 文档流块按**数组下标**找邻居 —— 数组里夹着自由框时，换掉的不是屏幕上
+     上下相邻的那块，一次动好几块，看起来"乱套"；② 自由框按"整格移动/位移"处理，提示还写着
+     「移动 40 像素」（功能根本不存在，用户：标错了，而且不需要这个功能）。现在统一成：
+       · 邻居 = 按实际矩形排序后紧邻的上/下一块（同一行按左缘）；
+       · 两块都在文档流 → 交换数组条目，视觉正好互换；
+       · 其中有自由框 → 同时交换数组条目 + 把这个框的 y 设成对方原来所在的 top，
+         让位引擎随即把对方推到框的另一侧 —— 结果就是两者位置互换，数据顺序也与视觉一致
+         （以后再点 ⌂ 归位也能落到正确位置）；自由框**保持自由**，不会被强行放回流。
+     并排组（free.g）里的块不参与换位：整行一起动会拆散行，提示改用「取消并排」。 */
+  function swapNeighbor(page, i, up) {
+    const col = document.querySelector('.blocks');
+    if (!col || !page || !page.blocks[i]) return;
+    const me = col.querySelector('.block-wrap[data-idx="' + i + '"]');
+    if (!me) return;
+    const items = [];
+    col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
+      const k = +w.getAttribute('data-idx');
+      const b = page.blocks[k];
+      if (!b) return;
+      const r = w.getBoundingClientRect();
+      if (!r || (!r.height && !r.width)) return;
+      items.push({ i: k, b: b, r: r });
+    });
+    items.sort(function (a, b) {
+      if (Math.abs(a.r.top - b.r.top) > 2) return a.r.top - b.r.top; /* 先按视觉行 */
+      return a.r.left - b.r.left;                                    /* 同一行按左缘 */
+    });
+    const at = items.findIndex(function (x) { return x.i === i; });
+    if (at < 0) return;
+    const nb = items[up ? at - 1 : at + 1];
+    if (!nb) { LMApp.toast(up ? '上面已经没有模块了' : '下面已经没有模块了'); return; }
+    const mine = page.blocks[i], other = nb.b, j = nb.i;
+    if ((mine.free && mine.free.g != null) || (other.free && other.free.g != null)) {
+      LMApp.toast('并排的块不参与上下换位（整行一起动会拆散行）：请在本行内左右拖动微调，或先「取消并排」');
+      return;
+    }
+    /* 自由框要换到的 y（列内像素）= 对方此刻所在的位置 */
+    const colTop = col.getBoundingClientRect().top;
+    const freeB = mine.free ? mine : (other.free ? other : null);
+    const yNew = Math.max(0, Math.round((freeB === mine ? nb.r.top : items[at].r.top) - colTop));
+    /* 交换数据位置（顺序与视觉保持一致） */
+    page.blocks[i] = other; page.blocks[j] = mine;
+    if (freeB) freeB.free.y = yNew;
+    /* 工具条跟着被移动的块走（数组已换位，否则 ↑↓ 会作用到"换过来的那一块"） */
+    if (tb.active === i) tb.active = j; else if (tb.active === j) tb.active = i;
+    if (tb.pressBi === i) tb.pressBi = j; else if (tb.pressBi === j) tb.pressBi = i;
+    LMApp.applyEdit('已与' + (up ? '上' : '下') + '面的模块互换位置');
+    setTimeout(function () { try { if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout(); } catch (eX) { /* noop */ } }, 30);
+  }
   /* ---------- 管理员工具条 ---------- */
   /* 内容列左右边缘（px，相对 .blocks 内沿）：以文档流块的实际位置为基准 ——
      表格、卡片、正文的对齐线是它们，而不是 .blocks 的内边距外缘；
@@ -679,39 +700,6 @@ window.LMEditor = (function () {
     LMApp.adjustFreeLayout();
     markSaved();
     LMApp.toast(mode === 'left' ? '已贴左（与内容块左缘对齐）' : mode === 'right' ? '已贴右（与内容块右缘对齐）' : '已在内容列水平居中（宽度不变）');
-  }
-  /* 自由框整格移动（↑/↓）：↑ = 跳到「上一模块」的上面（框顶 = 该模块顶，原模块被让位机制推到框下方）；
-     ↓ = 跳到「下一模块」的下面（框顶 = 该模块底 + 16px 缝）。按当前视觉位置找相邻模块，一步到位，
-     不是机械的 ±40px。全程不重渲染、只改 style.top → 换位走 CSS 过渡（平滑滑动），也不会触发旧“飞升” */
-  function freeJump(page, i, dir) {
-    const b = page.blocks[i]; if (!b || !b.free) return;
-    if (b.free.g != null) { LMApp.toast('并排的块请在本行内左右拖动微调（↑↓ 整格移动会拆散并排行；要拆散请用「取消并排」）'); return; }
-    const col = document.querySelector('.blocks'); if (!col) return;
-    const me = col.querySelector('.block-wrap[data-idx="' + i + '"]');
-    if (!me) return;
-    const rb = me.getBoundingClientRect();
-    let best = null, bestKey = (dir === 'up') ? -Infinity : Infinity;
-    col.querySelectorAll(':scope > .block-wrap').forEach(function (w) {
-      if (w === me) return;
-      if (!page.blocks[+w.getAttribute('data-idx')]) return;
-      const r = w.getBoundingClientRect();
-      if (r.height < 4) return; /* 空块跳过 */
-      if (dir === 'up') { if (r.bottom <= rb.top + 8 && r.bottom > bestKey) { bestKey = r.bottom; best = w; } }
-      else { if (r.top >= rb.bottom - 8 && r.top < bestKey) { bestKey = r.top; best = w; } }
-    });
-    if (!best) { LMApp.toast(dir === 'up' ? '上面已经没有模块了' : '下面已经没有模块了'); return; }
-    const colTop = col.getBoundingClientRect().top;
-    const r = best.getBoundingClientRect();
-    const yNew = (dir === 'up')
-      ? Math.max(0, Math.round(r.top - colTop))
-      : Math.max(0, Math.round(r.bottom - colTop + 16));
-    b.free.y = yNew;
-    me.style.top = yNew + 'px';
-    LMApp.commit({ silent: true, rerender: false });
-    resolveFreeOverlaps(null, null); /* ↑/↓ 整格移动后同样全量防重叠 */
-    LMApp.adjustFreeLayout();
-    markSaved();
-    LMApp.toast(dir === 'up' ? '已移到上一模块的上面（原模块被推到框下方）' : '已移到下一模块的下面');
   }
   /* ★ 修复㊿：⤓ 底对齐 —— 框的下缘贴平到「下一个内容块」的上缘（⤒ 的镜像操作）。
      与 ⤒ 同款容差规则：框底只要落在某模块顶缘附近（容差 = max(24, 模块高 20%)，上限 96px），
@@ -1000,6 +988,13 @@ window.LMEditor = (function () {
     if (!uf || !window.LMApp || !LMApp.state.admin) return;
     const wrap = uf.closest('.block-wrap[data-idx],.free-box[data-idx]');
     if (wrap && !isNaN(+wrap.getAttribute('data-idx'))) LMApp.unfreeBlock(+wrap.getAttribute('data-idx'));
+  });
+  /* ★ 修复86：文档流块「⤢ 自由摆放」—— 与上面的 ⌂ 是同一个位置的两个方向（数据出口见 app.js makeFree） */
+  document.addEventListener('click', function (e) {
+    const fb = e.target.closest ? e.target.closest('[data-act="freebox"]') : null;
+    if (!fb || !window.LMApp || !LMApp.state.admin) return;
+    const wrap = fb.closest('.block-wrap[data-idx]');
+    if (wrap && !isNaN(+wrap.getAttribute('data-idx'))) LMApp.makeFree(+wrap.getAttribute('data-idx'));
   });
 
   /* ---------- GitHub 同步设置（双视图）----------
@@ -3738,14 +3733,12 @@ window.LMEditor = (function () {
     if (Math.abs((window.scrollY || window.pageYOffset || 0) - sy) > 2) window.scrollTo(0, sy);
     if (msg) LMApp.toast(msg);
   }
-  function freeBoxDefault() {
-    /* 新文本框默认出现在当前视口中部（而不是页面固定位置） */
-    const col = document.querySelector('.blocks');
-    let y = 240;
-    if (col) y = Math.round(window.innerHeight * 0.45 - col.getBoundingClientRect().top);
-    return { type: 'paragraph', size: 'normal', text: '', style: {}, free: { x: 14, y: Math.max(20, y), w: 44 } };
+  /* ★ 修复86：新建文本框默认**在文档流里**（随内容自动排版，不再一出生就是浮框）。
+     想要自由摆放：选中它 → 工具条 ⤢（makeFree）；再点同一位置的 ⌂ 又回归文档流，两个方向都原地不动 */
+  function textBoxDefault() {
     /* ★ text 置空（修复㉙）：渲染层对空段落自带 data-ph 占位（css :empty::before）——
        「双击输入文字」不再作为真文字写进数据，点进去直接打字，不用先手动删掉那几个字 */
+    return { type: 'paragraph', size: 'normal', text: '', style: {} };
   }
   /* 插入图片：本地文件（Base64）或链接；已选中图片块时直接替换 */
   function imgInsertPop(anchor) {
@@ -4885,7 +4878,7 @@ window.LMEditor = (function () {
       case 'grid': closePop(); pickGrid(); break;
       case 'imgins': if (popEl && popEl._for === 'imgins') closePop(); else imgInsertPop(btn); break;
       case 'mdins': closePop(); insertAt(defaultsFor('md'), false, '已插入 Markdown 块：写完点「✓ 转换保存」'); break;
-      case 'boxins': closePop(); insertAt(freeBoxDefault(), true, '已插入文本框：拖 ⠿ 移动，拖边角缩放'); break;
+      case 'boxins': closePop(); insertAt(textBoxDefault(), true, '已插入文本框（在文档流里，随内容自动排版）：要自由摆放点工具条 ⤢'); break;
       case 'entriesins': {
         /* ★ 修复75：插入条目块 → 直接打开它的设置（栏目标题 / 版式 / 列数） */
         closePop();
