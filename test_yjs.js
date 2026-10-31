@@ -254,8 +254,8 @@ T('md.js 带色 mark 渲染：==#hex,文字== → <mark style=background>（色�
 T('walkInline 前缀并入开 tok（hlOpen 线性配对，前缀不进可见字符）',
   edt2.indexOf('let i = 0, hlOpen = false;') > 0
     && edt2.indexOf('rest.slice(2).match(/^(#[0-9a-fA-F]{3,8}),/)') > 0);
-T('hlWrapped 用 tok 线性配对检测（兼容带色开标记）',
-  edt2.indexOf('hlToks[ki].b === s0 && hlToks[ki + 1].a === e0') > 0);
+T('hlWrapped 用 tok 线性配对检测（兼容带色开标记；判定用「原始选区」，不受外层扩展影响）',
+  edt2.indexOf('hlToks[ki].b === rawS && hlToks[ki + 1].a === rawE') > 0);
 T('包裹带色前缀 + 同色取消/异色换色/整段底色一并清',
   edt2.indexOf("(v ? v + ',' : '')") > 0 && edt2.indexOf('已换高亮颜色') > 0
     && edt2.indexOf("b.style.hl = '';") > 0);
@@ -466,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '86';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '87';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -1226,7 +1226,7 @@ T('全局兜底把真实错误写进控制台（下次「已自动跳过」可�
 
 /* 真跑：从源码截出 walkInline…applyInlineSwatchBlock，用桩 DOM 跑真实选区 + 真 md.js 渲染 */
 (function () {
-  const a9 = edt2.indexOf('  function walkInline(t, depth) {');
+  const a9 = edt2.indexOf('  function inlineApplyCore(t, s0, e0, prop, v) {');
   const b9 = edt2.indexOf('  /* ★ 块级行内字号 / 字体（修复㉔）');
   const code9 = (a9 >= 0 && b9 > a9) ? edt2.slice(a9, b9) : '';
   let LMMD9 = null;
@@ -1247,13 +1247,14 @@ T('全局兜底把真实错误写进控制台（下次「已自动跳过」可�
       commit: function () {}, toast: function () {}
     };
     const applyFn = new Function('document', 'window', 'LMApp', 'markSaved', 'pageOf', 'activeBlock', 'isTextType', 'tb',
-      'textElOf', 'refreshTextEl', 'restoreSelectionIn',
+      'textElOf', 'refreshTextEl', 'restoreSelectionIn', 'selTextOf', 'selCell',
       code9 + '\nreturn applyInlineSwatchBlock;')(
       { querySelector: function () { return null; } },
       { getSelection: function () { return selS; } },
       LMAppS, function () {}, function () { return page; }, function () { return page.blocks[0]; },
       function (x) { return !!x && x.type === 'paragraph'; }, tbS,
-      function () { return null; }, function () {}, function () {});
+      function () { return null; }, function () {}, function () {},
+      function () { return ''; }, function () { return null; });
     run = function (text, needle, prop, v) {
       page.blocks[0].text = text; cur = needle;
       const ok = applyFn(prop, v);
@@ -1700,6 +1701,70 @@ T('旧实现已清除：freeJump（整格移动）与 swapWith（放回流再换
     } catch (eA) { okA = false; dA = '抛出 ' + eA.message; }
   }
   T('真跑换位：只和视觉相邻那一块换 · 自由框保持自由并落到对方 top · 两个自由框互相换 y · 触底只提示 · 并排组不参与 · 下标≠视觉时也对', okA, dA);
+})();
+
+/* ---------- 9.52) 修复87：表格/文本框里的高亮与渐变真生效（一份逻辑，两条路径共用） ---------- */
+console.log('【9.52】修复87：表格单元格高亮只出黄 · 换色生成坏标记 · ∅ 清不掉 · 渐变不显示 —— 与正文块统一成一份逻辑');
+T('editor.js：行内高亮/上色/渐变只有一份实现 inlineApplyCore，单元格与正文块都调它（不再各写一套）',
+  edt2.indexOf('function inlineApplyCore(t, s0, e0, prop, v) {') > 0
+    && edt2.indexOf('const res = inlineApplyCore(t, sp.s0, sp.e0, prop, v);') > 0
+    && edt2.indexOf('const res = inlineApplyCore(t, s0, e0, prop, v);') > 0);
+T('单元格路径不再自己拼标记：忽略色值的 wrapTok(\'hl\',\'==\',\'==\')、漏 grad 前缀的 \'@@\' + v + \',\' 都删净',
+  edt2.indexOf("wrapTok('hl', '==', '==')") < 0
+    && edt2.indexOf("nt = wrapTok('@@', '@@' + v + ',', '@@');") < 0);
+T('渐变 token 带 grad 前缀（旧版 @@2,文字@@ 被当成非法字号丢弃 → 渐变色一点都不显示）',
+  edt2.indexOf("const tag = prop === 'grad' ? 'grad' + v : v;") > 0);
+T('正文块：点色板清掉实时选区时用 selTextOf 记住的拖选兜底（文本框里「高亮不了」的根因）',
+  edt2.indexOf("if (!needle) needle = String(selTextOf(tb.active != null ? tb.active : null) || '')") > 0);
+T('正文块：行内高亮时一并清掉旧版整段底色 b.style.hl（否则「怎么点都还是黄的」「取消不掉」）',
+  edt2.indexOf("if (prop === 'hl' && b.style && b.style.hl) { b.style.hl = '';") > 0);
+
+/* 真跑：切出 inlineApplyCore + walkInline/srcSpanOf/pairCheck/stripToks，用真 md.js 渲染核对 */
+(function () {
+  const src52 = edt2.replace(/\r\n/g, '\n');
+  const aA = src52.indexOf('  function inlineApplyCore(t, s0, e0, prop, v) {');
+  const bA = src52.indexOf('  /* ★ 块级行内字号 / 字体（修复㉔）');
+  const code52 = (aA >= 0 && bA > aA) ? src52.slice(aA, bA) : '';
+  let LMMD52 = null;
+  try { LMMD52 = require(path.join(DIR, 'js/md.js')); } catch (e52) { LMMD52 = null; }
+  let ok52 = false, d52 = '切片/md.js 不可用';
+  if (code52 && LMMD52) {
+    try {
+      const api = new Function(code52 + '\nreturn { core: inlineApplyCore, walk: walkInline };')();
+      const go = function (t, needle, prop, v) {
+        const w = api.walk(t);
+        const vis = w.map.map(function (k) { return t.charAt(k); }).join('');
+        const vi = vis.indexOf(needle);
+        if (vi < 0) return { src: t, html: '', miss: true };
+        const r = api.core(t, w.map[vi], w.map[vi + needle.length - 1] + 1, prop, v);
+        return r ? { src: r.nt, html: LMMD52.inlineFmt(r.nt) } : { src: null, html: '' };
+      };
+      const c1 = go('文字', '文字', 'hl', '#caffbf');             /* 表格/文本框最常走的一条 */
+      const c2 = go('==文字==', '文字', 'hl', '#9bf6ff');        /* 默认黄 → 换成别的颜色 */
+      const c3 = go('==#9bf6ff,文字==', '文字', 'hl', '#caffbf');/* 带色 → 换色（旧版生成坏标记） */
+      const c4 = go('==#9bf6ff,文字==', '文字', 'hl', '');      /* ∅ 必须真的清掉 */
+      const c5 = go('==#caffbf,文字==', '文字', 'hl', '#caffbf');/* 点回同一个色 = 取消 */
+      const c6 = go('文字', '文字', 'grad', '2');               /* 表格里的渐变 */
+      const c7 = go('@@grad2,文字@@', '文字', 'grad', '3');
+      const c8 = go('@@grad2,文字@@', '文字', 'grad', '');
+      const c9 = go('前面文字后面', '文字', 'color', '#ff3b30');
+      const c10 = go('@@#0071e3,文字@@', '文字', 'color', '#34c759');
+      const c11 = go('==**文字**==', '文字', 'hl', '#caffbf');  /* 高亮里带加粗 */
+      ok52 = c1.src === '==#caffbf,文字==' && /background:#caffbf/.test(c1.html) && /<mark/.test(c1.html)
+        && c2.src === '==#9bf6ff,文字==' && /background:#9bf6ff/.test(c2.html)
+        && c3.src === '==#caffbf,文字==' && /background:#caffbf/.test(c3.html)
+        && c4.src === '文字' && c4.html.indexOf('<mark') < 0
+        && c5.src === '文字'
+        && c6.src === '@@grad2,文字@@' && /grad-2/.test(c6.html)
+        && c7.src === '@@grad3,文字@@' && /grad-3/.test(c7.html)
+        && c8.src === '文字'
+        && c9.src === '前面@@#ff3b30,文字@@后面' && /color:#ff3b30/.test(c9.html)
+        && c10.src === '@@#34c759,文字@@'
+        && /background:#caffbf/.test(c11.html) && /<strong>/.test(c11.html);
+      if (!ok52) d52 = JSON.stringify({ c1: c1, c2: c2, c3: c3, c4: c4, c5: c5, c6: c6, c7: c7, c8: c8, c9: c9, c10: c10, c11: c11 }).slice(0, 420);
+    } catch (e) { ok52 = false; d52 = '抛出 ' + e.message; }
+  }
+  T('真跑：高亮带色 · 换色不留半截 == · 同色/∅ 取消 · 渐变写到 @@gradN,@@ 并渲染出 .grad-N · 高亮里的加粗不被吞', ok52, d52);
 })();
 
 

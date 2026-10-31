@@ -2433,7 +2433,117 @@ window.LMEditor = (function () {
     else LMApp.commit({ silent: true });
     LMApp.toast('已清除格式');
   }
-  /* 表格单元格里直接上颜色 / 高亮 / 渐变（选中格内文字 → 色板），返回是否命中单元格 */
+  /* ★ 修复87：行内高亮 / 上色 / 渐变的**唯一实现**（正文块与表格单元格共用一份）。
+     旧版两份各自演化，单元格那份漏了「带色高亮 ==#hex, 前缀」，于是：
+       · 选字点高亮 → 永远只写 ==文字==（默认黄）——「点其他颜色只显示黄色」；
+       · 已带色高亮再换色 → 生成 ==#旧,==新,文字==== 这种坏标记（md.js 只认到空内容 + 旧色）；
+       · 已带色高亮点 ∅ → 源码原样不动 ——「不能取消高亮」；
+       · 渐变写成 @@2,文字@@（漏了 grad 前缀）→ 被当成非法字号丢弃 ——「表格里的渐变不显示」。
+     现在只有一份逻辑，两边行为完全一致。返回 { nt, msg }；无法安全处理返回 null（调用方自己兜底）。
+     s0/e0 = 选区「可见文字」在源码里的范围（walkInline / srcSpanOf 给），v = 色值 / gradN / ''（清除） */
+  function inlineApplyCore(t, s0, e0, prop, v) {
+    const w = walkInline(t);
+    const rawS = s0, rawE = e0; /* 原始选区：判定「是不是正好裹在一个标记里」必须用它 */
+    const SYM = ['hl', 'bold', 'em', 'u', 's', 'sup', 'sub'];
+    /* ① 选区边界切在加粗/斜体等对称标记中间 → 扩到完整标记（== 内嵌套标记仍能正常解析） */
+    w.toks.forEach(function (k) {
+      if (SYM.indexOf(k.t) < 0) return;
+      if (k.b > s0 && k.a < e0 && (k.a < s0 || k.b > e0)) { s0 = Math.min(s0, k.a); e0 = Math.max(e0, k.b); }
+    });
+    /* ② 用「原始选区」判定包裹关系：同色=取消、异色=原地换色、∅=清除都走这里。
+       旧代码在③扩展之后才判定，于是永远判不出来 —— 点回同一个颜色只会原地重包一次，
+       用户看到的就是「不能取消高亮」 */
+    const hlToks = w.toks.filter(function (k) { return k.t === 'hl'; });
+    let hlPair = null;
+    for (let ki = 0; ki + 1 < hlToks.length; ki++) {
+      if (hlToks[ki].b === rawS && hlToks[ki + 1].a === rawE) { hlPair = { o: hlToks[ki], c: hlToks[ki + 1] }; break; }
+    }
+    const atOpen = rawS > 0 ? t.lastIndexOf('@@', rawS - 1) : -1;
+    const atWrapped = atOpen >= 0 && t.slice(rawE, rawE + 2) === '@@'
+      && /^[#a-zA-Z][#a-zA-Z0-9]*,$/.test(t.slice(atOpen + 2, rawS));
+    const atTag = atWrapped ? t.slice(atOpen + 2, rawS).replace(/,$/, '') : '';
+    /* ③ 外层 hl / @@ 包裹骑跨选区 → 扩到整个包裹，随后 strip 掉再包新标记（绝不嵌套错配） */
+    (function () {
+      var openHl = null, stAt = [], pairs = [];
+      w.toks.forEach(function (k) {
+        if (k.t === 'hl') { if (openHl === null) { openHl = k; } else { pairs.push([openHl, k]); openHl = null; } }
+        else if (k.t === '@@o') stAt.push(k);
+        else if (k.t === '@@c' && stAt.length) pairs.push([stAt.pop(), k]);
+      });
+      pairs.forEach(function (p) { if (p[0].a < s0 && p[1].b > e0) { s0 = p[0].a; e0 = p[1].b; } });
+    })();
+    const inter = w.toks.filter(function (k) { return k.b > s0 && k.a < e0; }); /* 与选区相交的标记 */
+    const touchHl = w.toks.some(function (k) { /* 紧贴选区边界的 ==/@@（非完整包裹）→ 配对会被打散 */
+      if (k.a >= s0 && k.b <= e0) return false;
+      if (k.t === '@@o' && k.b === s0) return true;
+      if (k.t === '@@c' && k.a === e0) return true;
+      if (k.t === 'hl' && (k.b === s0 || k.a === e0)) return true;
+      return false;
+    });
+    const splitSym = SYM.some(function (ty) { /* 同类标记一半在内一半在外 → 换位会打散 */
+      const ks = w.toks.filter(function (k) { return k.t === ty && k.b >= s0 && k.a <= e0; });
+      return ks.some(function (k) { return k.a < s0 || k.b > e0; }) && ks.some(function (k) { return k.a >= s0 && k.b <= e0; });
+    });
+    let nt, msg;
+    if (prop === 'hl') {
+      if (hlPair) { /* 选区正好是 ==…== 的内容：∅ / 同色 = 取消；异色 = 原地换色（只改前缀） */
+        const cur = t.slice(hlPair.o.a + 2, hlPair.o.b).replace(/,$/, '');
+        if (!v || v === cur) {
+          nt = t.slice(0, hlPair.o.a) + t.slice(hlPair.o.b, hlPair.c.a) + t.slice(hlPair.c.b);
+          msg = '已清除高亮（仅选中文字）';
+        } else {
+          /* ★ 只改开标记里的色（闭标记与后文原样保留）——旧代码从闭标记结尾切，把闭合 == 丢掉，
+             换色后源码成了 ==#hex,文字（缺闭标记）→ md.js 认不出高亮、还把 == 清成可见色值文字 */
+          nt = t.slice(0, hlPair.o.a + 2) + v + ',' + t.slice(hlPair.o.b);
+          msg = '已换高亮颜色';
+        }
+      } else if (v === '') {
+        const rm = inter.filter(function (k) { return k.t === 'hl' && k.a >= s0 && k.b <= e0; });
+        if (!rm.length || touchHl || inter.some(function (k) { return k.t === 'hl' && !(k.a >= s0 && k.b <= e0); })) return null;
+        nt = stripToks(t, w.toks, s0, e0, ['hl']).text;
+        msg = '已清除高亮（仅选中文字）';
+      } else {
+        if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return null;
+        if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return null;
+        const r = stripToks(t, w.toks, s0, e0, ['@@o', '@@c', 'hl']);
+        nt = r.text.slice(0, r.s) + '==' + (v ? v + ',' : '') + r.text.slice(r.s, r.e) + '==' + r.text.slice(r.e);
+        msg = '已高亮选中文字';
+      }
+    } else {
+      const tag = prop === 'grad' ? 'grad' + v : v; /* ★ 渐变必须带 grad 前缀，否则成了非法字号 */
+      const kind = prop === 'grad' ? '渐变' : '颜色';
+      if (atWrapped && (v === '' || atTag === tag)) { /* 同色/清空 → 取消包裹 */
+        nt = t.slice(0, atOpen) + t.slice(rawS, rawE) + t.slice(rawE + 2);
+        msg = '已清除' + kind + '（仅选中文字）';
+      } else if (atWrapped) { /* 异色 → 原地换色（补回闭合 @@） */
+        nt = t.slice(0, atOpen) + '@@' + tag + ',' + t.slice(rawS, rawE) + '@@' + t.slice(rawE + 2);
+        msg = '已换' + kind + '（仅选中文字）';
+      } else if (v === '') { /* 清除：剥掉完整落在选区内的 @@ 配对 */
+        const stack = [], rm = [];
+        w.toks.forEach(function (k) {
+          if (k.t === '@@o') stack.push(k);
+          else if (k.t === '@@c' && stack.length) {
+            const o = stack.pop();
+            if (o.a >= s0 && o.b <= e0 && k.a >= s0 && k.b <= e0) rm.push(o, k);
+          }
+        });
+        if (!rm.length || touchHl || inter.some(function (k) { return (k.t === '@@o' || k.t === '@@c') && rm.indexOf(k) < 0; })) return null;
+        nt = stripToks(t, rm, s0, e0, ['@@o', '@@c']).text;
+        msg = '已清除' + kind + '（仅选中文字）';
+      } else {
+        if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return null; /* ref/jump/link 骑跨 → 放弃 */
+        if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return null;
+        /* ★ 只剥选区内完整的旧颜色对，**保留 == 高亮**：md.js 先渲染 == 再渲染 @@色,?@@，可安全嵌套 */
+        const rs = stripToks(t, w.toks, s0, e0, ['@@o', '@@c']);
+        nt = rs.text.slice(0, rs.s) + '@@' + tag + ',' + rs.text.slice(rs.s, rs.e) + '@@' + rs.text.slice(rs.e);
+        msg = '已对选中文字应用' + kind;
+      }
+    }
+    return { nt: nt, msg: msg };
+  }
+  /* 表格单元格里直接上颜色 / 高亮 / 渐变（选中格内文字 → 色板），返回是否命中单元格。
+     ★ 修复87：算法与正文块完全共用 inlineApplyCore —— 旧版这里自己写了一套，颜色前缀/换色/清除
+     全都错（详见 inlineApplyCore 顶部注释），表格里的高亮与渐变因此长期失效 */
   function applyInlineSwatch(prop, v, preview) {
     const cell = selCell();
     if (!cell) return false;
@@ -2443,41 +2553,15 @@ window.LMEditor = (function () {
     const t = String(cell.get() || '').replace(/\u00A0/g, ' ');
     const sp = needle ? srcSpanOf(t, needle) : null;
     if (!sp) { LMApp.toast('请先选中同一单元格里的文字，再选样式'); return true; }
-    const s0 = sp.s0, e0 = sp.e0, seg = sp.seg;
-    const w = walkInline(t);
-    /* 骑跨引用/链接/已有跳转或颜色标记 → 拒绝（防坏源码），与块级行内同一保守策略 */
-    const cross = w.toks.some(function (k) { return k.b > s0 && k.a < e0 && (k.t === 'ref' || k.t === 'jump' || k.t === 'link'); });
-    if (cross || !pairCheck(w.toks, s0, e0)) { LMApp.toast('选区骑跨了引用/链接/跳转或颜色标记，请调整选区'); return true; }
-    const wrapTok = function (type, open, close) { /* 先剥选区内同类标记再包新标记；★ 只包选区，不向外扩展 */
-      /* 旧版在这里「向外扩展完整包裹选区的 @@ 配对」再整体重包 —— 结果选区外的文字也被拖进
-         新标记，用户看到「明明只画了一个词，整段都变色」。现在 md.js 已支持嵌套渲染（自内向外
-         循环解析），直接只包选区即可：外层字号/渐变原样保留、互不干扰，也不再产生泄漏乱码 */
-      const r = stripToks(t, w.toks, s0, e0, type === '@@' ? ['@@o', '@@c'] : [type]);
-      return r.text.slice(0, r.s) + open + r.text.slice(r.s, r.e) + close + r.text.slice(r.e);
-    };
-    let nt, msg;
-    if (prop === 'hl') {
-      if (t.slice(s0 - 2, s0) === '==' && t.slice(e0, e0 + 2) === '==') { nt = t.slice(0, s0 - 2) + seg + t.slice(e0 + 2); msg = '已清除高亮'; }
-      else if (v === '') { nt = t.slice(0, s0) + stripInline(seg) + t.slice(e0); msg = '已清除高亮'; }
-      else { nt = wrapTok('hl', '==', '=='); msg = '已高亮'; }
-    } else if (prop === 'grad') {
-      const gm = (t.slice(0, s0).match(/@@grad[1-6],$/) || [])[0];
-      if (gm && t.slice(e0, e0 + 2) === '@@') { nt = t.slice(0, s0 - gm.length) + seg + t.slice(e0 + 2); msg = '已清除渐变'; }
-      else if (v === '') { nt = t.slice(0, s0) + stripInline(seg) + t.slice(e0); msg = '已清除渐变'; }
-      else { nt = wrapTok('@@', '@@' + v + ',', '@@'); msg = '已上渐变'; }
-    } else { /* color */
-      const om = (t.slice(0, s0).match(/@@[#a-zA-Z][#a-zA-Z0-9]*,$/) || [])[0];
-      if (om && t.slice(e0, e0 + 2) === '@@') { nt = t.slice(0, s0 - om.length) + seg + t.slice(e0 + 2); msg = '已清除颜色'; }
-      else if (v === '') { nt = t.slice(0, s0) + stripInline(seg) + t.slice(e0); msg = '已清除颜色'; }
-      else { nt = wrapTok('@@', '@@' + v + ',', '@@'); msg = '已变色'; }
-    }
-    cell.set(nt);
-    cell.el.innerHTML = LMApp.md(nt);
+    const res = inlineApplyCore(t, sp.s0, sp.e0, prop, v);
+    if (!res) { LMApp.toast('选区骑跨了引用/链接/跳转或颜色标记，请调整选区'); return true; }
+    cell.set(res.nt);
+    cell.el.innerHTML = LMApp.md(res.nt);
     restoreSelectionIn(cell.el, needle);
     if (!preview) { /* 预览模式：数据已改但不提交/不记撤销/不提示，等确认后统一补一步 */
       LMApp.commit({ silent: true, rerender: false });
       markSaved();
-      LMApp.toast(msg + '（仅选中文字）');
+      LMApp.toast(res.msg + '（仅选中文字）');
     }
     return true;
   }
@@ -2573,155 +2657,35 @@ window.LMEditor = (function () {
     return { text: out, s: s, e: e - cut };
   }
   /* ★ 块内选区的行内颜色 / 高亮 / 渐变：只改选中文字，不改整段（返回 true = 已按行内处理）。
-     color → @@色值,选区@@；grad → @@gradN,选区@@（md.js 渲染为渐变 span）；hl → ==选区==。
-     与 **加粗**、*斜体* 等标记自由嵌套；对同一选区重复点同一色 = 取消；选区内旧颜色/旧高亮
-     先剥掉再包新标记，避免 @@ 与 == 嵌套破坏解析；选区骑跨已有标记时回退整段（不出坏源码）。
-     没有选中文字时返回 false → 交给整块 applyStyle（保持老行为：点一下块改整段）。 */
+     color → @@色值,选区@@；grad → @@gradN,选区@@；hl → ==#色值,选区==（取消 / 换色 / 嵌套细节见
+     inlineApplyCore，与表格单元格共用同一份）。没有选中文字时返回 false → 交给整块 applyStyle。
+     ★ 修复87：「点色板」会把正文选区清掉（焦点跑到按钮上），旧版只读实时选区 → 明明选了字也被判成
+     没选（提示「请先拖选要高亮的文字」），看起来就是「文本框里高亮不了」。现在实时选区为空时用
+     selTextOf 记住的上一次拖选兜底 —— 与字号/字体下拉、单元格高亮同一条规则 */
   function applyInlineSwatchBlock(prop, v, preview) {
     if (tb.hero) return false; /* 大标题字段保持整块样式体系 */
     const sel = window.getSelection();
-    if (!sel || !sel.rangeCount || sel.isCollapsed) return false;
     const pg = pageOf();
     const b = (pg && pg.blocks && pg.blocks[tb.active]) || activeBlock();
     if (!b || !isTextType(b) || b.type === 'md') return false;
     let needle = '';
-    try { needle = sel.toString(); } catch (err) { /* noop */ }
-    needle = String(needle).replace(/\u00A0/g, ' ');
+    try { needle = (sel && sel.toString()) || ''; } catch (err) { /* noop */ }
+    needle = String(needle).replace(/\u00A0/g, ' ').replace(/^\s+|\s+$/g, '');
+    if (!needle) needle = String(selTextOf(tb.active != null ? tb.active : null) || '').replace(/^\s+|\s+$/g, '');
     if (!needle) return false;
     const t = String(b.text || '').replace(/\u00A0/g, ' ');
     const w = walkInline(t);
     const vis = w.map.map(function (i2) { return t.charAt(i2); }).join('');
     const vi = vis.indexOf(needle);
     if (vi < 0) return false;
-    let s0 = w.map[vi];
-    let e0 = w.map[vi + needle.length - 1] + 1; /* ★ 最后一个选中字符的源结尾（紧贴其后的闭合 @@/== 才能被边界检测到） */
-    const SYM = ['hl', 'bold', 'em', 'u', 's', 'sup', 'sub'];
-    /* ★ 选区边界切在加粗/斜体/高亮等标记中间（如从加粗词中间开始拖选）→ 自动扩展到完整
-       包含该标记。旧版不扩展：跨着标记边界的选区一律静默 return false 交给整段
-       applyStyle ——「选中带加粗的词再高亮，整个文本框都被高亮」「跨加粗/非加粗设色失败」
-       两个 bug 都从这里来。@@ 颜色/字号标记不在此扩展（见下方外层包裹扩展）。
-       md.js 渲染加粗/斜体等先于 ==、@@ 自内向外循环，扩展后 == / @@ 内嵌套加粗等标记
-       都能正常解析 */
-    w.toks.forEach(function (k) {
-      if (SYM.indexOf(k.t) < 0) return;
-      if (k.b > s0 && k.a < e0 && (k.a < s0 || k.b > e0)) { s0 = Math.min(s0, k.a); e0 = Math.max(e0, k.b); }
-    });
-    /* ★ 外层 hl / @@ 包裹「骑跨」选区（开标记在选区前、闭标记在选区后）→ 把选区扩展到该
-       包裹的完整范围，随后 stripToks 会把（现已完整包含的）外层对剥掉再包新标记 —— 全程
-       无嵌套。修复㉖⑦放宽后踩过的坑：外层已 ==…== 时在其内部再包 == / @@，md.js 的 ==
-       配对是线性最近闭合、@@ 的 [^@]+ 会被内层开标记截断，嵌套必然错配 →「选中的不高亮、
-       没选中的高亮」「调色后冒出可见 ==」全是它。配对方式与 md.js 一致：hl 单槽交替
-       （线性最近闭合），@@ 用 @@o/@@c 栈配对 */
-    (function () {
-      var openHl = null, stAt = [], pairs = [];
-      w.toks.forEach(function (k) {
-        if (k.t === 'hl') { if (openHl === null) { openHl = k; } else { pairs.push([openHl, k]); openHl = null; } }
-        else if (k.t === '@@o') stAt.push(k);
-        else if (k.t === '@@c' && stAt.length) pairs.push([stAt.pop(), k]);
-      });
-      pairs.forEach(function (p) {
-        if (p[0].a < s0 && p[1].b > e0) { s0 = p[0].a; e0 = p[1].b; }
-      });
-    })();
-    const inter = w.toks.filter(function (k) { return k.b > s0 && k.a < e0; }); /* 与选区相交的标记 */
-    const touchHl = w.toks.some(function (k) { /* 紧贴选区边界的 ==/@@（非完整包裹）→ 配对会被打散 */
-      if (k.a >= s0 && k.b <= e0) return false;
-      if (k.t === '@@o' && k.b === s0) return true;  /* 开标记贴左：选区在其内部，包裹会嵌套 @@ */
-      if (k.t === '@@c' && k.a === e0) return true;  /* 闭标记贴右：选区在其内部（且未按完整包裹处理） */
-      if (k.t === 'hl' && (k.b === s0 || k.a === e0)) return true; /* == 自由配对，保守拒绝 */
-      return false;
-    });
-    const splitSym = SYM.some(function (ty) { /* 同类标记一半在选区内一半在外 → 换位打散 */
-      const ks = w.toks.filter(function (k) { return k.t === ty && k.b >= s0 && k.a <= e0; });
-      return ks.some(function (k) { return k.a < s0 || k.b > e0; }) && ks.some(function (k) { return k.a >= s0 && k.b <= e0; });
-    });
-    /* ★ hlWrapped 用 tok 线性配对检测（修复㉚）：带色高亮的开 tok 是 ==#hex,（不止 2 字符），
-       旧版 t.slice(s0-2,s0)==='==' 对它失效 —— 相邻两个 hl tok（开紧贴选区左、闭紧贴选区右）
-       即为「选区正好是高亮内容」，与 md.js 的线性最近闭合配对一致 */
-    const hlToks = w.toks.filter(function (k) { return k.t === 'hl'; });
-    let hlWrapPair = null;
-    for (let ki = 0; ki + 1 < hlToks.length; ki++) {
-      if (hlToks[ki].b === s0 && hlToks[ki + 1].a === e0) { hlWrapPair = { o: hlToks[ki], c: hlToks[ki + 1] }; break; }
-    }
-    const hlWrapped = !!hlWrapPair;
-    const open = t.lastIndexOf('@@', s0 - 1);
-    /* 色值须以 # 或字母开头（纯数字是字号标记 @@28,x@@，换色会丢字号 → 走回退） */
-    const atWrapped = open >= 0 && t.slice(e0, e0 + 2) === '@@' && /^[#a-zA-Z][#a-zA-Z0-9]*,$/.test(t.slice(open + 2, s0));
-    let nt, msg;
-    if (prop === 'hl') {
-      if (hlWrapped) { /* 选区正好是 ==…== 的内容：∅ / 同色 = 取消；异色 = 原地换色（只改前缀） */
-        const cur = t.slice(hlWrapPair.o.a + 2, hlWrapPair.o.b).replace(/,$/, '');
-        if (!v || v === cur) {
-          nt = t.slice(0, hlWrapPair.o.a) + t.slice(hlWrapPair.o.b, hlWrapPair.c.a) + t.slice(hlWrapPair.c.b);
-          msg = '已清除高亮（仅选中文字）';
-        } else {
-          nt = t.slice(0, hlWrapPair.o.a + 2) + v + ',' + t.slice(hlWrapPair.o.b, hlWrapPair.c.a) + t.slice(hlWrapPair.c.b);
-          msg = '已换高亮颜色';
-        }
-      } else if (v === '') {
-        const rm = inter.filter(function (k) { return k.t === 'hl' && k.a >= s0 && k.b <= e0; });
-        if (!rm.length || touchHl || inter.some(function (k) { return k.t === 'hl' && !(k.a >= s0 && k.b <= e0); })) return false;
-        nt = stripToks(t, w.toks, s0, e0, ['hl']).text;
-        msg = '已清除高亮（仅选中文字）';
-      } else {
-        /* 与颜色/渐变分支同一保守策略：骑跨任何标记（一半在内一半在外）→ 回退整段；
-           完整包含在选区内的标记可共存 —— md.js 里加粗等先渲染、== 后渲染，
-           == 内的加粗/斜体正常解析；只剥选区内完整的旧颜色/旧高亮（== 里不能再套 ==）。
-           外层 hl/@@ 包裹骑跨的情况已在上方扩展为整个包裹范围（此处不会遇到） */
-        if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false;
-        if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return false;
-        const r = stripToks(t, w.toks, s0, e0, ['@@o', '@@c', 'hl']);
-        /* ★ 带色包裹（修复㉚）：色值写进 == 前缀（==#hex,文字==），色板 7 色行内全部可用 */
-        nt = r.text.slice(0, r.s) + '==' + (v ? v + ',' : '') + r.text.slice(r.s, r.e) + '==' + r.text.slice(r.e);
-        msg = '已高亮选中文字';
-      }
-      /* ★ 行内高亮清干净后，整段底色（b.style.hl）还在会让人以为「清不掉」→ 一并清 */
-      if (msg.indexOf('清除高亮') >= 0 && b.style && b.style.hl) {
-        b.style.hl = '';
-        msg = '已清除高亮（含整段底色）';
-      }
-    } else {
-      const tag = prop === 'grad' ? 'grad' + v : v;
-      const kind = prop === 'grad' ? '渐变' : '颜色';
-      if (atWrapped && (v === '' || t.slice(open + 2, s0).replace(/,$/, '') === tag)) {
-        nt = t.slice(0, open) + t.slice(s0, e0) + t.slice(e0 + 2); /* 同色/清空 → 取消包裹 */
-        msg = '已清除' + kind + '（仅选中文字）';
-      } else if (atWrapped) { /* 异色 → 原地换色（补回闭合 @@） */
-        nt = t.slice(0, open) + '@@' + tag + ',' + t.slice(s0, e0) + '@@' + t.slice(e0 + 2);
-        msg = '已换' + kind + '（仅选中文字）';
-      } else if (hlWrapped && v !== '') { /* 选区是 ==…== 的内容 → 高亮转颜色/渐变（tok 边界，兼容带色开标记） */
-        nt = t.slice(0, hlWrapPair.o.a) + '@@' + tag + ',' + t.slice(hlWrapPair.o.b, hlWrapPair.c.a) + '@@' + t.slice(hlWrapPair.c.b);
-        msg = '已对选中文字应用' + kind + '（原高亮转为' + kind + '）';
-      } else if (hlWrapped) {
-        nt = t.slice(0, hlWrapPair.o.a) + t.slice(hlWrapPair.o.b, hlWrapPair.c.a) + t.slice(hlWrapPair.c.b);
-        msg = '已清除高亮（仅选中文字）';
-      } else if (v === '') { /* 清除：剥掉完整落在选区内的 @@ 配对 */
-        const stack = [], rm = [];
-        w.toks.forEach(function (k) {
-          if (k.t === '@@o') stack.push(k);
-          else if (k.t === '@@c' && stack.length) {
-            const o = stack.pop();
-            if (o.a >= s0 && o.b <= e0 && k.a >= s0 && k.b <= e0) rm.push(o, k);
-          }
-        });
-        if (!rm.length || touchHl || inter.some(function (k) { return (k.t === '@@o' || k.t === '@@c') && rm.indexOf(k) < 0; })) return false;
-        nt = stripToks(t, rm, s0, e0, ['@@o', '@@c']).text;
-        msg = '已清除' + kind + '（仅选中文字）';
-      } else {
-        if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false; /* ref/jump/link 等骑跨 → 回退整段 */
-        if (touchHl || splitSym || !pairCheck(w.toks, s0, e0)) return false;
-        /* ★ 修复81：这里原来直接用了 r.text / r.s / r.e，而 r 只在上面 hl 分支里声明过 ——
-           于是「选中文字点 A 文字颜色 / 点 🌈 渐变」100% 抛 ReferenceError: r is not defined，
-           被全局兜底吞成「⚠ 页面出现一个小问题」，颜色自然一点没上。就地算一次剥离结果。
-           ★ 只剥选区内完整的旧颜色对，**保留 == 高亮**：md.js 先渲染 == 再渲染 @@色,?@@，
-           所以 @@色,==高亮==@@ 能正确嵌套（反过来 @@ 套在 == 里才是坏的，那条路已在上方
-           整体外扩处理）。剥掉高亮等于「上色把荧光笔抹了」，用户不会想要 */
-        const rs = stripToks(t, w.toks, s0, e0, ['@@o', '@@c']);
-        nt = rs.text.slice(0, rs.s) + '@@' + tag + ',' + rs.text.slice(rs.s, rs.e) + '@@' + rs.text.slice(rs.e);
-        msg = '已对选中文字应用' + kind;
-      }
-    }
-    b.text = nt;
+    const s0 = w.map[vi];
+    const e0 = w.map[vi + needle.length - 1] + 1; /* 最后一个选中字符的源结尾（紧贴其后的闭合 @@/== 才能被边界检测到） */
+    const res = inlineApplyCore(t, s0, e0, prop, v);
+    if (!res) return false; /* 骑跨引用/链接等 → 回退整段（老行为） */
+    b.text = res.nt;
+    /* 整段底色（旧版 b.style.hl）会把行内高亮整个盖住 —— 看着「怎么选都还是黄的」、也「取消不掉」。
+       现在高亮只走行内标记，旧整段底色顺手清掉（仅高亮需要；上色/渐变与底色不冲突） */
+    if (prop === 'hl' && b.style && b.style.hl) { b.style.hl = ''; res.msg += '（已清除旧版整段底色）'; }
     const wrap = document.querySelector('.block-wrap[data-idx="' + tb.active + '"]');
     const el = textElOf(wrap, sel, needle);
     if (el) { refreshTextEl(el, b); restoreSelectionIn(el, needle); }
@@ -2729,7 +2693,7 @@ window.LMEditor = (function () {
       if (el) LMApp.commit({ silent: true, rerender: false });
       else LMApp.commit({ silent: true });
       markSaved();
-      LMApp.toast(msg);
+      LMApp.toast(res.msg);
     }
     return true;
   }

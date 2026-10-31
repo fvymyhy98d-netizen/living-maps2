@@ -77,7 +77,7 @@ T('render-tail hPush undo baseline (fix27)', /renderAdminBar\(\); LMEditor\.rend
    修复㉗：外层 hl/@@ 包裹骑跨选区 → 扩展选区到外层完整范围再剥再包（全程无嵌套）——
    修复㉖⑦放宽后，在已有 ==…== 内部再包 == 会嵌套错配：md.js 的 == 配对是线性最近闭合、
    @@ 的 [^@]+ 会被内层开标记截断 →「选中的不高亮、没选中的高亮」「调色后冒出可见 ==」 */
-T('outer hl/@@ wrap straddling selection expands selection (fix27)', /外层 hl \/ @@ 包裹「骑跨」选区[\s\S]{0,1200}pairs\.forEach/.test(esrc));
+T('outer hl/@@ wrap straddling selection expands selection (fix27)', /③ 外层 hl \/ @@ 包裹骑跨选区[\s\S]{0,1200}pairs\.forEach/.test(esrc));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
