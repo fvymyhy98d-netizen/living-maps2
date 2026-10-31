@@ -321,6 +321,7 @@ W.LMAI = (function () {
      没装扩展：bridgeSeen 一直是 false → 走原来的「复制 + 打开网页 + 粘回」，功能不受影响。 */
   const BRIDGE_TAG = 'lm-ds-bridge';
   let bridgeSeen = false;
+  let pendingAsk = null;            /* 等扩展回执的那一次提问（扩展不可用时用来退回复制） */
   function bridgeSend(txt, id) {
     try {
       window.postMessage({ ch: 'lm-page', type: 'ask', text: txt, pageId: id }, location.origin);
@@ -334,12 +335,31 @@ W.LMAI = (function () {
     window.addEventListener('message', function (e) {
       const d = e && e.data;
       if (!d || d.ch !== BRIDGE_TAG) return;
-      if (d.type === 'hello' || d.type === 'ack') {
+      if (d.type === 'hello') {
         bridgeSeen = true;
         if (panel && !panel.hidden) renderPanel();
         return;
       }
+      if (d.type === 'ack') {
+        bridgeSeen = true;
+        /* ★ 修复109：扩展装了、但 DeepSeek 标签页没开（或没登录）→ 自动退回「复制 + 打开」
+           （以前这里只是把提示留在那儿，用户会以为卡住了） */
+        if (d.ok === false && pendingAsk) {
+          const pa = pendingAsk;
+          pendingAsk = null;
+          copyText(pa.txt).then(function () {
+            try { window.open('https://chat.deepseek.com/', '_blank', 'noopener'); } catch (e) { /* noop */ }
+            chatPush(pa.id, { r: 'ds', t: '扩展在，但没找到已登录的 DeepSeek 标签页 —— 已自动退回「复制 + 打开」：在输入框按 Ctrl/⌘+V 就能发。\n（让扩展全自动：先开一个 chat.deepseek.com 标签页并保持登录。）' });
+            if (panel && !panel.hidden) renderPanel();
+          }, function () {
+            chatPush(pa.id, { r: 'ds', t: '既没找到 DeepSeek 标签页，剪贴板也被浏览器拦了。请先打开 chat.deepseek.com 登录，再回来说一声。' });
+            if (panel && !panel.hidden) renderPanel();
+          });
+        } else if (panel && !panel.hidden) renderPanel();
+        return;
+      }
       if (d.type === 'reply' && d.text) {
+        pendingAsk = null;
         chatPush(curId(), { r: 'ds', t: d.text });
         if (panel && !panel.hidden) renderPanel();
         else if (window.LMApp && LMApp.toast) LMApp.toast('✅ DeepSeek 的回答已回到对话框');
@@ -478,6 +498,7 @@ W.LMAI = (function () {
       chatPush(id, { r: 'me', t: q });
       /* 装了扩展 → 全自动：送过去、等回答自己回来（不用复制/粘贴） */
       if (bridgeSeen && bridgeSend(txt, id)) {
+        pendingAsk = { id: id, txt: txt };     /* 存着：扩展没接住就自动退回复制 */
         chatPush(id, { r: 'ds', t: '⏳ 已交给 DeepSeek（浏览器扩展在接管）—— 它会在标签页里自己发出去，回答好了**自动**回到这里，你不用复制粘贴。' });
         renderPanel();
         return;

@@ -2301,7 +2301,8 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && s.indexOf('listenBridge();') > 0
         && /"manifest_version": 3/.test(ext) && ext.indexOf('chat.deepseek.com') > 0
         && ext.indexOf("type: 'reply'") > 0 && ext.indexOf('findEditor') > 0
-        && ext.indexOf('ds-markdown') > 0;
+        && ext.indexOf('ds-markdown') > 0
+        && s.indexOf('d.ok === false && pendingAsk') > 0;   /* 修复109：扩展没接住 → 自动退回复制 */
     })(), '扩展 4 个文件 + 页面协议（hello/ping/ack/reply）');
 
   T('界面顺序：对话框在面板**最上面**（.lm-ai-chat 必须排在「这一页的要点 / 相关条目」之前）',
@@ -2742,10 +2743,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=108 · LM_ASSET_VER=108',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=109 · LM_ASSET_VER=109',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0
-      && (html.match(/\?v=107/g) || []).length === 0 && /\?v=108/.test(html)
-      && /LM_ASSET_VER = '108'/.test(appJs));
+      && (html.match(/\?v=108/g) || []).length === 0 && /\?v=109/.test(html)
+      && /LM_ASSET_VER = '109'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3098,10 +3099,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 108（?v=108 共 20 处 · v107 无残留 · LM_ASSET_VER=108）',
-    (html.match(/\?v=108/g) || []).length === 20 && (html.match(/\?v=107/g) || []).length === 0
-      && /LM_ASSET_VER = '108'/.test(appJs),
-    'v108=' + (html.match(/\?v=108/g) || []).length + ' v107=' + (html.match(/\?v=107/g) || []).length);
+  T('版本已升到 109（?v=109 共 20 处 · v108 无残留 · LM_ASSET_VER=109）',
+    (html.match(/\?v=109/g) || []).length === 20 && (html.match(/\?v=108/g) || []).length === 0
+      && /LM_ASSET_VER = '109'/.test(appJs),
+    'v109=' + (html.match(/\?v=109/g) || []).length + ' v108=' + (html.match(/\?v=108/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
