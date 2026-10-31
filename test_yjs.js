@@ -2442,6 +2442,43 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return n === 0 || outside === 0;
     })());
 
+  /* ★ 修复114：答案后面附「原文出处」（逐字引用 + 该页链接），回到最原始那种"有据可查" */
+  T('出处1：每条本地回答都带 used（pageId / title / text 齐全，非空）',
+    (function () {
+      const r = ai.askSmart(ix, 'RAG 是什么', 3);
+      return r.length >= 1 && r.every(function (x) {
+        return Array.isArray(x.used) && x.used.length >= 1 && x.used.every(function (c) {
+          return !!c.pageId && typeof c.text === 'string' && c.text.length >= 2;
+        });
+      });
+    })(), JSON.stringify(ai.askSmart(ix, 'RAG 是什么', 1).map(function (x) { return (x.used || []).length; })));
+
+  T('出处2：★ used 里引用的文字必须逐字出自那一页（引错页/改写都算失败）',
+    (function () {
+      const byId = {};
+      ix.docs.forEach(function (d) { byId[d.id] = d.text; });
+      let n = 0, bad = 0;
+      ['RAG 是什么', '三张地图有什么区别', '活地图是什么'].forEach(function (q) {
+        ai.askSmart(ix, q, 3).forEach(function (r) {
+          (r.used || []).forEach(function (c) {
+            n++;
+            const page = byId[c.pageId] || '';
+            if (page.indexOf(c.text) < 0) bad++;
+          });
+        });
+      });
+      return n >= 3 && bad === 0;
+    })());
+
+  T('出处3：对话里存 cite（限 4 条 / 每条 200 字）· 面板渲染出可折叠的「📄 原文出处」· 样式已加',
+    (function () {
+      const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
+      return s.indexOf('cite: (r.used || []).slice(0, 4)') > 0
+        && s.indexOf('lm-ai-cite') > 0 && s.indexOf('📄 原文出处') > 0
+        && s.indexOf('details class="lm-ai-cite"') > 0
+        && c.indexOf('.lm-ai-cite>summary') > 0 && c.indexOf('.lm-ai-quote') > 0;
+    })());
+
 
   T('问答升级7：对话框顶部有模式切换键 · 默认「本站速答」· 选择存 localStorage · 样式已加',
     (function () {
@@ -2975,10 +3012,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=113 · LM_ASSET_VER=113',
-    css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0
-      && (html.match(/\?v=112/g) || []).length === 0 && /\?v=113/.test(html)
-      && /LM_ASSET_VER = '113'/.test(appJs));
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=114 · LM_ASSET_VER=114',
+    css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
+      && (html.match(/\?v=113/g) || []).length === 0 && /\?v=114/.test(html)
+      && /LM_ASSET_VER = '114'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3331,10 +3368,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 113（?v=113 共 21 处 · v112 无残留 · LM_ASSET_VER=113）',
-    (html.match(/\?v=113/g) || []).length === 21 && (html.match(/\?v=112/g) || []).length === 0
-      && /LM_ASSET_VER = '113'/.test(appJs),
-    'v113=' + (html.match(/\?v=113/g) || []).length + ' v112=' + (html.match(/\?v=112/g) || []).length);
+  T('版本已升到 114（?v=114 共 21 处 · v113 无残留 · LM_ASSET_VER=114）',
+    (html.match(/\?v=114/g) || []).length === 21 && (html.match(/\?v=113/g) || []).length === 0
+      && /LM_ASSET_VER = '114'/.test(appJs),
+    'v114=' + (html.match(/\?v=114/g) || []).length + ' v113=' + (html.match(/\?v=113/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

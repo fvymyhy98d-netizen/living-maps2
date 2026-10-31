@@ -385,7 +385,7 @@ W.LMAI = (function () {
           let hit = 0;
           uniq.forEach(function (t) { if (hay.indexOf(t) >= 0) hit++; });
           if (hit < Math.max(1, Math.ceil(uniq.length * 0.5))) return;
-          out.push({ pageId: p.id, title: plain(p.label || p.id), table: plain(b.title || '表格'), head: head, line: line, hit: hit });
+          out.push({ pageId: p.id, title: plain(p.label || p.id), table: plain(b.title || '表格'), head: head, line: line, raw: cells.join(' '), hit: hit });
         });
       });
     });
@@ -436,7 +436,11 @@ W.LMAI = (function () {
       : '（分别出自《' + a.title + '》和《' + b.title + '》）';
     return {
       answer: '①【' + pair[0] + '】' + a.s + '\n②【' + pair[1] + '】' + b.s + '\n③ 差别就看这两句：' + tail,
-      pageId: a.pageId, title: a.title, score: Math.round((a.score + b.score) / 2 * 100) / 100, kind: '对比'
+      pageId: a.pageId, title: a.title, score: Math.round((a.score + b.score) / 2 * 100) / 100, kind: '对比',
+      used: [
+        { pageId: a.pageId, title: a.title, text: a.s },
+        { pageId: b.pageId, title: b.title, text: b.s }
+      ]
     };
   }
   /* ★ 修复113：伪相关反馈（PRF）—— 第一轮排得最好的几句里，挑"站内高频信息词"补进查询再排一次。
@@ -486,7 +490,8 @@ W.LMAI = (function () {
         res.push({
           answer: '按《' + r.title + '》里的步骤（原文条目，共 ' + r.items.length + ' 条）：\n'
             + r.items.map(function (t, i) { return (i + 1) + '. ' + t; }).join('\n'),
-          pageId: r.pageId, title: r.title, score: 9 + r.hit, kind: '步骤'
+          pageId: r.pageId, title: r.title, score: 9 + r.hit, kind: '步骤',
+          used: r.items.map(function (t) { return { pageId: r.pageId, title: r.title, text: t }; })
         });
       });
     }
@@ -494,7 +499,9 @@ W.LMAI = (function () {
       res.push({
         answer: '📊 表格《' + r.table + '》里有一行对得上：\n'
           + (r.head.length ? r.head.join(' | ') + '\n' : '') + r.line,
-        pageId: r.pageId, title: r.title, score: 8 + r.hit, kind: '表格'
+        pageId: r.pageId, title: r.title, score: 8 + r.hit, kind: '表格',
+        /* ★ 修复114：引用用网页里的真实拼法（空格分隔），不是给人看的 " | " 版 */
+        used: [{ pageId: r.pageId, title: r.title, text: r.raw || r.line }]
       });
     });
     let ranked = rankSent(index, q, 30).filter(function (x) { return x.cover >= 0.3; });
@@ -535,7 +542,8 @@ W.LMAI = (function () {
       const pts = list.map(function (x) { return '· ' + x.s; }).join('\n');
       res.push({
         answer: headLead(kind, d.title) + '\n' + pts,
-        pageId: pid, title: d.title, score: Math.round(d.score * 100) / 100, kind: kind
+        pageId: pid, title: d.title, score: Math.round(d.score * 100) / 100, kind: kind,
+        used: list.map(function (x) { return { pageId: pid, title: d.title, text: x.s }; })
       });
     });
     return res.slice(0, want);
@@ -750,8 +758,19 @@ W.LMAI = (function () {
         const src = (m.src && m.src.pageId)
           ? '<a class="lm-ai-src" href="#/p/' + encodeURIComponent(m.src.pageId) + '">出自《' + esc(m.src.title || '') + '》· 相关度 ' + m.src.score + '</a>'
           : '';
+        /* ★ 修复114：答案下面挂「📄 原文出处」——逐字引用 + 该页链接（可折叠，不挡视线） */
+        const cite = (m.cite && m.cite.length)
+          ? '<details class="lm-ai-cite"><summary>📄 原文出处（' + m.cite.length + ' 条）</summary>'
+            + m.cite.map(function (c) {
+              const body = String(c.text || '');
+              return '<div class="lm-ai-quote">'
+                + '<a class="lm-ai-src" href="#/p/' + encodeURIComponent(c.pageId) + '">《' + esc(c.title || c.pageId) + '》</a>'
+                + '<p>' + esc(body.length > 200 ? body.slice(0, 200) + '…' : body) + '</p></div>';
+            }).join('')
+            + '</details>'
+          : '';
         return '<div class="lm-ai-msg ' + cls + '"><span class="lm-ai-who">' + who + '</span><p>'
-          + esc(m.t).replace(/\n/g, '<br>') + '</p>' + src + '</div>';
+          + esc(m.t).replace(/\n/g, '<br>') + '</p>' + src + cite + '</div>';
       }).join('')
       : '<p class="lm-ai-tip">还没有对话。先在下面选一种模式，写个问题按回车：\n<b>⚡ 本站速答</b>＝只在站里找、自己组织成一段话（免配置）；<b>🐋 DeepSeek</b>＝把这页正文附上交给网页版（更全面，但要装扩展或手动粘贴）。</p>';
     h += '</div>';
@@ -820,7 +839,15 @@ W.LMAI = (function () {
         chatPush(id, { r: 'local', t: '本站没写过相关内容。换个说法再试；想让它用通用知识回答，把上面的模式切到 🐋 DeepSeek。' });
       } else {
         res.forEach(function (r) {
-          chatPush(id, { r: 'local', t: r.answer, src: { pageId: r.pageId, title: r.title, score: r.score } });
+          chatPush(id, {
+            r: 'local', t: r.answer,
+            src: { pageId: r.pageId, title: r.title, score: r.score },
+            /* ★ 修复114：把"这句答案是从哪段原文来的"一起存进对话（限 4 条、每条 200 字，免得占满 storage） */
+            cite: (r.used || []).slice(0, 4).map(function (c) {
+              const t = String(c.text || '');
+              return { pageId: c.pageId, title: c.title, text: t.length > 200 ? t.slice(0, 200) : t };
+            })
+          });
         });
         /* ★ 诚实护栏：只找到一条就明说"可能没完全对上"，不假装很懂 */
         if (res.length === 1) {
