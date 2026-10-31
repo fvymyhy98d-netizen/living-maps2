@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '91';
+var LM_ASSET_VER = '92';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2089,12 +2089,52 @@ window.LMApp = (function () {
      ⚠ 静态站限制：反馈存在提交时的那台浏览器里，管理员需在同一浏览器查看；
      跨设备收集需后续接入云数据库（WorkBuddy）。所有输出都经 esc() 转义防注入。 */
   var FB_KEY = 'lm_feedback_v1';
-  function fbList() {
+  /* ★ 修复92：本机存「全量」（含删除墓碑 del），界面只看未删除的 —— 云端同步靠墓碑
+     才能做到「A 删了，B 不会又把它同步回来」 */
+  function fbRaw() {
     try { const a = JSON.parse(localStorage.getItem(FB_KEY) || '[]'); return Array.isArray(a) ? a : []; }
     catch (e) { return []; }
   }
+  function fbList() { return fbRaw().filter(function (it) { return it && !it.del; }); }
   function fbStore(list) {
     try { localStorage.setItem(FB_KEY, JSON.stringify(list)); } catch (e) { toast('反馈保存失败：浏览器存储不可用'); }
+    fbPushSoon();   /* ★ 修复92：有 Token 的设备顺手同步到数据分支；没有 Token 什么也不做 */
+  }
+  /* ★ 修复92：反馈云端同步（只写数据分支 lm-data → 不触发 Pages 构建；无 Token 直接跳过） */
+  var _fbPushT = null, _fbBusy = false;
+  function fbPushSoon() {
+    if (!window.LMFB || !LMFB.hasCloud() || _fbBusy) return;
+    if (_fbPushT) clearTimeout(_fbPushT);
+    _fbPushT = setTimeout(function () { _fbPushT = null; fbSyncNow(false); }, 1500);
+  }
+  function fbSyncNow(showToast) {
+    if (!window.LMFB || !LMFB.hasCloud() || _fbBusy) return Promise.resolve(false);
+    _fbBusy = true;
+    return LMFB.sync(fbRaw()).then(function (r) {
+      _fbBusy = false;
+      if (r && r.ok && r.changed) {
+        try { localStorage.setItem(FB_KEY, JSON.stringify(r.list)); } catch (e) { /* noop */ }
+        if (document.getElementById('fbMount')) mountFeedback();
+      }
+      if (showToast) toast(r && r.ok ? '☁ 反馈已同步到云端' : '⚠ 反馈云端同步失败（内容已存在本机）');
+      return !!(r && r.ok);
+    }, function () { _fbBusy = false; return false; });
+  }
+  /* ★ 修复92：URL 里带着别人的留言（#fb=…）→ 收进来（按 id 去重），有 Token 就顺手上传 */
+  function fbIngestUrl() {
+    try {
+      if (!window.LMFB) return;
+      const got = LMFB.readFromUrl();
+      if (!got.length) return;
+      const raw = fbRaw();
+      const merged = LMFB.merge(raw, got);
+      if (JSON.stringify(merged) === JSON.stringify(raw)) return;
+      localStorage.setItem(FB_KEY, JSON.stringify(merged));
+      const n = got.filter(function (x) { return !x.del; }).length;
+      toast('📥 已收下 ' + n + ' 条同学留言' + (LMFB.hasCloud() ? '（正在同步到云端）' : '（先存在本机）'));
+      if (document.getElementById('fbMount')) mountFeedback();
+      fbPushSoon();
+    } catch (e) { /* noop */ }
   }
   function fbNextId(list) {
     let mx = 0;
@@ -2107,7 +2147,7 @@ window.LMApp = (function () {
   }
   /* v3 迁移：老数据补设备身份码（老数据本就存在这台浏览器里，归属本机设备） */
   function fbMigrate() {
-    const meD = LMCommunity.me(), list = fbList();
+    const meD = LMCommunity.me(), list = fbRaw();   /* ★ 修复92：用全量（含墓碑），别把已删记录「复活」 */
     let changed = false;
     list.forEach(function (it) { if (!it.dev) { it.dev = meD.code; changed = true; } });
     if (changed) fbStore(list);
@@ -2220,16 +2260,34 @@ window.LMApp = (function () {
   }
   function fbAdminHtml(fb) {
     return '<section class="fb-sec fb-admin"><h2 class="fb-title">🔐 反馈处理（管理员通道）</h2>'
+      /* ★ 修复92：云端同步状态 + 手动同步（只写数据分支，不触发构建） */
+      + '<p class="fb-hint">'
+      + (window.LMFB && LMFB.hasCloud()
+        ? '☁ 已连接云端（分支 <b>' + esc(LMFB.refName()) + '</b> · <code>' + esc(LMFB.path) + '</code>）：'
+          + '同学发来的留言会自动收进来，你改状态 / 写回复也会同步到其他设备。'
+          + ' <button type="button" class="fb-mini" id="fbSyncNow">立即同步</button>'
+        : '⚠ 当前设备没有绑定 Token：留言只存在本机。建议管理员登录后绑定一次，'
+          + '同学们的留言就能自动汇总（同学那边留言后点「📤 发给组长」把链接发给你，也能一键收进来）。')
+      + '</p>'
       + (fb.length
         ? '<div class="fb-list">' + fb.slice().reverse().map(function (it) { return fbItemHtml(it, true); }).join('') + '</div>'
           + '<div class="fb-actions"><button type="button" class="fb-mini" id="fbCopy">📋 复制全部反馈</button></div>'
-        : '<p class="fb-empty">还没有收到反馈。访客在上面提交后，会出现在这里（保存在本浏览器中）。</p>')
+        : '<p class="fb-empty">还没有收到反馈。同学在手机上留言后：① 他点「📤 发给组长」把链接发给你；'
+          + '② 你打开链接就自动收进来（有 Token 时同时上传云端）。</p>')
       + '</section>';
   }
   function mountFeedback() {
     const host = document.getElementById('fbMount');
     if (!host) return;
     if (!window.LMCommunity) { host.innerHTML = '<p class="fb-empty">社区模块未加载（js/community.js）。</p>'; return; }
+    /* ★ 修复92：打开反馈页顺手拉一次云端（只有带 Token 的设备才会真的发请求；
+       没变化就是一次 304 / 或直接不发 → 不耗额度） */
+    try {
+      if (window.LMFB && LMFB.hasCloud() && !_fbBusy && Date.now() - (state._fbPullAt || 0) > 20000) {
+        state._fbPullAt = Date.now();
+        setTimeout(function () { fbSyncNow(false); }, 60);
+      }
+    } catch (eFb) { /* noop */ }
     fbMigrate();
     const meD = LMCommunity.me();
     const fb = fbList();
@@ -2255,7 +2313,7 @@ window.LMApp = (function () {
       const url = (f.querySelector('#fbUrl').value || '').trim();
       const g = LMCommunity.gate('feedback', text);
       if (!g.ok) { toast(g.msg); return; }
-      const list = fbList();
+      const list = fbRaw();   /* ★ 修复92：必须用全量（含墓碑），否则推送会把别人的删除记录丢掉 */
       const it = {
         id: fbNextId(list), ts: Date.now(),
         type: f.querySelector('#fbType').value || '提出问题',
@@ -2270,6 +2328,23 @@ window.LMApp = (function () {
       const ok = f.querySelector('#fbOk');
       ok.hidden = false;
       ok.textContent = '✅ 已提交（' + it.id + '）。你的留言与小组回复会显示在下方「我的反馈」。';
+      /* ★ 修复92：没有 Token 的访客 —— 这条留言只在本机，给一个「发给组长」的链接
+         （点一下复制到剪贴板，发到班级群；组长一打开就自动收进云端并去重） */
+      if (window.LMFB && !LMFB.hasCloud()) {
+        const link = LMFB.shareLink([it]);
+        ok.innerHTML = '✅ 已提交（' + esc(it.id) + '）。这条留言现在只存在你这台设备上 —— 点右边的'
+          + ' <button type="button" class="fb-mini" id="fbShare">📤 发给组长</button>'
+          + ' 复制一条链接，发到课程群 / 班级群，组长打开后就会自动收进云端。';
+        const sb = ok.querySelector('#fbShare');
+        if (sb) sb.addEventListener('click', function () {
+          const done = function () { toast('链接已复制，发到群里就行'); };
+          const fail = function () { window.prompt('复制这条链接发给组长：', link); };
+          try {
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done, fail);
+            else fail();
+          } catch (eC) { fail(); }
+        });
+      }
       mountFeedback();
     } else if (f.id === 'dcForm') {
       e.preventDefault();
@@ -2299,19 +2374,29 @@ window.LMApp = (function () {
       toast('回复已发布');
     }
   });
+  /* ★ 修复92：手动「立即同步」反馈（只有带 Token 的设备才会渲染这个按钮） */
+  document.addEventListener('click', function (e) {
+    const b = (e.target && e.target.closest) ? e.target.closest('#fbSyncNow') : null;
+    if (!b) return;
+    e.preventDefault();
+    toast('☁ 正在与云端核对反馈…');
+    fbSyncNow(true);
+  });
   /* 管理员通道：改状态 / 写回复（事件委托，列表重渲染后依然有效） */
   document.addEventListener('change', function (e) {
     const t = e.target;
     if (!t || !t.closest || !t.closest('.fb-item')) return;
     const id = t.closest('.fb-item').getAttribute('data-fbid');
-    const list = fbList();
+    const list = fbRaw();   /* ★ 修复92：全量（含墓碑），避免推送时丢掉删除记录 */
     const it = list.find(function (x) { return x.id === id; });
     if (!it) return;
     if (t.hasAttribute('data-fbst')) {
-      it.status = t.value; fbStore(list); mountFeedback();
+      it.status = t.value; it.updatedAt = Date.now();   /* ★ 修复92：改状态也算一次更新，云端按 updatedAt 合并 */
+      fbStore(list); mountFeedback();
       toast(it.id + ' 状态已改为「' + t.value + '」');
     } else if (t.hasAttribute('data-fbreply')) {
-      it.reply = (t.value || '').slice(0, 200); fbStore(list);
+      it.reply = (t.value || '').slice(0, 200); it.updatedAt = Date.now();   /* ★ 修复92 */
+      fbStore(list);
     }
   });
   /* 点击统一处理：反馈删除/复制/屏蔽 + 讨论区（改昵称 / 展开回复 / 删除 / 屏蔽发言者） */
@@ -2323,7 +2408,10 @@ window.LMApp = (function () {
       const item = del.closest('.fb-item');
       const id = item ? item.getAttribute('data-fbid') : '';
       LMEditor.confirmModal('删除反馈', '确定删除 ' + id + ' 这条反馈？删除后不可恢复。', '删除', function () {
-        fbStore(fbList().filter(function (x) { return x.id !== id; }));
+        /* ★ 修复92：写「墓碑」而不是直接抹掉 —— 否则别的设备一同步又把它带回来 */
+        const raw = fbRaw();
+        raw.forEach(function (x) { if (x && x.id === id) { x.del = 1; x.updatedAt = Date.now(); } });
+        fbStore(raw);
         mountFeedback();
         toast('已删除 ' + id);
       });
@@ -2511,6 +2599,9 @@ window.LMApp = (function () {
     if (mq.addEventListener) mq.addEventListener('change', onMq); else if (mq.addListener) mq.addListener(onMq);
     window.addEventListener('resize', onMq);
     if (window.LMEditor) LMEditor.init();
+    /* ★ 修复92：启动时先把 URL 里带来的同学留言收进来（#fb=…），再进入正常渲染 */
+    fbIngestUrl();
+    window.addEventListener('hashchange', function () { fbIngestUrl(); });
   }
 
   if (document.readyState === 'loading') {

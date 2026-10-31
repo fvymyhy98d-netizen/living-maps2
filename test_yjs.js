@@ -466,7 +466,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '91';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '92';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -2209,6 +2209,86 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return /js\/ai\.js\?v=\d+/.test(html) && css.indexOf('.lm-ai-fab') > 0 && css.indexOf('.lm-ai-panel') > 0
         && readme.indexOf('修复91') > 0 && readme.indexOf('✅ AI 能力') > 0;
     })());
+})();
+
+
+/* ---------- 9.58) 修复92：反馈跨设备（只走数据分支 · 墓碑合并 · 链接接力 · 零构建） ---------- */
+console.log('【9.58】修复92：反馈跨设备同步 —— 合并/打包真跑 + 只写数据分支 + 链接接力');
+(function () {
+  const fb = require(path.join(DIR, 'js/fbsync.js'));
+  const appJs = srcOf('js/app.js');
+  const html = srcOf('index.html');
+  const readme = srcOf('README.md');
+
+  T('模块可 require：合并 / 规范化 / 打包 / 链接 / 云端接口齐全',
+    !!fb && typeof fb.merge === 'function' && typeof fb.norm === 'function'
+      && typeof fb.pack === 'function' && typeof fb.unpack === 'function'
+      && typeof fb.shareLink === 'function' && typeof fb.readFromUrl === 'function'
+      && typeof fb.sync === 'function' && typeof fb.hasCloud === 'function'
+      && fb.path === 'data/feedback.json', fb && fb.path);
+
+  const A = [{ id: 'F-01', ts: 1000, text: '甲', dev: 'DEV1' }, { id: 'F-02', ts: 2000, text: '乙', dev: 'DEV2' }];
+  const B = [{ id: 'F-01', ts: 1000, text: '甲（组长改过）', dev: 'DEV1', status: '已处理', updatedAt: 5000 },
+    { id: 'F-03', ts: 3000, text: '丙', dev: 'DEV3' }];
+  const M = fb.merge(A, B);
+  T('合并：同 id 取 updatedAt 新的（组长回复不会被旧的盖掉）· 双方独有条目都保留 · 按时间升序',
+    M.length === 3 && M[0].id === 'F-01' && M[0].text.indexOf('组长改过') >= 0 && M[0].status === '已处理'
+      && M[1].id === 'F-02' && M[2].id === 'F-03',
+    JSON.stringify(M.map(function (x) { return x.id + ':' + x.text; })));
+
+  T('合并幂等：再合一次结果不变（多设备反复同步不会越合越乱）',
+    JSON.stringify(fb.merge(M, B)) === JSON.stringify(M) && JSON.stringify(fb.merge(M, M)) === JSON.stringify(M));
+
+  const DEL = fb.merge(M, [{ id: 'F-02', updatedAt: 9000, del: 1 }]);
+  T('删除用「墓碑」：条目还在列表里但带 del 标记（否则别的设备一同步又把它带回来）',
+    DEL.length === 3 && DEL.filter(function (x) { return x.id === 'F-02'; })[0].del === 1);
+
+  const packed = fb.pack(M);
+  const back = fb.unpack(packed);
+  T('打包往返：中文不乱码 · 只含 URL 安全字符 · 解回来内容一致',
+    back.length === 3 && back[0].text === M[0].text && back[2].text === '丙'
+      && /^[A-Za-z0-9_-]+$/.test(packed),
+    'len=' + packed.length);
+
+  T('打包容错：空列表 → 空串；乱码 → 空数组（不会抛异常把页面搞崩）',
+    fb.pack([]) === '' && JSON.stringify(fb.unpack('这不是合法数据')) === '[]'
+      && JSON.stringify(fb.unpack('')) === '[]');
+
+  T('字段瘦身：只带传递必需的字段（链接才不会太长）· updatedAt 缺失时用 ts 兜底',
+    (function () {
+      const s = fb.slim({ id: 'F-09', ts: 123, text: 'x', foo: 'BAR', _ts: 9, extra: { a: 1 } });
+      const n = fb.norm({ id: 'F-10', ts: 456, text: 'y' });
+      return !('foo' in s) && !('_ts' in s) && !('extra' in s) && n.updatedAt === 456;
+    })());
+
+  T('云端只写「数据分支」：用 LMStore.dataRefOf 取 ref（不是 cfg.branch）→ 不触发 Pages 构建',
+    srcOf('js/fbsync.js').indexOf('S.dataRefOf ? S.dataRefOf(cfg)') > 0
+      && srcOf('js/fbsync.js').indexOf('branch: c.ref') > 0);
+
+  T('云端健壮性：文件还不存在(404)当空列表 · 409/422 清 sha 下次重取 · 拉取失败不影响本机',
+    (function () {
+      const s = srcOf('js/fbsync.js');
+      return s.indexOf('if (r.status === 404)') > 0 && s.indexOf('if (r.status === 409 || r.status === 422) shaCache') > 0
+        && s.indexOf('return { ok: false, list: local || [], changed: false };') > 0;
+    })());
+
+  T('接入 app.js：本机存全量但界面过滤墓碑 · 提交后给「发给组长」链接 · 打开链接自动收 · 删除写墓碑',
+    (function () {
+      return appJs.indexOf('function fbRaw()') > 0 && appJs.indexOf('it && !it.del') > 0
+        && appJs.indexOf("ok.innerHTML = '✅ 已提交（' + esc(it.id)") > 0
+        && appJs.indexOf('LMFB.shareLink([it])') > 0
+        && appJs.indexOf('function fbIngestUrl()') > 0 && appJs.indexOf('fbIngestUrl();') > 0
+        && appJs.indexOf('x.del = 1; x.updatedAt = Date.now();') > 0
+        && appJs.indexOf('it.reply = (t.value || \'\').slice(0, 200); it.updatedAt = Date.now();') > 0;
+    })());
+
+  T('节流与开关：无 Token 的设备完全不发请求（访客零额度）· 有 Token 才同步 · 20 秒内不重复拉',
+    appJs.indexOf('function fbPushSoon()') > 0 && appJs.indexOf('!LMFB.hasCloud() || _fbBusy') > 0
+      && appJs.indexOf('Date.now() - (state._fbPullAt || 0) > 20000') > 0);
+
+  T('接入完整性：index.html 引入 js/fbsync.js（带版本号）· README 记录修复92 与「只写数据分支」',
+    /js\/fbsync\.js\?v=\d+/.test(html) && readme.indexOf('修复92') > 0
+      && readme.indexOf('data/feedback.json') > 0);
 })();
 
 
