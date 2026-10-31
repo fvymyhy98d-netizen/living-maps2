@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793409154531,
+      "syncTs": 1793409302095,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -515,18 +515,20 @@ window.SITE_CONTENT = {
       "title": "",
       "description": "哈哈哈哈哈哈哈",
       "heroAlign": "",
-      "blocks": [],
+      "blocks": [
+        {
+          "type": "paragraph",
+          "size": "normal",
+          "text": "",
+          "style": {},
+          "free": {
+            "x": 14,
+            "y": 78,
+            "w": 44
+          }
+        }
+      ],
       "parent": "domain"
-    },
-    {
-      "id": "node-p2dmb",
-      "kind": "page",
-      "icon": "📄",
-      "label": "？？？",
-      "title": "",
-      "description": "覅u各位乙方违反回复",
-      "heroAlign": "",
-      "blocks": []
     }
   ],
   "discuss": [],
