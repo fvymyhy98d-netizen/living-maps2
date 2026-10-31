@@ -439,6 +439,38 @@ W.LMAI = (function () {
       pageId: a.pageId, title: a.title, score: Math.round((a.score + b.score) / 2 * 100) / 100, kind: '对比'
     };
   }
+  /* ★ 修复113：伪相关反馈（PRF）—— 第一轮排得最好的几句里，挑"站内高频信息词"补进查询再排一次。
+     只动"排哪些原句/排多前"，一个字都不生成；补进去的词必须是索引里真实存在的词。 */
+  function prfExpand(index, q, ranked) {
+    if (!index || !ranked || !ranked.length) return q;
+    if ((ranked[0].score || 0) < 1.5) return q;      /* 第一轮就没把握 → 不扩展，免得越扩越偏 */
+    const qset = {};
+    tokens(q).forEach(function (t) { qset[t] = 1; });
+    const cand = [], seen = {};
+    ranked.slice(0, 3).forEach(function (r) {
+      tokens(r.s).forEach(function (t) {
+        if (qset[t] || seen[t] || t.length < 2) return;
+        seen[t] = 1;
+        const w = index.idf[t] || 0;
+        if (w >= 1.6) cand.push({ t: t, w: w });
+      });
+    });
+    cand.sort(function (a, b) { return b.w - a.w; });
+    const extra = [], used = {};
+    cand.forEach(function (x) { if (!used[x.t] && extra.length < 4) { used[x.t] = 1; extra.push(x.t); } });
+    return extra.length ? q + ' ' + extra.join(' ') : q;
+  }
+  /* ★ 修复113：跨页近似重复只留一条（同一句话写了两遍，不该刷屏占掉三个名额） */
+  function dedupeSent(ranked) {
+    const out = [], sig = {};
+    (ranked || []).forEach(function (x) {
+      const s = tokens(x.s).sort().join('');
+      if (sig[s]) return;
+      sig[s] = 1;
+      out.push(x);
+    });
+    return out;
+  }
   /* ★ 本地问答主入口：类型判断 → 对比/表格 → 按页聚合成"有结构的回答" */
   function askSmart(index, q, k) {
     const want = k || 3;
@@ -466,6 +498,20 @@ W.LMAI = (function () {
       });
     });
     let ranked = rankSent(index, q, 30).filter(function (x) { return x.cover >= 0.3; });
+    /* ★ 修复113：PRF 二次打分 —— 只用「已经命中的原句」里的词加重权重，候选集一个字都不变 */
+    const q2 = prfExpand(index, q, ranked);
+    if (q2 !== q && ranked.length) {
+      const bonus = {};
+      rankSent(index, q2, 80).forEach(function (x) { bonus[x.pageId + '|' + x.s] = x.score; });
+      ranked = ranked.map(function (x) {
+        const b = bonus[x.pageId + '|' + x.s] || 0;
+        return {
+          s: x.s, i: x.i, pageId: x.pageId, title: x.title, cover: x.cover,
+          score: Math.round((x.score + 0.35 * b) * 100) / 100
+        };
+      }).sort(function (a, b) { return b.score - a.score; });
+    }
+    ranked = dedupeSent(ranked);
     /* ★ 修复112：语言模型只做「重排」（±15% 微调），出字仍然 100% 是原文子串 */
     if (W.LMLM && W.LMLM.ready && W.LMLM.ready()) ranked = W.LMLM.rerank(ranked);
     const byPage = {};
@@ -907,6 +953,7 @@ W.LMAI = (function () {
     buildIndex: buildIndex, related: related, keywords: keywords, summarize: summarize, ask: ask,
     askSmart: askSmart, qKind: qKind, qPair: qPair, rankSent: rankSent, tableHits: tableHits,
     sentIndex: sentIndex, warm: warm, listSteps: listSteps, expandQuery: expandQuery,
+    prfExpand: prfExpand, dedupeSent: dedupeSent,
     aiMode: aiMode, setAiMode: setAiMode,
     pageDigest: pageDigest, promptFor: promptFor,
     chatOf: chatOf, chatPush: chatPush, chatClear: chatClear,

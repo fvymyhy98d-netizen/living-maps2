@@ -15,7 +15,19 @@ const path = require('path');
 const DIR = path.join(__dirname, '..');
 const ai = require(path.join(DIR, 'js/ai.js'));
 
-const MAX_BYTES = 380 * 1024;   /* 产物上限：超过就继续裁剪（页面只在打开面板时才懒加载） */
+const MAX_BYTES = 900 * 1024;   /* ★ 修复113：上限放大（模型"大一点"）；页面仍只在打开面板时懒加载 */
+
+/* ★ 修复113：--check —— 只比对"语料变没变"，不重训。改了内容后用它可以一眼看出 lm.json 是否过期 */
+function checkOnly() {
+  const text = corpus();
+  const file = path.join(DIR, 'data/lm.json');
+  if (!fs.existsSync(file)) { console.log('✗ 还没有 data/lm.json —— 先跑 node tools/train_lm.js'); return 1; }
+  const j = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (j.chars === text.length) { console.log('✓ 已同步（语料 ' + text.length + ' 字 · 模型 ' + j.order + '-gram）'); return 0; }
+  console.log('✗ 语料变了：模型记的是 ' + j.chars + ' 字，现在 ' + text.length + ' 字 → 建议重训 node tools/train_lm.js');
+  return 2;
+}
+
 
 function corpus() {
   const file = path.join(DIR, 'data/content.js');
@@ -68,7 +80,7 @@ function bytesOf(order, grams, chars) {
 }
 
 function main() {
-  const order = Math.max(1, Math.min(5, parseInt(process.argv[2], 10) || 3));
+  const order = Math.max(1, Math.min(5, parseInt(process.argv[2], 10) || 4));
   const text = corpus();
   if (text.length < 500) throw new Error('语料太小（' + text.length + ' 字），先多写几页');
   const raw = count(text, order);
@@ -96,3 +108,9 @@ function main() {
 }
 
 main();
+
+module.exports = { corpus: corpus, checkOnly: checkOnly };
+if (require.main === module) {
+  if (process.argv.indexOf('--check') > 0) process.exitCode = checkOnly();
+  else main();
+}

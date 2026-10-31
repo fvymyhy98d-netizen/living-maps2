@@ -2391,6 +2391,58 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
     })());
 
 
+  T('小模型7：lm.json 与语料同步（往站里加内容后不重训，这条就会红 —— 提醒你跑一次）',
+    (function () {
+      const chars = pages.map(function (p) { return ai.pageText(p); }).join('\n').length;
+      return lmPayload.chars === chars;
+    })(), 'lm=' + lmPayload.chars + ' 语料=' + pages.map(function (p) { return ai.pageText(p); }).join('\n').length);
+
+  T('检索升级7：PRF 扩展只追加「索引里真有」的词（≤4 个，绝不造词）',
+    (function () {
+      const q0 = 'RAG 是什么';
+      const q2 = ai.prfExpand(ix, q0, ai.rankSent(ix, q0, 10));
+      if (q2 === q0) return true;
+      const added = q2.slice(q0.length).trim().split(/\s+/).filter(Boolean);
+      return added.length > 0 && added.length <= 4
+        && added.every(function (t) { return Object.prototype.hasOwnProperty.call(ix.idf, t); });
+    })(), JSON.stringify(ai.prfExpand(ix, 'RAG 是什么', ai.rankSent(ix, 'RAG 是什么', 10))));
+
+  T('检索升级8：跨页同一句话只出现一次（加内容不会让同一事实刷屏）',
+    (function () {
+      const dup = ai.buildIndex([
+        { id: 'd1', label: 'A页', blocks: [{ type: 'text', text: '向量检索靠相似度算最近邻，速度快。' }] },
+        { id: 'd2', label: 'B页', blocks: [{ type: 'text', text: '向量检索靠相似度算最近邻，速度快。' }] }
+      ]);
+      const lines = [];
+      ai.askSmart(dup, '向量检索 相似度', 3).forEach(function (r) {
+        String(r.answer).split('\n').forEach(function (l) { const m = l.match(/^· (.*)$/); if (m) lines.push(m[1]); });
+      });
+      return lines.length >= 1 && new Set(lines).size === lines.length;
+    })(), '重复句 ' + ai.dedupeSent([
+      { s: '向量检索靠相似度算最近邻', pageId: 'a' },
+      { s: '向量检索靠相似度算最近邻', pageId: 'b' }
+    ]).length);
+
+  T('检索升级9：PRF 只重排、不换候选 —— 每条要点仍来自那次检索的原句集合',
+    (function () {
+      const q0 = 'RAG 是什么';
+      const pool = {};
+      ai.rankSent(ix, q0, 80).forEach(function (x) { pool[x.pageId + '|' + x.s] = 1; });
+      const q2 = ai.prfExpand(ix, q0, ai.rankSent(ix, q0, 30));
+      if (q2 !== q0) ai.rankSent(ix, q2, 80).forEach(function (x) { pool[x.pageId + '|' + x.s] = 1; });
+      let outside = 0, n = 0;
+      ai.askSmart(ix, q0, 3).forEach(function (r) {
+        String(r.answer).split('\n').forEach(function (l) {
+          const m = l.match(/^· (.*)$/);
+          if (!m) return;
+          n++;
+          if (!pool[r.pageId + '|' + m[1]]) outside++;
+        });
+      });
+      return n === 0 || outside === 0;
+    })());
+
+
   T('问答升级7：对话框顶部有模式切换键 · 默认「本站速答」· 选择存 localStorage · 样式已加',
     (function () {
       const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
@@ -2923,10 +2975,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=112 · LM_ASSET_VER=112',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=113 · LM_ASSET_VER=113',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0
-      && (html.match(/\?v=111/g) || []).length === 0 && /\?v=112/.test(html)
-      && /LM_ASSET_VER = '112'/.test(appJs));
+      && (html.match(/\?v=112/g) || []).length === 0 && /\?v=113/.test(html)
+      && /LM_ASSET_VER = '113'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3279,10 +3331,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 112（?v=112 共 21 处 · v111 无残留 · LM_ASSET_VER=112）',
-    (html.match(/\?v=112/g) || []).length === 21 && (html.match(/\?v=111/g) || []).length === 0
-      && /LM_ASSET_VER = '112'/.test(appJs),
-    'v112=' + (html.match(/\?v=112/g) || []).length + ' v111=' + (html.match(/\?v=111/g) || []).length);
+  T('版本已升到 113（?v=113 共 21 处 · v112 无残留 · LM_ASSET_VER=113）',
+    (html.match(/\?v=113/g) || []).length === 21 && (html.match(/\?v=112/g) || []).length === 0
+      && /LM_ASSET_VER = '113'/.test(appJs),
+    'v113=' + (html.match(/\?v=113/g) || []).length + ' v112=' + (html.match(/\?v=112/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
