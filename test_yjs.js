@@ -2470,6 +2470,55 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return n >= 3 && bad === 0;
     })());
 
+  T('出处4：★ cite 能真的存进对话再读出来（chatPush/chatOf 往返，且每条 ≤200 字）',
+    (function () {
+      const stub = {
+        m: {},
+        getItem: function (k) { return this.m[k] == null ? null : this.m[k]; },
+        setItem: function (k, v) { this.m[k] = String(v); }
+      };
+      const prev = global.localStorage;
+      global.localStorage = stub;
+      let ok = false;
+      try {
+        ai.chatPush('tst', {
+          r: 'local', t: '答案', src: { pageId: 'p1', title: '页1', score: 3 },
+          cite: [
+            { pageId: 'p1', title: '页1', text: '原文一句' },
+            { pageId: 'p2', title: '页2', text: new Array(501).join('x') }
+          ]
+        });
+        const m = ai.chatOf('tst');
+        ok = m.length === 1 && Array.isArray(m[0].cite) && m[0].cite.length === 2
+          && m[0].cite[0].text === '原文一句' && m[0].cite[1].text.length === 200;
+      } catch (e) { ok = false; }
+      if (prev === undefined) delete global.localStorage; else global.localStorage = prev;
+      return ok;
+    })());
+
+  T('训练工具：★ --check 只读不写（之前遗留的 main() 会让「只检查」偷偷重训并改文件）',
+    (function () {
+      const cp = require('child_process');
+      const crypto = require('crypto');
+      const md5 = function () { return crypto.createHash('md5').update(fs2.readFileSync(lmPath)).digest('hex'); };
+      const before = md5(), mt = fs2.statSync(lmPath).mtimeMs;
+      try {
+        cp.execFileSync(process.execPath, [path.join(DIR, 'tools/train_lm.js'), '--check'],
+          { cwd: DIR, stdio: 'pipe', timeout: 30000 });
+      } catch (e) { return false; }
+      return md5() === before && fs2.statSync(lmPath).mtimeMs === mt;
+    })());
+
+  T('训练工具：node tools/train_lm.js --check 端到端能跑通（退出码 0 = 语料与模型同步）',
+    (function () {
+      try {
+        require('child_process').execFileSync(process.execPath,
+          [path.join(DIR, 'tools/train_lm.js'), '--check'],
+          { cwd: DIR, stdio: 'pipe', timeout: 30000 });
+        return true;
+      } catch (e) { return false; }
+    })());
+
   T('出处3：对话里存 cite（限 4 条 / 每条 200 字）· 面板渲染出可折叠的「📄 原文出处」· 样式已加',
     (function () {
       const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
@@ -3012,10 +3061,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=114 · LM_ASSET_VER=114',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=115 · LM_ASSET_VER=115',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=113/g) || []).length === 0 && /\?v=114/.test(html)
-      && /LM_ASSET_VER = '114'/.test(appJs));
+      && (html.match(/\?v=114/g) || []).length === 0 && /\?v=115/.test(html)
+      && /LM_ASSET_VER = '115'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3368,10 +3417,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 114（?v=114 共 21 处 · v113 无残留 · LM_ASSET_VER=114）',
-    (html.match(/\?v=114/g) || []).length === 21 && (html.match(/\?v=113/g) || []).length === 0
-      && /LM_ASSET_VER = '114'/.test(appJs),
-    'v114=' + (html.match(/\?v=114/g) || []).length + ' v113=' + (html.match(/\?v=113/g) || []).length);
+  T('版本已升到 115（?v=115 共 21 处 · v114 无残留 · LM_ASSET_VER=115）',
+    (html.match(/\?v=115/g) || []).length === 21 && (html.match(/\?v=114/g) || []).length === 0
+      && /LM_ASSET_VER = '115'/.test(appJs),
+    'v115=' + (html.match(/\?v=115/g) || []).length + ' v114=' + (html.match(/\?v=114/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

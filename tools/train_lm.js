@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const DIR = path.join(__dirname, '..');
 const ai = require(path.join(DIR, 'js/ai.js'));
+const LMLM = require(path.join(DIR, 'js/lm.js'));   /* ★ 修复115：训练完立刻用运行时打分，给出可量化的困惑度 */
 
 const MAX_BYTES = 900 * 1024;   /* ★ 修复113：上限放大（模型"大一点"）；页面仍只在打开面板时懒加载 */
 
@@ -56,7 +57,10 @@ function count(text, order) {
   return ctx;
 }
 
-/* 裁剪：丢掉出现太少的上下文/字符，每个上下文最多留 cap 个后继 */
+/* 裁剪：丢掉出现太少的上下文/字符，每个上下文最多留 cap 个后继
+   ★ 修复115：**一元（k=1）不裁剪** —— 以前连单字后继也被砍到 8 个，
+   结果大量字根本查不到概率、全部落到 FLOOR 惩罚（困惑度 5780，毫无意义）。
+   一元表很小（每个字一行），全留既省不了多少体积，又能保证"任何字都有概率"。 */
 function prune(ctx, order, minC, cap) {
   const out = {};
   for (let k = 1; k <= order; k++) {
@@ -64,11 +68,13 @@ function prune(ctx, order, minC, cap) {
     out[k] = {};
     Object.keys(src).forEach(function (key) {
       const row = src[key];
-      const chars = Object.keys(row).filter(function (c) { return row[c] >= minC; });
+      const chars = (k === 1)
+        ? Object.keys(row)
+        : Object.keys(row).filter(function (c) { return row[c] >= minC; });
       if (!chars.length) return;
       chars.sort(function (a, b) { return row[b] - row[a]; });
       const o = {};
-      chars.slice(0, cap).forEach(function (c) { o[c] = row[c]; });
+      chars.slice(0, k === 1 ? chars.length : cap).forEach(function (c) { o[c] = row[c]; });
       out[k][key] = o;
     });
   }
@@ -80,6 +86,7 @@ function bytesOf(order, grams, chars) {
 }
 
 function main() {
+  const t0 = Date.now();
   const order = Math.max(1, Math.min(5, parseInt(process.argv[2], 10) || 4));
   const text = corpus();
   if (text.length < 500) throw new Error('语料太小（' + text.length + ' 字），先多写几页');
@@ -105,12 +112,27 @@ function main() {
   fs.writeFileSync(outFile, JSON.stringify({ order: order, chars: text.length, grams: grams }), 'utf8');
   console.log('语料 ' + text.length + ' 字 · ' + order + '-gram · 上下文 ' + contexts + ' 个 · 条目 ' + entries);
   console.log('裁剪参数 minCount=' + minC + ' cap=' + cap + ' · 产物 ' + (bytes / 1024).toFixed(1) + ' KB → data/lm.json');
+  /* ★ 修复115：给出可量化的质量指标（困惑度越低越"像站里的话"）+ 耗时，方便你判断这次改动值不值 */
+  LMLM.fromJSON({ order: order, chars: text.length, grams: grams });
+  const ppl = function (s) { return s.length >= 2 ? Math.exp(-LMLM.logp(s)) : 0; };
+  const holdN = Math.min(400, Math.floor(text.length * 0.15));
+  const hold = holdN >= 40 ? text.slice(-holdN) : '';
+  console.log('困惑度：全量 ' + ppl(text).toFixed(2)
+    + (hold ? ' · 留出尾段 ' + ppl(hold).toFixed(2) + '（该段也参与了训练，数字偏乐观）' : '')
+    + ' · 耗时 ' + (Date.now() - t0) + ' ms');
 }
 
-main();
-
-module.exports = { corpus: corpus, checkOnly: checkOnly };
+module.exports = { corpus: corpus, checkOnly: checkOnly, main: main };
 if (require.main === module) {
-  if (process.argv.indexOf('--check') > 0) process.exitCode = checkOnly();
-  else main();
+  const args = process.argv.slice(2);
+  if (args.indexOf('--check') >= 0) {
+    process.exitCode = checkOnly();
+  } else if (args.indexOf('--auto') >= 0) {
+    /* ★ 修复115：--auto —— 只有"没产物 / 语料变了"才重训 */
+    const r = checkOnly();
+    if (r === 0) console.log('→ 已同步，跳过训练。');
+    else main();
+  } else {
+    main();
+  }
 }

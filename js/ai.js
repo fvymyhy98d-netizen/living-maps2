@@ -555,7 +555,12 @@ W.LMAI = (function () {
   function ensureLM() {
     if (lmTried) return;
     lmTried = true;
-    try { if (W.LMLM && typeof W.LMLM.load === 'function') W.LMLM.load('data/lm.json'); } catch (e) { /* 静默降级 */ }
+    try {
+      if (!W.LMLM || typeof W.LMLM.load !== 'function') return;
+      const p = W.LMLM.load('data/lm.json');
+      /* ★ 修复115：加载失败（断网/文件 404）允许下次再试，以前一次失败就永久放弃 */
+      if (p && typeof p.then === 'function') p.then(function (ok) { if (!ok) lmTried = false; }, function () { lmTried = false; });
+    } catch (e) { lmTried = false; }
   }
   /* ---------- ⑨ 界面：右下角「✨ 智能提炼」浮标 + 面板 ---------- */
   let panel = null, fab = null, idx = null, idxSrc = null;
@@ -606,7 +611,20 @@ W.LMAI = (function () {
     if (!id || !msg) return;
     const all = chatAll();
     const arr = Array.isArray(all[id]) ? all[id] : [];
-    arr.push({ r: msg.r || 'me', t: String(msg.t || '').slice(0, 4000), ts: Date.now(), src: msg.src || null });
+    const rec = { r: msg.r || 'me', t: String(msg.t || '').slice(0, 4000), ts: Date.now(), src: msg.src || null };
+    /* ★ 修复115：以前这里只存 {r,t,ts,src}，把 cite 悄悄丢了 → 「📄 原文出处」存不进对话、重绘就消失。
+       现在把出处一起存（≤4 条 / 每条 ≤200 字），并做长度裁剪防膨胀。 */
+    if (Array.isArray(msg.cite) && msg.cite.length) {
+      rec.cite = msg.cite.slice(0, 4).map(function (c) {
+        return {
+          pageId: String(c.pageId || ''),
+          title: String(c.title || '').slice(0, 60),
+          text: String(c.text || '').slice(0, 200)
+        };
+      }).filter(function (c) { return c.pageId && c.text; });
+      if (!rec.cite.length) delete rec.cite;
+    }
+    arr.push(rec);
     all[id] = arr.slice(-12);                       /* 每页最多留 12 条，防 localStorage 膨胀 */
     try { localStorage.setItem(CHAT_KEY, JSON.stringify(all)); } catch (e) { /* 隐私模式：只在本页内存生效 */ }
   }
