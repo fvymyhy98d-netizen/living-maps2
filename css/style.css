@@ -1060,3 +1060,38 @@ body.mobile-view .hist-note{font-size:11.5px;-webkit-line-clamp:1}
 .icon-more:hover{background:rgba(0,113,227,.20)}
 /* 手机上 8 列会顶到卡片边，收成 6 列（面板本身已可上下滚） */
 body.mobile-view .icon-pick{grid-template-columns:repeat(6,38px)}
+/* ★ 修复80：左上角「‹ 返回」—— 苹果式胶囊，按真实浏览历史退回上一屏；
+   没有历史（分享链接直接进子页面）时退回它的上级页面；无处可退时整个按钮隐藏 */
+.nav-back{display:flex;align-items:center;gap:2px;flex:none;height:32px;padding:0 12px 0 7px;
+  border:1px solid rgba(0,113,227,.16);border-radius:999px;background:rgba(0,113,227,.08);
+  color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
+  transition:background .18s ease,transform .18s cubic-bezier(.16,1,.3,1)}
+.nav-back:hover{background:rgba(0,113,227,.16)}
+.nav-back:active{transform:scale(.95)}
+.nav-back[hidden]{display:none}
+.nav-back-ico{font-size:20px;line-height:1;margin-top:-3px}
+.nav-back-t{max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+body.mobile-view .nav-back{height:30px;padding:0 10px 0 5px;font-size:12.5px}
+body.mobile-view .nav-back-ico{font-size:18px}
+body.mobile-view .nav-back-t{max-width:76px}
+
+/* ★ 修复80：跨母项的「关联条目」块 —— 复用条目块的卡片/列表视觉，只多一个「来自「某母项」」小标签 */
+.rel-from{display:inline-block;font-size:11px;line-height:1.5;color:var(--text2);
+  background:rgba(0,0,0,.05);border-radius:980px;padding:2px 8px;white-space:nowrap;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.rel-card .entry-go{margin-top:auto}
+/* 块设置弹窗里的「挑条目」清单：按层级缩进，勾选即可，跨母项随便连 */
+.rel-pick{max-height:44vh;overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);
+  border-radius:12px;padding:6px;margin-top:6px;background:rgba(0,0,0,.02)}
+.rel-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;cursor:pointer;transition:background .15s ease}
+.rel-opt:hover{background:rgba(0,113,227,.08)}
+.rel-opt input{width:16px;height:16px;flex:none;accent-color:var(--blue);cursor:pointer}
+.rel-opt[data-d="1"]{padding-left:26px}
+.rel-opt[data-d="2"]{padding-left:44px}
+.rel-opt[data-d="3"],.rel-opt[data-d="4"]{padding-left:62px}
+.rel-ico{font-size:15px;line-height:1;flex:none}
+.rel-t{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rel-from2{margin-left:auto;font-size:11px;color:var(--text2);white-space:nowrap;flex:none}
+body.mobile-view .rel-from2{display:none}
+/* 手机端单列列表：行内放不下「来自「母项」」，藏掉避免挤压标题（卡片版式不受影响） */
+body.mobile-view .rel-row .rel-from{display:none}

@@ -144,6 +144,7 @@ window.LMEditor = (function () {
     md: { name: 'Markdown', icon: '📝' },
     sources: { name: '来源引用', icon: '🔗' },
     entries: { name: '嵌套条目', icon: '▤' },
+    related: { name: '关联条目', icon: '⇄' }, /* ★ 修复80：跨母项的网状关联 */
     hr: { name: '分隔线', icon: '─' }
   };
 
@@ -159,6 +160,7 @@ window.LMEditor = (function () {
       case 'sources': return { type: type, title: '本页来源', items: [] };
       case 'md': return { type: type, text: '## 这里是小标题\n\n正文支持 **加粗**、*斜体*、__下划线__、~~删除线~~、==高亮==\n\n- 列表一\n- 列表二\n\n| 列A | 列B |\n|---|---|\n| 内容1 | 内容2 |' };
       case 'entries': return { type: type, title: '相关条目', mode: 'card', cols: 3, note: '' };
+      case 'related': return { type: type, title: '关联条目', mode: 'card', cols: 3, note: '', links: [] };
       case 'hr': return { type: type };
     }
     return { type: type };
@@ -166,6 +168,24 @@ window.LMEditor = (function () {
   function lines(v) { return String(v || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean); }
   function pairs(v) { return lines(v).map(function (l) { return l.split('|').map(function (s) { return s.trim(); }); }); }
 
+  /* ★ 修复80：关联条目块里的「挑条目」清单 —— 用条目树的 DFS 顺序列出全站页面，
+     每行标出它属于哪个母项（跨母项互联时一眼看清来源），勾选即关联，顺序 = 树里的顺序 */
+  function relatedPickerHTML(sel) {
+    const chosen = Array.isArray(sel) ? sel : [];
+    const pages = (LMApp.state.content && LMApp.state.content.pages) || [];
+    const rows = treeRows(pages);
+    if (!rows.length) return '<p class="modal-note">站里还没有条目可关联：先去「🗂 条目树」加几个。</p>';
+    return '<div class="rel-pick">' + rows.map(function (r) {
+      const p = r.page;
+      const on = chosen.indexOf(p.id) >= 0;
+      const from = r.parent ? '来自「' + LMApp.esc(LMApp.pageTitle(LMApp.pageById(r.parent) || {})) + '」' : '顶层页面';
+      return '<label class="rel-opt" data-d="' + Math.min(r.depth, 4) + '">'
+        + '<input type="checkbox" name="rel" value="' + LMApp.esc(p.id) + '"' + (on ? ' checked' : '') + '>'
+        + '<span class="rel-ico">' + LMApp.esc(p.icon || '📄') + '</span>'
+        + '<span class="rel-t">' + LMApp.esc(LMApp.pageTitle(p)) + '</span>'
+        + '<span class="rel-from2">' + LMApp.esc(from) + '</span></label>';
+    }).join('') + '</div>';
+  }
   /* ---------- 编辑表单 ---------- */
   function formHTML(type, b) {
     switch (type) {
@@ -204,6 +224,17 @@ window.LMEditor = (function () {
       case 'md': return ''
         + field('Markdown 源码', F.area('text', b.text, '# 标题、- 列表、| 表格 |、**加粗**、[链接](网址)', 12),
           '页面上也可以直接在块里编辑：输入时实时预览，点「✓ 转换保存」生效。');
+      case 'related': return ''
+        + field('栏目标题（可留空）', F.text('title', b.title, '例如：相关条目、也可以叫「延伸阅读」'))
+        /* 清单里每行本身是 <label>（点整行即可勾选），所以这里不能再套 field() 的 <label> ——
+           嵌套 label 会让「点清单空白处」误勾第一项，改用等价的 <div class="field"> */
+        + '<div class="field"><span class="field-label">勾选要关联的条目（可跨母项）</span>'
+        + relatedPickerHTML(b.links)
+        + '<span class="field-hint">清单按条目树的层级排好；勾上任意页面都行 —— 不同母项下的子项也能互相关联，这就是网状入口</span></div>'
+        + field('版式', F.select('mode', [['card', '卡片网格'], ['list', '单列列表']], b.mode || 'card'))
+        + field('每行几个（卡片版式）', F.select('cols', [[2, '2 个'], [3, '3 个'], [4, '4 个']], b.cols || 3))
+        + field('说明文字（可留空）', F.text('note', b.note, '显示在标题下面的一行小字'))
+        + '<p class="modal-note">这里的卡片和「▤ 条目」不同：条目块固定列出<b>本页的子条目</b>，而关联块是<b>你自己挑</b>——所以「领域地图 › 提示工程」可以直连「认知地图 › Transformer」，访客点过去后左上角「‹ 返回」能退回刚才那一屏。</p>';
       case 'entries': return ''
         + field('栏目标题（可留空）', F.text('title', b.title, '例如：相关条目、下级关键词'))
         + field('版式', F.select('mode', [['card', '卡片网格'], ['list', '单列列表']], b.mode || 'card'))
@@ -252,6 +283,13 @@ window.LMEditor = (function () {
         b.items = pairs(form.querySelector('[name=items]').value).map(function (p) { return { label: p[0] || '来源', url: p[1] || '#' }; });
         break;
       case 'md': b.text = val('text'); break;
+      case 'related':
+        b.title = val('title');
+        b.mode = val('mode') === 'list' ? 'list' : 'card';
+        b.cols = Math.min(Math.max(+val('cols') || 3, 1), 4);
+        b.note = val('note');
+        b.links = Array.prototype.map.call(form.querySelectorAll('input[name="rel"]:checked'), function (x) { return x.value; });
+        break;
       case 'entries':
         b.title = val('title');
         b.mode = val('mode') === 'list' ? 'list' : 'card';
@@ -372,6 +410,13 @@ window.LMEditor = (function () {
     /* ★ 修复75：条目块里的「＋ 新建条目」磁贴 —— 等于在条目树里给本页加一个分支 */
     const entryAdd = e.target.closest ? e.target.closest('[data-entryadd]') : null;
     if (entryAdd) { openPageForm(null, entryAdd.getAttribute('data-entryadd')); return; }
+    /* ★ 修复80：关联块里的「＋ 挑选关联条目」磁贴 —— 直接打开这一块的设置（勾选清单） */
+    const relPick = e.target.closest ? e.target.closest('[data-relpick]') : null;
+    if (relPick) {
+      const pr = (relPick.getAttribute('data-relpick') || '').split(':');
+      if (pr[0]) openBlockForm(pr[0], +pr[1]);
+      return;
+    }
     /* 块类型切换条（选中标题/正文块时显示在块下方） */
     const tt = e.target.closest ? e.target.closest('.blk-typebar [data-tt]') : null;
     if (tt) {
@@ -1796,6 +1841,8 @@ window.LMEditor = (function () {
       + '<button class="tb-btn" data-tb="boxins" tabindex="-1" title="插入文本框（可拖动缩放）">▢ 文本框</button>'
       /* ★ 修复75：第 3 层嵌套条目的入口 —— 插入一个「条目块」，卡片内容自动跟本页子条目走 */
       + '<button class="tb-btn" data-tb="entriesins" tabindex="-1" title="插入嵌套条目块：自动列出本页的子条目（在「🛠️ → 🗂 条目树」里增删分支）">▤ 条目</button>'
+      /* ★ 修复80：跨母项的「关联条目」块 —— 把别的母项下的条目也连到这一页，点卡片就跳 */
+      + '<button class="tb-btn" data-tb="relins" tabindex="-1" title="插入关联条目块：勾选任意母项下的条目（可跨母项互联，形成网状）；访客点卡片就跳过去，左上角「‹ 返回」退回上一屏">⇄ 关联</button>'
       + '<button class="tb-btn" data-tb="chartins" tabindex="-1" title="插入图表">📊 图表</button>'
       + '<button class="tb-btn" data-tb="filesins" tabindex="-1" title="插入附件列表">📎 附件</button>'
       + '<button class="tb-btn" data-tb="srcins" tabindex="-1" title="插入来源列表块（页尾参考文献区域）">📑 引用列表</button>'
@@ -4696,6 +4743,13 @@ window.LMEditor = (function () {
         closePop();
         const atE = LMApp.insertBlock(defaultsFor('entries'), insertAnchor());
         if (atE >= 0) { LMApp.toast('已插入条目块：去「🗂 条目树」给本页加分支，卡片会自动出现'); openBlockForm(LMApp.state.pageId, atE); }
+        break;
+      }
+      case 'relins': {
+        /* ★ 修复80：插入关联条目块 → 直接打开设置（在这里勾选跨母项的条目） */
+        closePop();
+        const atR = LMApp.insertBlock(defaultsFor('related'), insertAnchor());
+        if (atR >= 0) openBlockForm(LMApp.state.pageId, atR);
         break;
       }
       case 'chartins': case 'filesins': case 'srcins': {

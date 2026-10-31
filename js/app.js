@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '79';
+var LM_ASSET_VER = '80';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -163,6 +163,66 @@ window.LMApp = (function () {
     return out;
   }
   function pageTitle(p) { return (p && (p.label || p.title)) || (p && p.id) || ""; }
+  /* ---------- ★ 修复80：访客也能「‹ 返回」（苹果式左上角返回键） ----------
+     全站是 hash 路由（#/p/<id>），翻一页 = 一次 hashchange —— 这里记一条「浏览栈」：
+     · 正常点链接 / 卡片 → 入栈；点返回键或浏览器后退 → 截断到今天这一屏（不会重复入栈）
+     · 返回目标 = 栈里的上一屏；没有历史（分享链接直接进子页面）时退回它的上级页面
+     · 只在本次打开期间有效，刷新即重置（不同设备 / 访客各记各的，互不影响） */
+  const navHist = [];
+  function navTrack(id) {
+    if (!id) return;
+    if (navHist[navHist.length - 1] !== id) {
+      let at = -1;
+      for (let i = navHist.length - 2; i >= 0; i--) { if (navHist[i] === id) { at = i; break; } }
+      if (at >= 0) navHist.length = at + 1; /* 回到访问过的页面（返回 / 浏览器后退）→ 截断，不新起一条 */
+      else { navHist.push(id); if (navHist.length > 60) navHist.shift(); }
+    }
+    refreshBackBtn();
+  }
+  /* 返回目标：{id, label}；无处可返 → null */
+  function backTarget() {
+    if (navHist.length > 1) {
+      const prev = navHist[navHist.length - 2];
+      const p = pageById(prev);
+      if (prev !== state.pageId && p) return { id: prev, label: pageTitle(p) };
+    }
+    const cur = pageById(state.pageId);
+    if (cur && cur.parent) { /* 直接打开的子页面：退回它的上级 */
+      const par = pageById(cur.parent);
+      if (par) return { id: par.id, label: pageTitle(par) };
+    }
+    return null;
+  }
+  /* 返回键的内容 = 上一屏的标题（iOS 风格：‹ 认知地图）；无可返回时隐藏 */
+  function refreshBackBtn() {
+    const btn = document.getElementById('navBack');
+    if (!btn) return;
+    const t = backTarget();
+    if (!t) { btn.hidden = true; return; }
+    btn.hidden = false;
+    const lab = document.getElementById('navBackT');
+    if (lab) lab.textContent = t.label || '返回';
+    btn.setAttribute('title', '返回「' + (t.label || '上一页') + '」（浏览器后退同效）');
+  }
+  function navBack() {
+    const t = backTarget();
+    if (!t) return false;
+    if (currentId() === t.id) { /* 极端情况：hash 已经是目标页 → 直接弹栈重绘 */
+      navHist.length = Math.max(1, navHist.length - 1);
+      render();
+      return true;
+    }
+    location.hash = '#/p/' + t.id; /* hashchange → render → navTrack 自动截断栈 */
+    return true;
+  }
+
+  document.addEventListener('click', function (e) {
+    const t = e.target && e.target.closest ? e.target.closest('#navBack') : null;
+    if (!t) return;
+    e.preventDefault();
+    navBack();
+  });
+
 
   /* ---------- 导航与页脚 ---------- */
   function renderNav() {
@@ -351,6 +411,51 @@ window.LMApp = (function () {
             + '<button type="button" class="btn btn-mini" data-md="save">✓ 转换保存</button></div></div>'
           : '')
           + '<div class="md-body' + (s2.grad ? ' grad grad-' + esc(s2.grad) : '') + '"' + textExtra(b) + '>' + body2 + '</div>';
+        break;
+      }
+      case 'related': {
+        /* ★ 修复80：跨母项的「关联条目」—— links 存页面 id，可以勾选**任意母项下**的条目，
+           于是「A 母项的子项」能直连「B 母项的子项」，多连几条就是网状；
+           点卡片跳过去，左上角「‹ 返回」按浏览历史退回刚才那一屏 */
+        const rIds = Array.isArray(b.links) ? b.links : [];
+        const rCols = Math.min(Math.max(+b.cols || 3, 1), 4);
+        const rList = b.mode === 'list';
+        let rCards = rIds.map(function (id2) {
+          const k = pageById(id2);
+          if (!k || k.id === pageId) return ''; /* 自己连自己没意义 */
+          const par = k.parent ? pageById(k.parent) : null;
+          const fromTag = par
+            ? '<span class="rel-from" title="这条属于另一个母项">来自「' + esc(pageTitle(par)) + '」</span>'
+            : '';
+          if (rList) {
+            return '<a class="entry-row rel-row" href="#/p/' + esc(k.id) + '">'
+              + '<span class="entry-ico">' + esc(k.icon || '📄') + '</span>'
+              + '<span class="entry-t">' + md(pageTitle(k)) + '</span>'
+              + (k.description ? '<span class="entry-d">' + esc(k.description) + '</span>' : '')
+              + fromTag + '<span class="entry-go">→</span></a>';
+          }
+          return '<a class="entry-card rel-card" href="#/p/' + esc(k.id) + '">'
+            + '<span class="entry-ico">' + esc(k.icon || '📄') + '</span>'
+            + '<span class="entry-t">' + md(pageTitle(k)) + '</span>'
+            + (k.description ? '<span class="entry-d">' + esc(k.description) + '</span>' : '')
+            + fromTag + '<span class="entry-go">进入 →</span></a>';
+        }).filter(Boolean).join('');
+        if (!rCards) {
+          rCards = state.admin
+            ? '<div class="entry-empty">这一栏还没有关联条目 —— 点下面「＋ 挑选关联条目」，勾选任意母项下的条目（跨母项也能连）</div>'
+            : '<div class="entry-empty">暂无关联条目</div>';
+        }
+        const rAdd = state.admin
+          ? '<button type="button" class="entry-card entry-add" data-relpick="' + esc(pageId) + ':' + i
+            + '" title="打开关联清单：勾选任意母项下的条目，保存后访客点卡片就能跳过去">＋ 挑选关联条目</button>'
+          : '';
+        inner = ((b.title || state.admin)
+            ? '<h3 class="block-title"' + edB(i, 'title', 1) + (b.title ? '' : ' data-ph="栏目标题（可留空）"') + '>' + esc(b.title || '') + '</h3>'
+            : '')
+          + (b.note ? '<p class="entry-note">' + md(b.note) + '</p>' : '')
+          + (rList ? '<div class="entry-list">'
+            : '<div class="entry-grid" style="grid-template-columns:repeat(' + rCols + ',minmax(0,1fr))">')
+          + rCards + rAdd + '</div>';
         break;
       }
       case 'entries': {
@@ -968,6 +1073,7 @@ window.LMApp = (function () {
   function render(skipAnim) {
     if (skipAnim) document.body.classList.add('no-anim');
     state.pageId = currentId();
+    navTrack(state.pageId); /* ★ 修复80：记一次浏览历史（顶部「‹ 返回」用它退回上一屏） */
     document.body.classList.toggle('admin', !!state.admin);
     renderNav();
     renderFooter();
@@ -2226,6 +2332,7 @@ window.LMApp = (function () {
     commit: commit, insertBlock: insertBlock, adjustFreeLayout: adjustFreeLayoutSafe,
     fixFreeOverlapVisual: fixFreeOverlapVisual, discardChanges: discardChanges,
     fixLayout: fixLayout, /* ★ 修复64：一键整理布局（清残留让位边距 + 全量重算，用户自救重叠/大空隙） */
+    navBack: navBack, backTarget: backTarget, navHist: navHist, /* ★ 修复80：浏览历史栈 + 左上角返回键 */
     dumpLayout: dumpLayout, /* ★ 修复67：控制台布局体检（打印每块摆放方式/位置/让位量并复制到剪贴板） */
     takeAdminSnap: takeAdminSnap, /* ★ 修复62：推送云端成功后由 collab 回调重拍快照（放弃更改=回到最近上传版） */
     unfreeBlock: unfreeBlock,

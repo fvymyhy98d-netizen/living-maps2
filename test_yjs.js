@@ -465,7 +465,7 @@ T('startFreeResize 抓取时记录 minH（内容实际高度）并用于 s/se �
 /* ---------- 9.21) 修复55：自动更新探针（顽固缓存浏览器自救）+ 手机端操作栏去重合紧凑化 ---------- */
 console.log('【9.21】修复55：LM_ASSET_VER 探针自动刷新 · index.html ?v= 版本参数 · 手机 sep 隐藏 + ⠿ 让位');
 T('app.js 顶部版本探针（no-store 强拉对比 reload）+ 手机操作栏 sep 隐藏/gap 紧凑/自由框给 ⠿ 让位',
-  appSrc.indexOf("var LM_ASSET_VER = '79';") > 0
+  appSrc.indexOf("var LM_ASSET_VER = '80';") > 0
     && appSrc.indexOf("fetch('js/app.js?probe=' + Date.now(), { cache: 'no-store' })") > 0
     && appSrc.indexOf('if (m && m[1] && m[1] !== LM_ASSET_VER && !(sessionStorage.getItem(\'lm_ver_reload\') === m[1]))') > 0
     && cssSrc.indexOf('body.mobile-view .block-tools .sep{display:none}') > 0
@@ -1122,6 +1122,96 @@ T('CSS：电脑端渲染 收起钮 + 右上角把手（:not(.mobile-view) 收窄
       && closed && opened && closed2 && closed3 && noBar === false;
   } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
   T('tbSetOpen 真跑：收起=open 移除且关气泡 · 展开=open 加回不关气泡 · 连续收起幂等 · 没有工具条时安全返回 false', ok);
+})();
+/* ---------- 9.45) 修复80：左上角「‹ 返回」+ 跨母项的「关联条目」块 ---------- */
+console.log('【9.45】修复80：访客也有 iOS 式返回键（按浏览历史退回上一屏）+ ⇄ 关联块（跨母项互联）');
+T('index.html/app.js：头部有 navBack 按钮；navHist 浏览栈 + navTrack/backTarget/navBack，render 里入栈并导出',
+  html.indexOf('class="nav-back" id="navBack"') > 0
+    && html.indexOf('id="navBackT"') > 0
+    && appSrc.indexOf('const navHist = [];') > 0
+    && appSrc.indexOf('function navTrack(id) {') > 0
+    && appSrc.indexOf('function backTarget() {') > 0
+    && appSrc.indexOf('function refreshBackBtn() {') > 0
+    && appSrc.indexOf('function navBack() {') > 0
+    && appSrc.indexOf('navTrack(state.pageId); /* ★ 修复80') > 0
+    && appSrc.indexOf("e.target.closest('#navBack')") > 0
+    && appSrc.indexOf('navBack: navBack, backTarget: backTarget, navHist: navHist,') > 0);
+T('app.js：新块类型 related（跨母项关联卡片 + 「来自「母项」」标签 + ＋ 挑选关联条目磁贴）',
+  appSrc.indexOf("      case 'related': {") > 0
+    && appSrc.indexOf('const rIds = Array.isArray(b.links) ? b.links : [];') > 0
+    && appSrc.indexOf('来自「') > 0
+    && appSrc.indexOf('rel-card') > 0
+    && appSrc.indexOf('data-relpick="') > 0
+    && appSrc.indexOf('＋ 挑选关联条目') > 0);
+T('editor.js：TYPES/defaultsFor/formHTML/readForm 认 related，⇄ 关联 插入钮 + relins 处理 + 磁贴点击',
+  edt2.indexOf("related: { name: '关联条目', icon: '⇄' },") > 0
+    && edt2.indexOf("case 'related': return { type: type, title: '关联条目', mode: 'card', cols: 3, note: '', links: [] };") > 0
+    && edt2.indexOf('function relatedPickerHTML(sel) {') > 0
+    && edt2.indexOf('const rows = treeRows(pages);') > 0
+    && edt2.indexOf('+ relatedPickerHTML(b.links)') > 0
+    && edt2.indexOf('<div class="field"><span class="field-label">勾选要关联的条目（可跨母项）</span>') > 0
+    && edt2.replace(/\r\n/g, '\n').indexOf("case 'related':\n        b.title = val('title');") > 0
+    && edt2.indexOf('b.links = Array.prototype.map.call(form.querySelectorAll(\'input[name="rel"]:checked\')') > 0
+    && edt2.indexOf('data-tb="relins"') > 0
+    && edt2.indexOf("case 'relins': {") > 0
+    && edt2.indexOf("e.target.closest('[data-relpick]')") > 0);
+T('CSS：返回键胶囊（含手机端收紧、[hidden] 隐藏）+ 关联卡片「来自母项」标签 + 挑条目清单缩进',
+  cssSrc.indexOf('.nav-back{display:flex;align-items:center;gap:2px;flex:none;height:32px;') > 0
+    && cssSrc.indexOf('.nav-back[hidden]{display:none}') > 0
+    && cssSrc.indexOf('body.mobile-view .nav-back{height:30px;') > 0
+    && cssSrc.indexOf('.rel-from{display:inline-block;font-size:11px;') > 0
+    && cssSrc.indexOf('.rel-pick{max-height:44vh;overflow:auto;') > 0
+    && cssSrc.indexOf('.rel-opt[data-d="1"]{padding-left:26px}') > 0);
+/* 真跑浏览栈：home → 领域地图 → 提示工程 →（跨母项）Transformer，再一路返回 */
+(function () {
+  const a8 = appSrc.indexOf('  const navHist = [];');
+  const navEnd = appSrc.indexOf('function navBack() {');
+  const z8 = navEnd > 0 ? appSrc.indexOf('\n  }', navEnd) : -1;
+  const code8 = (a8 >= 0 && z8 > a8) ? appSrc.slice(a8, z8 + 4) : '';
+  const pages = [
+    { id: 'home', label: '首页' },
+    { id: 'ma', label: '领域地图' },
+    { id: 'b', parent: 'ma', label: '提示工程' },
+    { id: 'mb', label: '认知地图' },
+    { id: 'c', parent: 'mb', label: 'Transformer' }
+  ];
+  const st = { pageId: 'home' };
+  const locate = { hash: '' };
+  const btn = { hidden: true, setAttribute: function () {} };
+  const doc = { getElementById: function (n) { return n === 'navBack' ? btn : null; } };
+  const byId = function (id) { return pages.filter(function (p) { return p.id === id; })[0] || null; };
+  const title = function (p) { return (p && (p.label || p.title)) || ''; };
+  let ok = false;
+  try {
+    const api = new Function('document', 'state', 'pageById', 'pageTitle', 'currentId', 'render', 'location',
+      code8 + '\nreturn { navHist: navHist, navTrack: navTrack, backTarget: backTarget, navBack: navBack };')(
+      doc, st, byId, title, function () { return st.pageId; }, function () {}, locate);
+    const H = api.navHist;
+    api.navTrack('home');
+    const r0 = api.backTarget();                    /* 只有首页 → 无处可返 */
+    st.pageId = 'ma'; api.navTrack('ma');
+    st.pageId = 'b'; api.navTrack('b');
+    const r1 = api.backTarget();                    /* 返回「领域地图」 */
+    st.pageId = 'c'; api.navTrack('c');             /* ★ 从「提示工程」跳到「认知地图›Transformer」 */
+    const r2 = api.backTarget();                    /* 应回到「提示工程」，而不是它自己的母项「认知地图」 */
+    const backOk = api.navBack();
+    const went = locate.hash;                       /* 点了返回 → hash 指向「提示工程」 */
+    /* 模拟 hashchange 后的 render → navTrack 截断 */
+    st.pageId = 'b'; api.navTrack('b');
+    const r3 = api.backTarget();                    /* 再返回 → 「领域地图」 */
+    const histLen = H.length;
+    /* 深链接兜底：栈里只有当前页 → 退回它的上级 */
+    H.length = 0; st.pageId = 'c'; api.navTrack('c');
+    const r4 = api.backTarget();
+    ok = r0 === null
+      && r1 && r1.id === 'ma' && r1.label === '领域地图'
+      && r2 && r2.id === 'b' && r2.label === '提示工程'
+      && backOk === true && went === '#/p/b'
+      && r3 && r3.id === 'ma' && histLen === 3
+      && r4 && r4.id === 'mb' && r4.label === '认知地图'
+      && btn.hidden === false;
+  } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
+  T('浏览栈真跑：首页无处可返 · 逐级入栈 · 跨母项跳转后返回的是「上一屏」而非自己的母项 · 返回后截断 · 深链接退回上级', ok);
 })();
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
