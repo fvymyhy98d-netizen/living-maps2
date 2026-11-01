@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '123';
+var LM_ASSET_VER = '124';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -201,11 +201,22 @@ window.LMApp = (function () {
     const btn = document.getElementById('navBack');
     if (!btn) return;
     const t = backTarget();
-    if (!t) { btn.hidden = true; return; }
+    /* ★ 修复124：不再用 hidden 硬跳（那一瞬间会把品牌名和整排导航一起顶开）。
+       现在按钮常驻 DOM、绝对定位（不占布局），出现/消失靠 .is-on 做「淡入 + 轻微放大」
+       的苹果式冒泡；导航其余部分一动不动。 */
     btn.hidden = false;
+    /* 首次显示的那一帧先让浏览器排版完再上 .is-on，否则从 display:none 切过来不会有过渡 */
+    if (t) requestAnimationFrame(function () { btn.classList.add('is-on'); });
+    else btn.classList.remove('is-on');
+    btn.tabIndex = t ? 0 : -1;
+    btn.setAttribute('aria-hidden', t ? 'false' : 'true');
+    const inner = document.querySelector('.nav-inner');
+    if (inner) inner.classList.toggle('nav-has-back', !!t);
+    if (!t) return;
     const lab = document.getElementById('navBackT');
     if (lab) lab.textContent = t.label || '返回';
     btn.setAttribute('title', '返回「' + (t.label || '上一页') + '」（浏览器后退同效）');
+    btn.setAttribute('aria-label', '返回「' + (t.label || '上一页') + '」');
   }
   function navBack() {
     const t = backTarget();
@@ -232,7 +243,10 @@ window.LMApp = (function () {
     /* 导航名清空 → 导航里就不显示这个页面（不留空白项）；页面本身仍可从首页卡片进入 */
     const links = state.content.pages.filter(function (p) {
       if (p.id === 'home') return false;
-      if (p.parent) return false; /* ★ 修复75：嵌套条目（子页面）不进顶部导航 */
+      /* ★ 修复75：嵌套条目（子页面）不进顶部导航
+         ★ 修复124：但三张地图（kind:'map'）例外 —— 它们被设了 parent 时以前会从导航和首页
+         卡片一起消失，看起来就是「少了一张地图」（三张活地图必须始终能在顶部导航点到） */
+      if (p.parent && p.kind !== 'map') return false;
       return !!(p.label || p.title || p.icon);
     });
     document.getElementById('navLinks').innerHTML = links.map(function (p) {
@@ -628,8 +642,11 @@ window.LMApp = (function () {
   function renderHome() {
     const c = state.content, s = c.site;
     /* 首页入口卡片 = 全部页面（除首页与更新记录）：页面管理加几个模块，这里就同步出几张卡片 */
-    /* ★ 修复75：首页卡片只列「第 2 层」导航页 —— 嵌套条目（p.parent）由所属页面里的条目块列出 */
-    const maps = c.pages.filter(function (p) { return p.id !== 'home' && p.id !== 'updates' && !p.parent; });
+    /* ★ 修复75：首页卡片只列「第 2 层」导航页 —— 嵌套条目（p.parent）由所属页面里的条目块列出
+       ★ 修复124：三张地图（kind:'map'）即使被挂成别人下级，也照样出卡片（别让地图"消失"） */
+    const maps = c.pages.filter(function (p) {
+      return p.id !== 'home' && p.id !== 'updates' && (!p.parent || p.kind === 'map');
+    });
     const first = maps.length ? maps[0].id : 'home';
     const upd = c.pages.find(function (p) { return p.id === 'updates'; });
     /* 各行独立样式：大标题 heroStyle / 顶部小字 subStyle / 点题 topicStyle / 简介 descStyle */
@@ -2216,7 +2233,10 @@ window.LMApp = (function () {
       ['✏️ 修改了什么', it.change],
       ['💬 为什么这样处理', it.why],
       ['📝 小组回复', it.reply]
-    ].filter(function (r) { return r[1]; });
+    ]
+      /* ★ 修复124：空栏（或只敲了空格）整行不显示 —— 管理员没填的项不再留一个光秃秃的标签 */
+      .map(function (r) { return [r[0], String(r[1] == null ? '' : r[1]).trim()]; })
+      .filter(function (r) { return r[1]; });
     if (!rows.length) return '';
     return '<div class="fb-record">' + rows.map(function (r) {
       return '<p><b>' + r[0] + '</b>' + esc(r[1]) + '</p>';

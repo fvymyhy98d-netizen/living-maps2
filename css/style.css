@@ -1105,19 +1105,38 @@ body.mobile-view .hist-note{font-size:11.5px;-webkit-line-clamp:1}
 /* 手机上 8 列会顶到卡片边，收成 6 列（面板本身已可上下滚） */
 body.mobile-view .icon-pick{grid-template-columns:repeat(6,38px)}
 /* ★ 修复80：左上角「‹ 返回」—— 苹果式胶囊，按真实浏览历史退回上一屏；
-   没有历史（分享链接直接进子页面）时退回它的上级页面；无处可退时整个按钮隐藏 */
-.nav-back{display:flex;align-items:center;gap:2px;flex:none;height:32px;padding:0 12px 0 7px;
+   没有历史（分享链接直接进子页面）时退回它的上级页面；无处可退时按钮隐身 */
+/* ★ 修复124：返回键改成「绝对定位 + 淡入放大」——
+   ① 不再突然跳出：opacity 0→1、scale .82→1（苹果那种轻轻鼓起的感觉）；
+   ② 出现时不挤动导航：它不占布局，品牌名和整排链接一动不动。
+   左槽（.nav-lead = 品牌名的宽度）是定位基准：宽屏时气泡落在品牌右边，窄屏时立在品牌原位（品牌淡出）。 */
+.nav-lead{position:relative;flex:none;display:flex;align-items:center;height:100%;min-height:32px}
+.brand{transition:opacity .2s ease}
+.nav-back{position:absolute;left:calc(100% + 10px);top:50%;display:flex;align-items:center;gap:2px;
+  height:32px;padding:0 12px 0 7px;
   border:1px solid rgba(0,113,227,.16);border-radius:999px;background:rgba(0,113,227,.08);
   color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;
-  transition:background .18s ease,transform .18s cubic-bezier(.16,1,.3,1)}
+  opacity:0;visibility:hidden;pointer-events:none;transform:translateY(-50%) scale(.82);
+  transition:opacity .2s ease,transform .34s cubic-bezier(.22,1.02,.32,1.12),background .18s ease,visibility 0s linear .22s}
+.nav-back.is-on{opacity:1;visibility:visible;pointer-events:auto;transform:translateY(-50%) scale(1);
+  transition:opacity .16s ease,transform .34s cubic-bezier(.22,1.02,.32,1.12),background .18s ease,visibility 0s}
 .nav-back:hover{background:rgba(0,113,227,.16)}
-.nav-back:active{transform:scale(.95)}
+.nav-back:active{transform:translateY(-50%) scale(.93)}
 .nav-back[hidden]{display:none}
 .nav-back-ico{font-size:20px;line-height:1;margin-top:-3px}
-.nav-back-t{max-width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-body.mobile-view .nav-back{height:30px;padding:0 10px 0 5px;font-size:12.5px}
+.nav-back-t{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 窄屏（<900px，品牌右边没有余量）→ 返回键立在品牌原位（只留「‹」，完整页名在提示里），导航仍不动 */
+@media (max-width:899px){
+  .nav-back{left:0;height:30px;padding:0 9px 0 5px;font-size:12.5px}
+  .nav-back-t{display:none}
+  .nav-back-ico{font-size:18px}
+  .nav-inner.nav-has-back .brand{opacity:0;pointer-events:none}
+}
+@media (prefers-reduced-motion:reduce){.nav-back{transition:none}}
+body.mobile-view .nav-back{left:0;height:30px;padding:0 9px 0 5px;font-size:12.5px}
 body.mobile-view .nav-back-ico{font-size:18px}
-body.mobile-view .nav-back-t{max-width:76px}
+body.mobile-view .nav-back-t{display:none}
+body.mobile-view .nav-inner.nav-has-back .brand{opacity:0;pointer-events:none}
 
 /* ★ 修复80：跨母项的「关联条目」块 —— 复用条目块的卡片/列表视觉，只多一个「来自「某母项」」小标签 */
 .rel-from{display:inline-block;font-size:11px;line-height:1.5;color:var(--text2);

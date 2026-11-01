@@ -780,13 +780,13 @@ T('editor.js：收起钮在「插入」之后（DOM 顺序）+ 点击只收工�
 
 /* ---------- 9.40) 修复75：第 3 层「嵌套条目」（子页面 + 条目块 + 条目树控制台） ---------- */
 console.log('【9.40】修复75：子页面(parent)不进导航/首页 · 条目块自动列子条目 · 🗂 条目树增删改调序');
-T('app.js：子页面数据模型（pageById / childPages / pagePath / pageTitle）+ 导航与首页排除 p.parent',
+T('app.js：子页面数据模型（pageById / childPages / pagePath / pageTitle）+ 导航与首页排除 p.parent（★ 124：kind:map 例外）',
   appSrc.indexOf('function pageById(id) {') > 0
     && appSrc.indexOf('function childPages(parentId) {') > 0
     && appSrc.indexOf('function pagePath(id) {') > 0
     && appSrc.indexOf('function pageTitle(p) {') > 0
-    && appSrc.indexOf("if (p.parent) return false; /* ★ 修复75：嵌套条目（子页面）不进顶部导航 */") > 0
-    && appSrc.indexOf("p.id !== 'updates' && !p.parent; })") > 0);
+    && appSrc.indexOf("if (p.parent && p.kind !== 'map') return false;") > 0
+    && appSrc.indexOf("p.id !== 'updates' && (!p.parent || p.kind === 'map')") > 0);
 T('app.js：entries 块渲染子页面卡片（卡片 / 列表两版式）+ 子页面面包屑 + 导出层级助手',
   appSrc.indexOf("case 'entries': {") > 0
     && appSrc.indexOf('const allKids = childPages(pageId).slice();') > 0
@@ -1163,10 +1163,12 @@ T('editor.js：TYPES/defaultsFor/formHTML/readForm 认 related，⇄ 关联 插�
     && edt2.indexOf('data-tb="relins"') > 0
     && edt2.indexOf("case 'relins': {") > 0
     && edt2.indexOf("e.target.closest('[data-relpick]')") > 0);
-T('CSS：返回键胶囊（含手机端收紧、[hidden] 隐藏）+ 关联卡片「来自母项」标签 + 挑条目清单缩进',
-  cssSrc.indexOf('.nav-back{display:flex;align-items:center;gap:2px;flex:none;height:32px;') > 0
+T('CSS：返回键胶囊（★ 124：绝对定位 + .is-on 冒泡淡入，不挤动导航；手机端收成「‹」）+ 关联卡片「来自母项」标签 + 挑条目清单缩进',
+  cssSrc.indexOf('.nav-lead{position:relative;flex:none;') > 0
+    && cssSrc.indexOf('.nav-back{position:absolute;left:calc(100% + 10px);') > 0
+    && cssSrc.indexOf('.nav-back.is-on{opacity:1;visibility:visible;') > 0
     && cssSrc.indexOf('.nav-back[hidden]{display:none}') > 0
-    && cssSrc.indexOf('body.mobile-view .nav-back{height:30px;') > 0
+    && cssSrc.indexOf('body.mobile-view .nav-back{left:0;height:30px;') > 0
     && cssSrc.indexOf('.rel-from{display:inline-block;font-size:11px;') > 0
     && cssSrc.indexOf('.rel-pick{max-height:44vh;overflow:auto;') > 0
     && cssSrc.indexOf('.rel-opt[data-d="1"]{padding-left:26px}') > 0);
@@ -1185,8 +1187,18 @@ T('CSS：返回键胶囊（含手机端收紧、[hidden] 隐藏）+ 关联卡片
   ];
   const st = { pageId: 'home' };
   const locate = { hash: '' };
-  const btn = { hidden: true, setAttribute: function () {} };
-  const doc = { getElementById: function (n) { return n === 'navBack' ? btn : null; } };
+  const btn = { hidden: true, tabIndex: 0, classList: { add: function () {}, remove: function () {}, toggle: function () {} }, setAttribute: function () {} };
+  const inner2 = { classList: { toggle: function () {} } };
+  const lel = { textContent: '' };
+  const doc = {
+    getElementById: function (n) { return n === 'navBack' ? btn : (n === 'navBackT' ? lel : null); },
+    querySelector: function () { return inner2; },
+    addEventListener: function () {}
+  };
+  /* ★ 修复124：refreshBackBtn 现在用 requestAnimationFrame 让首次显示也有过渡（Node 里没有这个全局） */
+  const hadRaf = typeof globalThis.requestAnimationFrame === 'function';
+  const prevRaf = globalThis.requestAnimationFrame;
+  if (!hadRaf) globalThis.requestAnimationFrame = function (f) { f(); };
   const byId = function (id) { return pages.filter(function (p) { return p.id === id; })[0] || null; };
   const title = function (p) { return (p && (p.label || p.title)) || ''; };
   let ok = false;
@@ -1220,6 +1232,7 @@ T('CSS：返回键胶囊（含手机端收紧、[hidden] 隐藏）+ 关联卡片
       && btn.hidden === false;
   } catch (e) { ok = false; console.log('  执行异常: ' + e.message); }
   T('浏览栈真跑：首页无处可返 · 逐级入栈 · 跨母项跳转后返回的是「上一屏」而非自己的母项 · 返回后截断 · 深链接退回上级', ok);
+  if (!hadRaf) { try { delete globalThis.requestAnimationFrame; } catch (eR) { globalThis.requestAnimationFrame = prevRaf; } }
 })();
 /* ---------- 9.46) 修复81：选中文字上「A 文字颜色 / 🌈 渐变」100% 抛错（r is not defined） ---------- */
 console.log('【9.46】修复81：行内上色不再抛 ReferenceError —— 选文字点颜色真的会上色');
@@ -3389,10 +3402,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=123 · LM_ASSET_VER=123',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=124 · LM_ASSET_VER=124',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=122/g) || []).length === 0 && /\?v=123/.test(html)
-      && /LM_ASSET_VER = '123'/.test(appJs));
+      && (html.match(/\?v=123/g) || []).length === 0 && /\?v=124/.test(html)
+      && /LM_ASSET_VER = '124'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3745,10 +3758,43 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && /grant select, insert, update on lm_discuss to anon, authenticated;/.test(readme)
       && readme.indexOf('on_conflict=id') > 0);
 
-  T('版本已升到 123（?v=123 共 21 处 · v122 无残留 · LM_ASSET_VER=123）',
-    (html.match(/\?v=123/g) || []).length === 21 && (html.match(/\?v=122/g) || []).length === 0
-      && /LM_ASSET_VER = '123'/.test(appJs),
-    'v123=' + (html.match(/\?v=123/g) || []).length + ' v122=' + (html.match(/\?v=122/g) || []).length);
+  /* —— ★ 修复124：一批「看得见的小毛病」 —— */
+  T('修复124 · AI：要点不再被截断（去掉 slice(0,120)+「…」），底部浮标与标题改成「提问」',
+    (function () {
+      const s = srcOf('js/ai.js');
+      return s.indexOf("const t = s.length > 120 ? s.slice(0, 120) + '…' : s;") < 0
+        && s.indexOf('lm-ai-fab-t">提问') > 0
+        && s.indexOf('<b>💬 提问</b>') > 0
+        && s.indexOf('📌 这一页的要点') > 0;
+    })());
+  T('修复124 · AI：「粘回回答」自动读剪贴板（readClip + 切回本页自动填入），不必再手动 Ctrl/⌘+V',
+    (function () {
+      const s = srcOf('js/ai.js');
+      return s.indexOf('function readClip() {') > 0
+        && s.indexOf('navigator.clipboard.readText') > 0
+        && s.indexOf('const tryAutoBack = function () {') > 0
+        && s.indexOf("document.addEventListener('visibilitychange', function () { if (!document.hidden) tryAutoBack(); })") > 0
+        && s.indexOf('let awaitBack = null;') > 0
+        && s.indexOf('if (t.length < 40 || t === ab.prompt) return;') > 0;
+    })());
+  T('修复124 · 地图：三张地图（kind:map）永远在顶部导航与首页卡片里，不会被 parent 藏掉',
+    appSrc.indexOf("if (p.parent && p.kind !== 'map') return false;") > 0
+      && appSrc.indexOf("p.id !== 'updates' && (!p.parent || p.kind === 'map')") > 0);
+  T('修复124 · 反馈：处理记录里空栏（含只敲空格）整行不渲染',
+    appSrc.indexOf("String(r[1] == null ? '' : r[1]).trim()") > 0
+      && appSrc.indexOf("if (!rows.length) return '';") > 0);
+  T('修复124 · 导航：返回键冒泡淡入 + 出现时不挤动导航（.nav-lead 左槽 · .is-on · nav-has-back）',
+    html.indexOf('<div class="nav-lead">') > 0
+      && cssSrc.indexOf('.nav-back.is-on{') > 0
+      && cssSrc.indexOf('.nav-inner.nav-has-back .brand{opacity:0') > 0
+      && appSrc.indexOf("btn.classList.add('is-on')") > 0
+      && appSrc.indexOf("inner.classList.toggle('nav-has-back', !!t)") > 0
+      && appSrc.indexOf('btn.hidden = true') < 0);
+
+  T('版本已升到 124（?v=124 共 21 处 · v123 无残留 · LM_ASSET_VER=124）',
+    (html.match(/\?v=124/g) || []).length === 21 && (html.match(/\?v=123/g) || []).length === 0
+      && /LM_ASSET_VER = '124'/.test(appJs),
+    'v124=' + (html.match(/\?v=124/g) || []).length + ' v123=' + (html.match(/\?v=123/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

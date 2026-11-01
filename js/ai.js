@@ -819,6 +819,16 @@ W.LMAI = (function () {
       return ok ? Promise.resolve() : Promise.reject(new Error('copy-fail'));
     } catch (e2) { return Promise.reject(e2); }
   }
+  /* ★ 修复124：读剪贴板 —— 「粘回回答」直接取，不用你再按 Ctrl/⌘+V。
+     浏览器没给权限（或老浏览器）时会 reject，调用方安静地回落到手动粘贴。 */
+  function readClip() {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) return navigator.clipboard.readText();
+    } catch (e) { /* 落到下面 */ }
+    return Promise.reject(new Error('no-clip-read'));
+  }
+  /* 「发出去、正在等回答」的记账：切回本页时据此去剪贴板找回答 */
+  let awaitBack = null;
   /* ★ 修复107：这里原本有一个「带 Key 直连官方接口」的函数 —— 已按要求**整块删除**。
      现在本站**没有任何 API 调用、不读写任何 Key**，`test_yjs` 断言「ai.js 全文 0 处 fetch」。 */
 
@@ -886,8 +896,9 @@ W.LMAI = (function () {
     h += '<h4 class="lm-ai-h">📌 这一页的要点</h4>';
     h += pts.length
       ? '<ol class="lm-ai-list">' + pts.map(function (s) {
-        const t = s.length > 120 ? s.slice(0, 120) + '…' : s;
-        return '<li>' + esc(t) + '</li>';
+        /* ★ 修复124：要点不再截断。以前超过 120 字就切掉补「…」，用户看到的是一条半句，
+           以为「要点没写完」；面板本身可以上下滚，没必要替用户做这个删减。 */
+        return '<li>' + esc(String(s || '').trim()) + '</li>';
       }).join('') + '</ol>'
       : '<p class="lm-ai-tip">这一页文字还少，写点内容再来看要点。</p>';
     h += '<h4 class="lm-ai-h">🔑 关键词</h4>';
@@ -984,9 +995,12 @@ W.LMAI = (function () {
         return;
       }
       const okHint = function () {
+        awaitBack = { id: id, prompt: txt, at: Date.now() };
         chatPush(id, {
           r: 'ds',
-          t: '✅ 已复制「这一页正文 + 你的问题」（约 ' + txt.length + ' 字），DeepSeek 网页在新标签打开了。\n① 在它的输入框按 Ctrl/⌘+V 粘贴并发送；\n② 回来点「📥 粘回回答」，把它的回答存进这个对话。'
+          t: '✅ 已复制「这一页正文 + 你的问题」（约 ' + txt.length + ' 字），DeepSeek 网页已在新标签打开。\n'
+            + '① 在它的输入框按 Ctrl/⌘+V 粘贴并发送 —— **跨网站替你打字这件事浏览器不允许**（只有装 ext/ 扩展才能全自动）；\n'
+            + '② 回答出来后复制它，再回到这里点「📥 粘回回答」：剪贴板内容会**自动填进去**，你核对一下保存即可。'
         });
         renderPanel();
       };
@@ -1019,7 +1033,15 @@ W.LMAI = (function () {
     if (pasteBtn) pasteBtn.addEventListener('click', function () {
       if (!pb) return;
       pb.hidden = !pb.hidden;
-      if (!pb.hidden && pta) pta.focus();
+      if (pb.hidden) return;
+      if (pta) pta.focus();
+      /* ★ 修复124：直接读剪贴板自动填入（浏览器没授权就保持手动粘贴，功能不降级） */
+      readClip().then(function (t) {
+        t = String(t || '').trim();
+        if (!pta || pta.value || t.length < 20) return;
+        pta.value = t;
+        if (window.LMApp && LMApp.toast) LMApp.toast('已自动填入剪贴板内容（' + t.length + ' 字），核对后点「保存到对话」');
+      }, function () { /* 没权限：手动 Ctrl/⌘+V */ });
     });
     const pasteSave = body.querySelector('.lm-ai-pastesave');
     if (pasteSave) pasteSave.addEventListener('click', function () {
@@ -1070,9 +1092,9 @@ W.LMAI = (function () {
     fab.type = 'button';
     fab.className = 'lm-ai-fab';
     fab.id = 'lmAiFab';
-    fab.title = '和 DeepSeek 对话：自动把这一页正文附在问题前面（不接 API、不存 Key）· 另有要点 / 关键词 / 相关条目';
+    fab.title = '提问：本站速答 / DeepSeek —— 自动把这一页正文附在问题前面（不接 API、不存 Key）· 另有要点 / 关键词 / 相关条目';
     fab.setAttribute('aria-expanded', 'false');
-    fab.innerHTML = '✨<span class="lm-ai-fab-t">问 DeepSeek</span>';
+    fab.innerHTML = '✨<span class="lm-ai-fab-t">提问</span>';
     fab.addEventListener('click', function () { toggle(); });
     document.body.appendChild(fab);
 
@@ -1081,8 +1103,8 @@ W.LMAI = (function () {
     panel.id = 'lmAiPanel';
     panel.hidden = true;
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-label', '和 DeepSeek 对话');
-    panel.innerHTML = '<div class="lm-ai-head"><b>💬 和 DeepSeek 对话</b>'
+    panel.setAttribute('aria-label', '提问 · 这一页的要点与问答');
+    panel.innerHTML = '<div class="lm-ai-head"><b>💬 提问</b>'
       + '<span class="lm-ai-badge">不用 API · 不存 Key</span>'
       + '<button type="button" class="lm-ai-x" aria-label="关闭">×</button></div>'
       + '<div class="lm-ai-body"></div>';
@@ -1120,6 +1142,29 @@ W.LMAI = (function () {
     });
     const x = panel.querySelector('.lm-ai-x');
     if (x) x.addEventListener('click', function () { toggle(false); });
+
+    /* ★ 修复124：从 DeepSeek 标签页切回来的那一刻，自动把回答读进「粘回」框 ——
+       以前必须自己点「粘回回答」再按 Ctrl+V。剪贴板里还是我们复制的那段提问时会跳过，
+       所以不会把问题当成回答。读不到（没授权）就安静退出，用户仍可手动粘贴。 */
+    const tryAutoBack = function () {
+      if (!awaitBack || !panel || document.hidden) return;
+      if (Date.now() - awaitBack.at < 1500) return;   /* 刚复制完就切回来 → 剪贴板还是提问本身 */
+      const ab = awaitBack;
+      readClip().then(function (t) {
+        t = String(t || '').trim();
+        if (awaitBack !== ab) return;                  /* 期间又问了别的 */
+        if (t.length < 40 || t === ab.prompt) return;   /* 太短 / 还是我们的提问 → 不算回答 */
+        awaitBack = null;
+        if (panel.hidden) toggle(true);                /* 先开面板（会重绘，再填） */
+        const pb2 = panel.querySelector('.lm-ai-pastebox');
+        const pta2 = panel.querySelector('.lm-ai-pasteta');
+        if (pb2) pb2.hidden = false;
+        if (pta2) pta2.value = t;
+        if (window.LMApp && LMApp.toast) LMApp.toast('已从剪贴板读到回答（' + t.length + ' 字），核对后点「保存到对话」');
+      }, function () { /* 没权限 / 没剪贴板 → 什么都不说 */ });
+    };
+    window.addEventListener('focus', tryAutoBack);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) tryAutoBack(); });
 
     /* 内容就绪后自动出浮标（访客与管理员都能用；纯阅读辅助，不写内容） */
     let tries = 0;
