@@ -3589,10 +3589,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=144 · LM_ASSET_VER=144',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=145 · LM_ASSET_VER=145',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=143/g) || []).length === 0 && /\?v=144/.test(html)
-      && /LM_ASSET_VER = '144'/.test(appJs));
+      && (html.match(/\?v=144/g) || []).length === 0 && /\?v=145/.test(html)
+      && /LM_ASSET_VER = '145'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4493,10 +4493,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 144（?v=144 共 22 处 · v143 无残留 · LM_ASSET_VER=144）',
-    (html.match(/\?v=144/g) || []).length === 22 && (html.match(/\?v=143/g) || []).length === 0
-      && /LM_ASSET_VER = '144'/.test(appJs),
-    'v144=' + (html.match(/\?v=144/g) || []).length + ' v143=' + (html.match(/\?v=143/g) || []).length);
+  T('版本已升到 145（?v=145 共 22 处 · v144 无残留 · LM_ASSET_VER=145）',
+    (html.match(/\?v=145/g) || []).length === 22 && (html.match(/\?v=144/g) || []).length === 0
+      && /LM_ASSET_VER = '145'/.test(appJs),
+    'v145=' + (html.match(/\?v=145/g) || []).length + ' v143=' + (html.match(/\?v=144/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -4883,6 +4883,75 @@ console.log('【修复143】首屏加载层：内联样式（不碰 CSP）+ 蹦�
 
   T('修复143 · README 记录首屏加载层',
     srcOf('README.md').indexOf('修复143') > 0);
+})();
+
+/* ---------- 修复145：网页内重训小模型（管理条一键，不用命令行） ---------- */
+console.log('【修复145】网页内重训：训练算法唯一化（CLI / 浏览器同源）+ 管理条一键 → 提交 data/lm.json');
+
+(function () {
+  const path3 = require('path');
+  const fs3 = require('fs');
+  const crypto3 = require('crypto');
+  const ai3 = require(path3.join(DIR, 'js/ai.js'));
+  const LMLM3 = require(path3.join(DIR, 'js/lm.js'));
+  const lmFile = path3.join(DIR, 'data/lm.json');
+  const corpusText = (function () {
+    const src = fs3.readFileSync(path3.join(DIR, 'data/content.js'), 'utf8');
+    const w = {};
+    new Function('window', 'var module={};' + src)(w);
+    return (w.SITE_CONTENT.pages || []).map(function (p) { return ai3.pageText(p); }).join('\n');
+  })();
+
+  /* ★ 这条是硬证据：网页按钮走的就是 LMLM.buildModel，它会真的把产物算出来 —— 
+     结果必须和仓库里的 data/lm.json 逐字节相同，等于「网页点一下 == 命令行跑一次」 */
+  T('修复145 · buildModel 重训当前语料 → 与仓库 data/lm.json 逐字节一致（网页重训 == 命令行重训）',
+    (function () {
+      const r = LMLM3.buildModel(corpusText, 4, LMLM3.MAX_BYTES);
+      const a = crypto3.createHash('md5').update(JSON.stringify(r.payload)).digest('hex');
+      const b = crypto3.createHash('md5').update(fs3.readFileSync(lmFile)).digest('hex');
+      return a === b && r.chars === corpusText.length;
+    })(), 'md5 ' + crypto3.createHash('md5').update(JSON.stringify(LMLM3.buildModel(corpusText, 4).payload)).digest('hex').slice(0, 12));
+
+  /* 浏览器没有 Buffer：手算 UTF-8 必须和 Node 的 Buffer.byteLength 一致（含 emoji 代理对） */
+  T('修复145 · utf8Bytes 与 Buffer.byteLength 完全等价（ASCII / 中文 / emoji 代理对 / 空串）',
+    ['abc', '三张活地图', '🐶🐱🐰🦊 在路上', '', 'a中1', '\u0000\u007f\u0080\u0800\uffff']
+      .every(function (s) { return LMLM3.utf8Bytes(s) === Buffer.byteLength(s, 'utf8'); }));
+
+  /* CLI 必须走同一份算法：源码里不许再有 count/prune 副本（有副本就会慢慢漂移） */
+  T('修复145 · CLI 也走 LMLM.buildModel（train_lm.js 不再自带计数 / 裁剪副本）',
+    (function () {
+      const s = srcOf('tools/train_lm.js');
+      return s.indexOf('LMLM.buildModel(') > 0 && s.indexOf('LMLM.MAX_BYTES') > 0
+        && s.indexOf('function prune(') < 0 && s.indexOf('function count(') < 0
+        && s.indexOf('function bytesOf(') < 0;
+    })());
+
+  /* 管理条入口 → 弹窗 → 提交能力，一条链全在 */
+  T('修复145 · 管理条「🧠 重训小模型」→ trainModal → LMApp.trainLM → store.saveFileToRepo(data/lm.json)',
+    (function () {
+      const e = srcOf('js/editor.js'), st = srcOf('js/store.js'), ap = srcOf('js/app.js');
+      return e.indexOf('data-panel="trainlm"') > 0
+        && e.indexOf("k === 'trainlm'") > 0
+        && e.indexOf('function trainModal()') > 0
+        && e.indexOf('LMApp.trainLM({ order: 4, upload: canUp, pushContent: canUp })') > 0
+        && st.indexOf('async function saveFileToRepo(') > 0
+        && st.indexOf('saveFileToRepo: saveFileToRepo') > 0
+        && st.indexOf('pathOverride') > 0
+        && ap.indexOf('function trainLM(opts)') > 0
+        && ap.indexOf('trainLM: trainLM, lmCorpus: lmCorpus') > 0
+        && ap.indexOf("saveFileToRepo(cfg, branch, 'data/lm.json'") > 0
+        && ap.indexOf('LMStore.saveGitHub(cfg, state.content)') > 0   /* 先推内容，模型才对得上 */
+        /* 语料太小时 buildModel 会同步 throw —— 必须转成 rejected Promise，
+           否则弹窗的 .catch 接不到，按钮会永远卡在「正在重训…」 */
+        && ap.indexOf('catch (e1) { return Promise.reject(e1); }') > 0;
+    })());
+
+  T('修复145 · 没 Token 也能用（只在本机生效 + 可下载 lm.json）· README 已记录',
+    (function () {
+      const e = srcOf('js/editor.js');
+      return e.indexOf('id="trDl"') > 0 && e.indexOf("a.download = 'lm.json'") > 0
+        && srcOf('README.md').indexOf('修复145') > 0;
+    })());
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */

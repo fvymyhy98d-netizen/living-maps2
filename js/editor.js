@@ -952,6 +952,8 @@ window.LMEditor = (function () {
       + '<button class="btn btn-mini" data-panel="gaps" type="button" title="本页有自由框悬在半空？点这里把它上移贴紧上文（只动这些框的位置，正文不动，可按 Ctrl+Z 撤销）">⇧ 收拢空隙</button>'
       + '<button class="btn btn-mini" data-panel="hist" type="button">🕘 历史版本</button>'
       + '<button class="btn btn-mini" data-panel="backup" type="button">💾 备份 / 恢复</button>'
+      /* ★ 修复145：网页内重训小模型 —— 不用再回电脑敲 node tools/train_lm.js */
+      + '<button class="btn btn-mini" data-panel="trainlm" type="button" title="用当前内容重训站内小模型（只影响检索重排 + 英文词纠错），训完自动提交 data/lm.json；内容没改过就不用点">🧠 重训小模型</button>'
       + '<button class="btn btn-mini" data-panel="discard" type="button">↩ 放弃修改</button>'
       + '<button class="btn btn-mini" data-panel="password" type="button">🔑 修改密码</button>';
     if (!bar.dataset.init) {
@@ -983,6 +985,7 @@ window.LMEditor = (function () {
         '收拢', function () { LMApp.tidyGaps(40); });
     }
     else if (k === 'backup') backupModal();
+    else if (k === 'trainlm') trainModal();   /* ★ 修复145：网页内重训小模型 */
     else if (k === 'discard') discardModal();
     else if (k === 'password') passwordModal();
   });
@@ -1624,6 +1627,101 @@ window.LMEditor = (function () {
         const del = hit('[data-treedel]');
         if (del) { delPageTree(del.getAttribute('data-treedel')); return; }
         if (hit('#treeTop')) openPageForm(null, '', true);
+      });
+    });
+  }
+
+  /* ---------- ★ 修复145：小模型重训（网页内一键完成，替代命令行） ----------
+     以前只能在自己电脑上跑 node tools/train_lm.js，再 git 提交 —— 对「不想碰命令行」的人不成立。
+     现在：管理员模式本来就有 Token 和提交能力（写内容靠的就是它），所以训练、落盘、提交都能在页面里做完。 */
+  function trainModal() {
+    const hasAI = !!(window.LMAI && LMAI.pageText);
+    const cur = (window.LMLM && LMLM.info) ? LMLM.info() : null;
+    const corpusLen = hasAI ? LMApp.lmCorpus().length : 0;
+    const cfg = LMStore.getGhCfg();
+    const canUp = !!(cfg && cfg.owner && cfg.repo && LMStore.ghToken());
+    const syncLine = function (c) {
+      const d = corpusLen - c;
+      return d === 0 ? '✅ 与当前内容同步' : '⚠️ 需要重训（差 ' + (d > 0 ? '+' : '') + d + ' 字）';
+    };
+    const nowTxt = cur
+      ? ('当前模型：' + cur.order + '-gram · ' + cur.chars + ' 字\n当前内容：' + corpusLen + ' 字\n' + syncLine(cur.chars))
+      : ('当前模型：正在读取 data/lm.json…\n当前内容：' + corpusLen + ' 字');
+
+    modal('<h3>🧠 重训站内小模型</h3>'
+      + '<p class="modal-note">它只做两件事：<b>给检索结果重排</b>、<b>纠正站内没有的英文词</b>。'
+      + '它不生成任何文字（答案永远逐字来自你的原文），所以<b>加内容后不重训也不会答错</b>，只是语感略旧。</p>'
+      + '<p class="modal-note" id="trNow" style="white-space:pre-line">' + nowTxt + '</p>'
+      + (canUp
+        ? '<p class="modal-note">点「重训并上传」会依次做三件事：① 把当前内容同步到云端（顺带刷新新访客的首屏快照）'
+          + ' → ② 用这份内容重训 → ③ 提交 <code>data/lm.json</code>。几秒完成，Pages 重新发布约 1-2 分钟。</p>'
+        : '<p class="modal-note">⚠️ 还没配置云端（仓库名 / Token），只能在<b>本标签页</b>试算，刷新就没了。<br>'
+          + '想真正生效：先在「☁️ 同步到 GitHub」里把 Token 填好；也可以点「⤓ 下载 lm.json」手动放进仓库 <code>data/</code> 目录。</p>')
+      + '<div id="trOut" class="modal-note" style="min-height:18px;white-space:pre-line"></div>'
+      + '<div class="form-actions">'
+      + '<button type="button" class="btn btn-ghost" data-close>关闭</button>'
+      + '<button type="button" class="btn btn-ghost" id="trDl">⤓ 下载 lm.json</button>'
+      + '<button type="button" class="btn btn-primary" id="trGo">' + (canUp ? '🧠 重训并上传' : '🧠 重训（仅本机）') + '</button>'
+      + '</div>', function (root) {
+      const out = root.querySelector('#trOut');
+      const go = root.querySelector('#trGo');
+      /* 模型还没被懒加载过（用户没开过 AI 面板）→ 自己读一下文件，把真实状态显示出来，
+         顺便让它对本标签页生效（省得用户为了看状态专门去开一次 AI 面板） */
+      if (!cur && window.LMLM && typeof LMLM.fromJSON === 'function') {
+        fetch('data/lm.json?t=' + Date.now(), { cache: 'no-cache' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (j) {
+            const now = root.querySelector('#trNow');
+            if (!now) return;
+            if (!j || j.chars == null) {
+              now.textContent = '当前模型：读取失败（不影响重训）\n当前内容：' + corpusLen + ' 字';
+              return;
+            }
+            try { LMLM.fromJSON(j); } catch (e0) { /* noop */ }
+            now.textContent = '当前模型：' + (j.order || 4) + '-gram · ' + j.chars + ' 字\n'
+              + '当前内容：' + corpusLen + ' 字\n' + syncLine(j.chars);
+          })
+          .catch(function () {
+            const now = root.querySelector('#trNow');
+            if (now) now.textContent = '当前模型：读取失败（不影响重训）\n当前内容：' + corpusLen + ' 字';
+          });
+      }
+      const show = function (r, ok) {
+        out.style.color = ok ? '#0a7d32' : '#b3261e';
+        out.textContent = [
+          '语料 ' + r.chars + ' 字 · ' + r.order + '-gram · 上下文 ' + r.contexts + ' 个 · 条目 ' + r.entries,
+          '产物 ' + (r.bytes / 1024).toFixed(1) + ' KB · 困惑度 ' + r.ppl.toFixed(2) + ' · 耗时 ' + r.ms + ' ms',
+          r.uploaded ? '✅ 已提交到 ' + r.branch + ' 分支（Pages 1-2 分钟后生效）' : '⚠️ 只在当前标签页生效（未上传）'
+        ].join('\n');
+      };
+      go.addEventListener('click', function () {
+        const old = go.textContent;
+        go.disabled = true; go.textContent = '正在重训…';
+        out.textContent = ''; out.style.color = '';
+        LMApp.trainLM({ order: 4, upload: canUp, pushContent: canUp }).then(function (r) {
+          go.textContent = '✅ 完成';
+          show(r, true);
+          LMApp.toast(r.uploaded ? '✅ 小模型已重训并提交' : '✅ 已重训（仅本标签页生效）');
+        }).catch(function (err) {
+          go.disabled = false; go.textContent = old;
+          out.style.color = '#b3261e';
+          out.textContent = '失败：' + ((err && err.message) ? err.message : err);
+        });
+      });
+      root.querySelector('#trDl').addEventListener('click', function () {
+        /* 兜底：没有 Token 也能把产物带走，手动放进仓库 data/ 即可 */
+        LMApp.trainLM({ order: 4, upload: false }).then(function (r) {
+          const blob = new Blob([JSON.stringify(r.payload)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'lm.json';
+          a.click();
+          URL.revokeObjectURL(a.href);
+          LMApp.toast('已下载 lm.json —— 放进仓库 data/ 目录即可');
+        }).catch(function (err) {
+          out.style.color = '#b3261e';
+          out.textContent = '失败：' + ((err && err.message) ? err.message : err);
+        });
       });
     });
   }

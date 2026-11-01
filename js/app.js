@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '144';
+var LM_ASSET_VER = '145';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -3193,8 +3193,61 @@ window.LMApp = (function () {
     init();
   }
 
+  /* ---------- ★ 修复145：网页内重训小模型（管理条「🧠 重训小模型」） ----------
+     训练算法在 js/lm.js（buildModel，命令行用的是同一份代码），这里只负责：
+     取当前内容当语料 → 训 → 本标签页立刻生效 → 提交 data/lm.json。
+     为什么能这么干：管理员模式本来就有 GitHub Token 与提交能力（写内容就是靠它），
+     所以不必再让人回电脑敲 node 命令。 */
+  function lmCorpus() {
+    if (!window.LMAI || typeof LMAI.pageText !== 'function') return '';
+    const pages = (state.content && state.content.pages) || [];
+    return pages.map(function (p) { return LMAI.pageText(p); }).join('\n');
+  }
+  function trainLM(opts) {
+    const o = opts || {};
+    if (!window.LMLM || typeof LMLM.buildModel !== 'function') {
+      return Promise.reject(new Error('小模型模块没加载（js/lm.js）'));
+    }
+    const text = lmCorpus();
+    let r;
+    /* ★ 必须把同步异常转成 rejected Promise：buildModel 语料太少会 throw，
+       而调用方（弹窗）用的是 .then/.catch —— 直接抛出去会让按钮永远卡在「正在重训…」 */
+    try { r = LMLM.buildModel(text, o.order || 4); }
+    catch (e1) { return Promise.reject(e1); }
+    LMLM.fromJSON(r.payload);       /* 当场生效：本标签页立刻用上新模型，不用刷新 */
+    const info = {
+      chars: r.chars, order: r.order, bytes: r.bytes, contexts: r.contexts,
+      entries: r.entries, minCount: r.minCount, cap: r.cap, ms: r.ms,
+      payload: r.payload,   /* 产物本体：调用方可以拿去下载 / 自己落盘 */
+      ppl: text.length >= 2 ? Math.exp(-LMLM.logp(text)) : 0
+    };
+    if (!o.upload) return Promise.resolve(info);
+
+    const cfg = LMStore.getGhCfg();
+    cfg.token = cfg.token || LMStore.ghToken();
+    if (!cfg.owner || !cfg.repo || !cfg.token) {
+      return Promise.reject(new Error('还没配置云端（仓库名 / Token）—— 模型只在本标签页生效'));
+    }
+    const branch = cfg.branch || 'main';
+    const json = JSON.stringify(r.payload);
+    let p = Promise.resolve();
+    /* 先把内容推上去：仓库里的 data/content.js 必须等于本机内容，
+       否则模型记的字数和线上内容对不上（命令行 --check、测试 小模型7 都会报「语料变了」） */
+    if (o.pushContent !== false) p = p.then(function () { return LMStore.saveGitHub(cfg, state.content); });
+    return p.then(function () {
+      /* lm.json 写发布分支（必须和页面同源，Pages 才送得到）；会让 Pages 重新发布，几十秒 */
+      return LMStore.saveFileToRepo(cfg, branch, 'data/lm.json', json,
+        '小模型重训（网站后台）' + new Date().toLocaleString('zh-CN'));
+    }).then(function () {
+      try { if (window.LMCollab && LMCollab.dropGhSha) LMCollab.dropGhSha(); } catch (e0) { /* noop */ }
+      info.uploaded = true; info.branch = branch;
+      return info;
+    });
+  }
+
   return {
     state: state, render: render, applyEdit: applyEdit, toast: toast,
+    trainLM: trainLM, lmCorpus: lmCorpus,   /* ★ 修复145：网页内重训小模型 */
     /* ★ 修复101：对方 dcommit 到达后要重绘「讨论区」——以前错接成 mountFeedback，
        结果数据合进来了、页面还不刷新（要手动切页才看到别人的发言/删除）。
        ★ 修复102：走 dcRepaint()，正在打字时不打断输入。 */

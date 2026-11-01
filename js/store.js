@@ -226,8 +226,10 @@ window.LMStore = (function () {
   }
 
   /* 单文件 PUT 工具（指定分支）：返回 Response */
-  async function ghPutFile(cfg, branch, text, token, msg) {
-    const path = (cfg.path || DEF_GH.path).replace(/^\/+/, '');
+  async function ghPutFile(cfg, branch, text, token, msg, pathOverride) {
+    /* ★ 修复145：可指定别的文件（网页内重训小模型要提交 data/lm.json）；
+       不传就还是内容文件，老调用点行为不变 */
+    const path = String(pathOverride || cfg.path || DEF_GH.path).replace(/^\/+/, '');
     const api = 'https://api.github.com/repos/' + encodeURIComponent(cfg.owner) + '/'
       + encodeURIComponent(cfg.repo) + '/contents/'
       + path.split('/').map(encodeURIComponent).join('/');
@@ -289,6 +291,20 @@ window.LMStore = (function () {
     return true;
   }
 
+  /* ★ 修复145：把「任意文本文件」提交到仓库指定分支（网页内重训小模型 → data/lm.json）。
+     为什么要单独一个函数：内容走 saveGitHub（数据分支 + main 快照），而 lm.json 必须和页面
+     同源（Pages 只发布发布分支），所以这里直接写发布分支，不碰数据分支。 */
+  async function saveFileToRepo(cfg, branch, filePath, text, msg) {
+    const token = cfg.token || ghToken();
+    if (!cfg.owner || !cfg.repo || !token) throw new Error('请先填写仓库名和 GitHub Token');
+    const res = await ghPutFile(cfg, branch || cfg.branch || 'main', text, token, msg, filePath);
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error('提交失败：HTTP ' + res.status + ' ' + t.slice(0, 160));
+    }
+    return true;
+  }
+
   return {
     load: load, saveLocal: saveLocal, resetLocal: resetLocal,
     validateContent: validateContent,   /* ★ 修复122：结构校验（导入备份 / 远端坏包共用） */
@@ -297,6 +313,7 @@ window.LMStore = (function () {
     encryptForTeam: encryptForTeam, decryptForTeam: decryptForTeam,
     sha256Hex: sha256Hex, pbkdf2Hex: pbkdf2Hex, randomSaltHex: randomSaltHex,
     PBKDF2_ITERS: PBKDF2_ITERS,
-    saveGitHub: saveGitHub, buildFileText: buildFileText, deepCopy: deepCopy
+    saveGitHub: saveGitHub, saveFileToRepo: saveFileToRepo,   /* ★ 修复145：提交任意文件（小模型） */
+    buildFileText: buildFileText, deepCopy: deepCopy
   };
 })();

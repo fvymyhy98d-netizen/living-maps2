@@ -111,8 +111,100 @@
     });
   }
 
+  /* ================= 训练（★ 修复145：网页里也能训，管理条「🧠 重训小模型」）=================
+     以前训练算法只存在于 tools/train_lm.js（Node），网页改不了仓库文件，所以只能敲命令行。
+     现在把算法放在这里：CLI（tools/train_lm.js）和网页（js/app.js → LMApp.trainLM）**调用同一份代码**，
+     两边训出来的 JSON 逐字节一致，不会出现「两套实现慢慢漂移」。
+     仍然是纯统计（数「前 k 个字 → 下一个字」的频次），这里不生成任何文字。 */
+  const MAX_BYTES = 900 * 1024;
+
+  /* UTF-8 字节数：浏览器没有 Buffer，这里手算（与 Node 的 Buffer.byteLength 等价） */
+  function utf8Bytes(s) {
+    s = String(s == null ? '' : s);
+    let n = 0;
+    for (let i = 0; i < s.length; i++) {
+      const c = s.charCodeAt(i);
+      if (c < 0x80) n += 1;
+      else if (c < 0x800) n += 2;
+      else if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) { n += 4; i++; }  /* 代理对 = 4 字节 */
+      else n += 3;
+    }
+    return n;
+  }
+
+  /* 统计 k=1..order 的字符上下文 → { 下一个字符: 次数 } */
+  function countGrams(text, order) {
+    const ctx = [];
+    for (let k = 1; k <= order; k++) ctx[k] = {};
+    for (let i = 1; i < text.length; i++) {
+      for (let k = 1; k <= order; k++) {
+        if (i - k < 0) break;
+        const key = text.slice(i - k, i);
+        const row = (ctx[k][key] = ctx[k][key] || {});
+        row[text[i]] = (row[text[i]] || 0) + 1;
+      }
+    }
+    return ctx;
+  }
+
+  /* 裁剪：丢掉出现太少的上下文/字符，每个上下文最多留 cap 个后继。
+     ★ 一元（k=1）不裁剪 —— 否则大量单字查不到概率、全落到 FLOOR（困惑度会失真）。 */
+  function pruneGrams(ctx, order, minC, cap) {
+    const out = {};
+    for (let k = 1; k <= order; k++) {
+      const src = ctx[k] || {};
+      out[k] = {};
+      Object.keys(src).forEach(function (key) {
+        const row = src[key];
+        const chars = (k === 1)
+          ? Object.keys(row)
+          : Object.keys(row).filter(function (c) { return row[c] >= minC; });
+        if (!chars.length) return;
+        chars.sort(function (a, b) { return row[b] - row[a]; });
+        const o = {};
+        chars.slice(0, k === 1 ? chars.length : cap).forEach(function (c) { o[c] = row[c]; });
+        out[k][key] = o;
+      });
+    }
+    return out;
+  }
+
+  /* 训练主入口：语料文本 → { payload, order, chars, bytes, contexts, entries, minCount, cap, ms }
+     payload 就是 data/lm.json 的完整内容，直接 JSON.stringify 落盘即可。 */
+  function buildModel(text, order, maxBytes) {
+    const t0 = (typeof Date !== 'undefined') ? Date.now() : 0;
+    order = Math.max(1, Math.min(5, parseInt(order, 10) || 4));
+    text = String(text == null ? '' : text);
+    if (text.length < 500) throw new Error('语料太小（' + text.length + ' 字），先多写几页');
+    const raw = countGrams(text, order);
+    const limit = maxBytes || MAX_BYTES;
+    let grams = null, bytes = 0, minC = 2, cap = 8, guard = 0;
+    for (;;) {
+      grams = pruneGrams(raw, order, minC, cap);
+      bytes = utf8Bytes(JSON.stringify({ order: order, chars: text.length, grams: grams }));
+      if (bytes <= limit || ++guard > 40) break;
+      if (minC < 10) minC++;
+      else if (cap > 2) cap--;
+      else break;
+    }
+    let entries = 0, contexts = 0;
+    for (let k = 1; k <= order; k++) {
+      Object.keys(grams[k]).forEach(function (key) {
+        contexts++;
+        entries += Object.keys(grams[k][key]).length;
+      });
+    }
+    return {
+      payload: { order: order, chars: text.length, grams: grams },
+      order: order, chars: text.length, bytes: bytes, contexts: contexts, entries: entries,
+      minCount: minC, cap: cap,
+      ms: (typeof Date !== 'undefined') ? (Date.now() - t0) : 0
+    };
+  }
+
   return {
     fromJSON: fromJSON, load: load, ready: ready, info: info,
-    logp: logp, rerank: rerank, fixQuery: fixQuery, dist: dist
+    logp: logp, rerank: rerank, fixQuery: fixQuery, dist: dist,
+    buildModel: buildModel, utf8Bytes: utf8Bytes, MAX_BYTES: MAX_BYTES   /* ★ 修复145 */
   };
 });

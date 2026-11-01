@@ -16,7 +16,7 @@ const DIR = path.join(__dirname, '..');
 const ai = require(path.join(DIR, 'js/ai.js'));
 const LMLM = require(path.join(DIR, 'js/lm.js'));   /* ★ 修复115：训练完立刻用运行时打分，给出可量化的困惑度 */
 
-const MAX_BYTES = 900 * 1024;   /* ★ 修复113：上限放大（模型"大一点"）；页面仍只在打开面板时懒加载 */
+const MAX_BYTES = LMLM.MAX_BYTES;   /* ★ 修复145：体积上限只有一份定义（js/lm.js） */
 
 /* ★ 修复113：--check —— 只比对"语料变没变"，不重训。改了内容后用它可以一眼看出 lm.json 是否过期 */
 function checkOnly() {
@@ -42,78 +42,26 @@ function corpus() {
   return pages.map(function (p) { return ai.pageText(p); }).join('\n');
 }
 
-/* 统计 k=1..order 的字符上下文 → { 下一个字符: 次数 } */
-function count(text, order) {
-  const ctx = [];
-  for (let k = 1; k <= order; k++) ctx[k] = {};
-  for (let i = 1; i < text.length; i++) {
-    for (let k = 1; k <= order; k++) {
-      if (i - k < 0) break;
-      const key = text.slice(i - k, i);
-      const row = (ctx[k][key] = ctx[k][key] || {});
-      row[text[i]] = (row[text[i]] || 0) + 1;
-    }
-  }
-  return ctx;
-}
+/* 统计 / 裁剪 / 体积计算都已搬到 js/lm.js（buildModel）—— 网页管理条「🧠 重训小模型」用的是同一份，
+   这里不再重复实现，避免 CLI 与浏览器各训一套、慢慢漂移。 */
 
-/* 裁剪：丢掉出现太少的上下文/字符，每个上下文最多留 cap 个后继
-   ★ 修复115：**一元（k=1）不裁剪** —— 以前连单字后继也被砍到 8 个，
-   结果大量字根本查不到概率、全部落到 FLOOR 惩罚（困惑度 5780，毫无意义）。
-   一元表很小（每个字一行），全留既省不了多少体积，又能保证"任何字都有概率"。 */
-function prune(ctx, order, minC, cap) {
-  const out = {};
-  for (let k = 1; k <= order; k++) {
-    const src = ctx[k] || {};
-    out[k] = {};
-    Object.keys(src).forEach(function (key) {
-      const row = src[key];
-      const chars = (k === 1)
-        ? Object.keys(row)
-        : Object.keys(row).filter(function (c) { return row[c] >= minC; });
-      if (!chars.length) return;
-      chars.sort(function (a, b) { return row[b] - row[a]; });
-      const o = {};
-      chars.slice(0, k === 1 ? chars.length : cap).forEach(function (c) { o[c] = row[c]; });
-      out[k][key] = o;
-    });
-  }
-  return out;
-}
-
-function bytesOf(order, grams, chars) {
-  return Buffer.byteLength(JSON.stringify({ order: order, chars: chars, grams: grams }), 'utf8');
-}
+/* 裁剪参数说明留在 js/lm.js 的 pruneGrams里（★ 修复145 起只有一份实现）。 */
 
 function main() {
   const t0 = Date.now();
   const order = Math.max(1, Math.min(5, parseInt(process.argv[2], 10) || 4));
   const text = corpus();
-  if (text.length < 500) throw new Error('语料太小（' + text.length + ' 字），先多写几页');
-  const raw = count(text, order);
-
-  let grams = null, bytes = 0, minC = 2, cap = 8, guard = 0;
-  for (;;) {
-    grams = prune(raw, order, minC, cap);
-    bytes = bytesOf(order, grams, text.length);
-    if (bytes <= MAX_BYTES || ++guard > 40) break;
-    if (minC < 10) minC++;
-    else if (cap > 2) cap--;
-    else break;
-  }
-
-  let entries = 0, contexts = 0;
-  for (let k = 1; k <= order; k++) {
-    Object.keys(grams[k]).forEach(function (key) { contexts++; entries += Object.keys(grams[k][key]).length; });
-  }
+  /* ★ 修复145：训练算法统一走 js/lm.js 的 buildModel —— 网页管理条「🧠 重训小模型」
+     调的是同一个函数，所以「命令行训的」和「网页点一下训的」产物逐字节一致。 */
+  const r = LMLM.buildModel(text, order, MAX_BYTES);
 
   const outFile = path.join(DIR, 'data/lm.json');
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
-  fs.writeFileSync(outFile, JSON.stringify({ order: order, chars: text.length, grams: grams }), 'utf8');
-  console.log('语料 ' + text.length + ' 字 · ' + order + '-gram · 上下文 ' + contexts + ' 个 · 条目 ' + entries);
-  console.log('裁剪参数 minCount=' + minC + ' cap=' + cap + ' · 产物 ' + (bytes / 1024).toFixed(1) + ' KB → data/lm.json');
+  fs.writeFileSync(outFile, JSON.stringify(r.payload), 'utf8');
+  console.log('语料 ' + r.chars + ' 字 · ' + r.order + '-gram · 上下文 ' + r.contexts + ' 个 · 条目 ' + r.entries);
+  console.log('裁剪参数 minCount=' + r.minCount + ' cap=' + r.cap + ' · 产物 ' + (r.bytes / 1024).toFixed(1) + ' KB → data/lm.json');
   /* ★ 修复115：给出可量化的质量指标（困惑度越低越"像站里的话"）+ 耗时，方便你判断这次改动值不值 */
-  LMLM.fromJSON({ order: order, chars: text.length, grams: grams });
+  LMLM.fromJSON(r.payload);
   const ppl = function (s) { return s.length >= 2 ? Math.exp(-LMLM.logp(s)) : 0; };
   const holdN = Math.min(400, Math.floor(text.length * 0.15));
   const hold = holdN >= 40 ? text.slice(-holdN) : '';
