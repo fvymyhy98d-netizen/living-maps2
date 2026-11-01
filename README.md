@@ -1385,3 +1385,78 @@ answer.head="- 此回复非三张活地图学习站点页面内容 / - 我是该
 
 **顺带**：按用户要求，已中止并删除 Ollama 安装包下载（`OllamaSetup.exe` 到 345 MB / 1.68 GB 时取消），本机**没有**安装 Ollama。
 
+
+
+## 三·补9、让别人也能用 + 滚轮不再带动主页面 + 上限可调（2026-10-31 / 修复130）
+
+四个问题，逐条回答：
+
+### ① 「别人电脑上探测到天禧，也能自动接上吗？」
+
+**网页自己装不了东西**（浏览器没有任何权限启动本地程序），所以「零操作自动接」在技术上不存在。能做到的是「**一键**」，而且已经做到：
+
+- **双击 `tools\start-tianxi-bridge.cmd`** —— 一个文件搞定，不用敲命令、不用记端口；
+- 桥起来之后，别人打开站点 → 「⚙ 接本机模型」→ 直接看到「**联想天禧（本地千问） · 11468**」→ 点一下就用上了；
+- **万一将来天禧自己补上 CORS**：站点新增了「**天禧直连（无桥）**」这条兜底（`http://[::1]:11466`）。那时别人什么都不用跑，打开网页就认出来了 —— 现在这条会被浏览器静默跳过（因为没 ACAO），不打扰任何人。
+
+### ② 「别人 Python 版本和我不一样，还能跑吗？」
+
+能，而且**根本不需要 Python**。新增第二个桥：`tools/tianxi-bridge.ps1`。
+
+| 方案 | 依赖 | 适用 |
+| --- | --- | --- |
+| `tools\tianxi-bridge.py` | Python **3.6+**（语法只用 `%` 格式化，不用 f-string/walrus） | 有 Python 的人，速度最快 |
+| `tools\tianxi-bridge.ps1` | **Windows 自带的 PowerShell 5.1**，零安装 | 没装 Python / 微软商店占位符 / 版本不确定 |
+| `tools\start-tianxi-bridge.cmd` | 无 | 双击入口：按 `py -3` → `python` → `python3` → `powershell` 顺序自动挑 |
+
+PS 版用 `System.Net.Sockets.TcpListener` 手写 HTTP 转发（**不用 HttpListener**，因为那需要管理员或 URL 预留），每条连接一个 runspace，所以长回答不会把「探测」堵住。
+
+实测（同一个流式请求，`curl -w` 计时）：
+
+```
+PS-BRIDGE ttfb=0.443s total=9.58s  bytes=53456     ← 首字节 0.44s ≪ 总时长 → 确实在逐字流
+PY-BRIDGE ttfb=0.015s total=1.63s  bytes=53468
+```
+
+结论：**两版都逐字流式**；Python 版更快，PowerShell 版是「人人有」的兜底。
+
+### ③ 「探测到其他模型能直接接入吗？」
+
+能。`ENDPOINTS` 现在是 **9 个**，探测到哪个就在设置面板里列成按钮（点一下自动填地址+模型）：
+
+`联想天禧（本地千问）· 11468`、`天禧直连（无桥）· 11466`、`Ollama · 11434`、`LM Studio · 1234`、`llama.cpp · 8080`、`KoboldCpp · 5001`、`vLLM · 8000`、`text-generation-webui · 5000`、`Jan · 1337`。
+
+- 端口不在这张表里？设置面板可以**手填地址**（只允许 `127.0.0.1` / `localhost` / `[::1]`，外网一律拒绝）。
+- 模型一堆挑不准？`pickBest()` 会排除 `embedding / rerank / safety / checker / intent / creator / whisper / tts` 这类非聊天模型，并按 `qwen3 > qwen2.5 > …` 与「3B–9B 最舒服」打分 —— 天禧那 6 个模型里实测选中 `Qwen3-4B-Thinking`。
+
+### ④ 「在提问里滚鼠标，后面的主页面会跟着滚」
+
+这是**滚动链（scroll chaining）**：`.lm-ai-chat` 滚到底后把滚动传给 `.lm-ai-panel`，再传给整个页面。修法两行：
+
+```css
+.lm-ai-panel{ overscroll-behavior:contain; }   /* 不把滚动传给主页面 */
+.lm-ai-chat { overscroll-behavior:contain; }   /* 对话区滚到底不再带着面板走 */
+```
+
+现在鼠标在面板里怎么滚，主页面都不动；面板自己滚到底也是「停住」而不是「甩给页面」。
+
+### ⑤ 「模型输出上限在电脑承受范围内改大一点」
+
+从写死的 1024 → **默认 3072，可在设置里选 1024 / 2048 / 3072（推荐）/ 4096 / 6144 / 8192**（代码里夹在 256–8192，越界自动纠正）。
+
+为什么不是越大越好：4B 模型 93 tok/s，3072 已经要约 33 秒；而且**输出上限算在模型的上下文窗口里**（天禧这类服务常是 8K 上下文），设太高会把提示词挤掉。老配置里没这个字段的，自动回落 3072。
+
+实测（站点自己的模块）：
+
+```
+maxTok=4096 → 请求体 max_tokens=4096
+maxTok=1024 → 1024
+maxTok=999999 → 8192（自动夹住）
+老配置缺字段 → 3072
+真跑：chunks=1635, len=62, 无 think 标签
+  "- 此问题未提供【页面内容】，以下为通用知识解释：…"
+```
+
+**回归（修复130）**：`node --check`（ai-ollama / app / test_yjs）通过；`test_yjs.js` **437/437**（新增 1 条：9 个端点含 `[::1]:11466`、CSS 两处 `overscroll-behavior:contain`、`maxTok` 默认与请求体、PS 桥的 `TcpListener`/CORS 头、启动器的两版分支；并把「7/8 个端口」「只认 127.0.0.1」的旧断言同步放宽）；`tools/tianxi-bridge.ps1` 实跑自检（GET `/v1/models` → 200 + 6 个 CORS 头；OPTIONS → 204；流式 POST → 53 KB / TTFB 0.44s）；其余套件：marks 25/25、hist 15/15、yield PASS、collab 9/9、comments 9/9。资源版本 `?v=130`（22 处）/ `LM_ASSET_VER='130'`。
+
+**诚实边界**：别人电脑上仍然**必须手动跑一次那个小桥**（浏览器限制，绕不过去）；天禧是联想预装软件，非联想机器没有它 —— 那些机器上站点会自动落到 Ollama / LM Studio 等 8 个常见本机服务上，或者在设置里手填地址。

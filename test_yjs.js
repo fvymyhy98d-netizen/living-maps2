@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=129 · LM_ASSET_VER=129',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=130 · LM_ASSET_VER=130',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=128/g) || []).length === 0 && /\?v=129/.test(html)
-      && /LM_ASSET_VER = '129'/.test(appJs));
+      && (html.match(/\?v=129/g) || []).length === 0 && /\?v=130/.test(html)
+      && /LM_ASSET_VER = '130'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3827,7 +3827,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         const urls = o.match(/https?:\/\/[^\s'"<)]+/g) || [];
         const bad = urls.filter(function (u) {
           return u.indexOf('ollama.com/download') < 0 && u.indexOf('你的站点') < 0
-            && !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(u);
+            && !/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])/.test(u);   /* ★ 130：回环三种写法都算本机 */
         });
         const oll = require(path.join(DIR, 'js/ai-ollama.js'));
         return bad.length === 0 && urls.length >= 2
@@ -3854,8 +3854,8 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         const a = srcOf('js/ai.js');
         const oll = require(path.join(DIR, 'js/ai-ollama.js'));
         const ports = oll.ENDPOINTS.map(function (e) { return String(e.base).replace(/.*:/, ''); });
-        const want = ['11468', '11434', '1234', '8080', '5001', '8000', '5000', '1337'];
-        return ports.length === 8
+        const want = ['11468', '11466', '11434', '1234', '8080', '5001', '8000', '5000', '1337'];
+        return ports.length === 9
           && want.every(function (p) { return ports.indexOf(p) >= 0; })
           && typeof oll.detect === 'function' && typeof oll.autoDetect === 'function'
           && typeof oll.autoConnect === 'function' && typeof oll.pull === 'function'
@@ -3903,7 +3903,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
           && oll.visible('前言<think>还没想完') === '前言'
           && oll.visible('直接答案') === '直接答案'
           && oll.version === '3'
-          && o.indexOf('max_tokens: 2048') > 0 && o.indexOf('num_predict: 2048') > 0
+          && o.indexOf('maxTok') > 0 && o.indexOf('max_tokens: mt') > 0
           && o.indexOf('思考中…') > 0 && o.indexOf('lmLlmTxCopy') > 0
           && html.indexOf('http://[::1]:*') > 0
           && py.indexOf('Access-Control-Allow-Origin') > 0 && py.indexOf('Access-Control-Allow-Private-Network') > 0
@@ -3912,10 +3912,31 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       } catch (e) { return false; }
     })());
 
-  T('版本已升到 129（?v=129 共 22 处 · v128 无残留 · LM_ASSET_VER=129）',
-    (html.match(/\?v=129/g) || []).length === 22 && (html.match(/\?v=128/g) || []).length === 0
-      && /LM_ASSET_VER = '129'/.test(appJs),
-    'v129=' + (html.match(/\?v=129/g) || []).length + ' v128=' + (html.match(/\?v=128/g) || []).length);
+  /* —— ★ 修复130：别人电脑也能用（PowerShell 零依赖兜底）/ 其它本地模型直接接 / 滚轮不再带动主页面 / 输出上限可调 —— */
+  T('修复130 · 本机模型：滚轮不再带动主页面 · 回答上限可调(默认3072) · 天禧直连兜底 · 没 Python 也能跑 PowerShell 桥',
+    (function () {
+      try {
+        const o = srcOf('js/ai-ollama.js');
+        const c130 = srcOf('css/style.css');
+        const oll = require(path.join(DIR, 'js/ai-ollama.js'));
+        const ps1 = srcOf('tools/tianxi-bridge.ps1');
+        const cmd = srcOf('tools/start-tianxi-bridge.cmd');
+        const eps = oll.ENDPOINTS.map(function (e) { return e.base; });
+        return oll.ENDPOINTS.length === 9
+          && eps.indexOf('http://[::1]:11466') >= 0                    /* 天禧直连兜底（将来它自己补 CORS 就零配置） */
+          && (c130.match(/overscroll-behavior:contain/g) || []).length >= 2
+          && o.indexOf('maxTok: 3072') > 0 && o.indexOf('lmLlmMaxTok') > 0
+          && o.indexOf('max_tokens: mt') > 0 && o.indexOf('num_predict: mt') > 0
+          && ps1.indexOf('TcpListener') > 0 && ps1.indexOf('Access-Control-Allow-Origin') > 0
+          && ps1.indexOf('ReadByte') > 0 && ps1.indexOf('Access-Control-Allow-Private-Network') > 0
+          && cmd.indexOf('tianxi-bridge.ps1') > 0 && cmd.indexOf('tianxi-bridge.py') > 0;
+      } catch (e) { return false; }
+    })());
+
+  T('版本已升到 130（?v=130 共 22 处 · v129 无残留 · LM_ASSET_VER=130）',
+    (html.match(/\?v=130/g) || []).length === 22 && (html.match(/\?v=129/g) || []).length === 0
+      && /LM_ASSET_VER = '130'/.test(appJs),
+    'v130=' + (html.match(/\?v=130/g) || []).length + ' v129=' + (html.match(/\?v=129/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

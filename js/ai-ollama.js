@@ -19,8 +19,9 @@
 (function (W) {
   'use strict';
   var KEY = 'lm_llm_cfg_v1';
-  /* kind：ollama = 原生 /api/*；openai = 兼容 /v1/chat/completions；scope：page=连本页正文一起发，question=只发问题 */
-  var DEF = { url: 'http://127.0.0.1:11434', model: 'qwen2.5:7b', kind: 'ollama', scope: 'page', on: false };
+  /* kind：ollama = 原生 /api/*；openai = 兼容 /v1/chat/completions；scope：page=连本页正文一起发，question=只发问题
+     maxTok：回答长度上限（★ 修复130：从写死的 1024 改成可调，默认 3072 —— 思考型模型光思考就吃满 1024） */
+  var DEF = { url: 'http://127.0.0.1:11434', model: 'qwen2.5:7b', kind: 'ollama', scope: 'page', maxTok: 3072, on: false };
   /* 只认本机地址：外网域名一律拒绝（就算有人手改 localStorage 也发不出去） */
   var ALLOW = /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\/?$/i;
   /* ★ 修复126：本机推理服务的「约定端口」—— 浏览器不能扫端口/枚举进程，只能试这些众所周知的口子。
@@ -29,6 +30,9 @@
     /* ★ 修复129：联想天禧（xiaotian）自带 Qwen3-4B，跑在 [::1]:11466 的 OpenAI 兼容接口上，
        但它不返回 CORS 头，网页直接连会被拦；用 tools/tianxi-bridge.py 在 127.0.0.1:11468 补一层即可。 */
     { id: 'tianxi', name: '联想天禧（本地千问）', base: 'http://127.0.0.1:11468', kind: 'openai' },
+    /* ★ 修复130：兜底探测「天禧直连」—— 万一以后天禧自己补上 CORS，别人什么都不用装就能用；
+       现在它不放行跨域，这条会被浏览器静默拦掉（catch 里跳过），不打扰用户。 */
+    { id: 'tianxiDirect', name: '天禧直连（无桥）', base: 'http://[::1]:11466', kind: 'openai' },
     { id: 'ollama', name: 'Ollama', base: 'http://127.0.0.1:11434', kind: 'ollama' },
     { id: 'lmstudio', name: 'LM Studio', base: 'http://127.0.0.1:1234', kind: 'openai' },
     { id: 'llamacpp', name: 'llama.cpp', base: 'http://127.0.0.1:8080', kind: 'openai' },
@@ -272,13 +276,16 @@
     if (!ALLOW.test(String(c.url || ''))) return Promise.reject(new Error('地址不在白名单（只允许 127.0.0.1 / localhost）'));
     var u = base(c.url);
     var isOll = (c.kind || 'ollama') !== 'openai';
+    /* ★ 修复130：上限可调（默认 3072）。夹在 256~8192：太小答案会被掐断，太大则白等 */
+    var mt = parseInt(c.maxTok, 10); if (!(mt > 0)) mt = 3072;
+    mt = Math.max(256, Math.min(8192, mt));
     var body = isOll
       ? {
-        model: c.model, stream: true, options: { temperature: 0.2, num_predict: 2048 },
+        model: c.model, stream: true, options: { temperature: 0.2, num_predict: mt },
         messages: [{ role: 'system', content: SYS }, { role: 'user', content: userMsg(c, q, digest) }]
       }
       : {
-        model: c.model, stream: true, temperature: 0.2, max_tokens: 2048,
+        model: c.model, stream: true, temperature: 0.2, max_tokens: mt,
         messages: [{ role: 'system', content: SYS }, { role: 'user', content: userMsg(c, q, digest) }]
       };
     return fetchT(u + (isOll ? '/api/chat' : '/v1/chat/completions'), {
@@ -349,6 +356,15 @@
       + '<input id="lmLlmUrl" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d2d2d7;border-radius:10px" value="' + String(c.url) + '">'
       + '<label style="display:block;margin:10px 0 4px">模型名</label>'
       + '<input id="lmLlmModel" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d2d2d7;border-radius:10px" value="' + String(c.model) + '">'
+      /* ★ 修复130：回答长度上限可调（默认 3072；思考型模型建议 3072 以上，否则结论出不来） */
+      + '<label style="display:block;margin:10px 0 4px">回答长度上限 <span style="color:#6e6e73">（越大越慢；思考型模型建议 3072 以上）</span></label>'
+      + '<select id="lmLlmMaxTok" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d2d2d7;border-radius:10px">'
+      + [1024, 2048, 3072, 4096, 6144, 8192].map(function (v) {
+        var cur = Number(c.maxTok) || 3072;
+        return '<option value="' + v + '"' + (cur === v ? ' selected' : '') + '>' + v + ' tokens'
+          + (v === 3072 ? '（推荐）' : v === 8192 ? '（最慢，够写长文）' : '') + '</option>';
+      }).join('')
+      + '</select>'
       + '<div style="margin:10px 0 0;color:#6e6e73">发给模型的内容：'
       + '<label style="display:block"><input type="radio" name="lmLlmScope" value="page"' + (c.scope !== 'question' ? ' checked' : '') + '> 本页正文 + 我的问题（答得更准）</label>'
       + '<label style="display:block"><input type="radio" name="lmLlmScope" value="question"' + (c.scope === 'question' ? ' checked' : '') + '> 只发我的问题（最保守，模型看不到页面）</label>'
@@ -368,8 +384,10 @@
       + '（<code>/v1/models</code> 能列出来）。它缺的只有 CORS，浏览器直连会被拦 —— 补一层本地小桥就行，'
       + '<strong>不下载任何模型、不用装东西</strong>（Python 标准库）：</div>'
       + '<pre id="lmLlmTxCmd" style="white-space:pre-wrap;background:#f5f5f7;border-radius:10px;padding:10px;margin:8px 0 0;font-size:12.5px">'
-      + '# 在仓库根目录执行一次（每次想用本机模型时开一个窗口挂着它）\n'
-      + 'py tools\\tianxi-bridge.py</pre>'
+      + '# 方式一（有 Python 3）：在仓库根目录执行\n'
+      + 'py tools\\tianxi-bridge.py\n\n'
+      + '# 方式二（没装 Python / 版本不确定）：双击这个，用的是系统自带的 PowerShell\n'
+      + 'tools\\start-tianxi-bridge.cmd</pre>'
       + '<button type="button" id="lmLlmTxCopy" class="btn btn-ghost" style="margin-top:8px">复制这条命令</button>'
       + '<div style="margin-top:6px;color:#6e6e73">桥起来后，上面的识别结果里会多一个「联想天禧（本地千问） · 11468」，'
       + '点它就接管了。模型识别与选择都在你自己电脑上完成，页面正文是否随问题一起发，由下面的「隐私范围」决定。</div>'
@@ -408,10 +426,12 @@
       return (r && r.value) === 'question' ? 'question' : 'page';
     };
     var readForm = function () {
+      var sel = q('#lmLlmMaxTok');
       return {
         url: String(q('#lmLlmUrl').value || '').trim(),
         model: String(q('#lmLlmModel').value || '').trim(),
-        scope: scopeOf()
+        scope: scopeOf(),
+        maxTok: Number((sel && sel.value) || 0) || 3072
       };
     };
     var kindOf = function (u) { return /:11434\/?$/.test(String(u)) ? 'ollama' : 'openai'; };
@@ -512,10 +532,11 @@
       var f = readForm();
       if (!ALLOW.test(f.url)) { say('地址只能是 127.0.0.1 / localhost（本机服务）', true); return; }
       if (!f.model) { say('请填模型名', true); return; }
-      if (!setCfg({ url: f.url, kind: kindOf(f.url), model: f.model, scope: f.scope, on: true })) {
+      if (!setCfg({ url: f.url, kind: kindOf(f.url), model: f.model, scope: f.scope, maxTok: f.maxTok, on: true })) {
         say('保存失败（无痕模式可能禁用了本地存储）', true); return;
       }
-      say('✅ 已启用 ' + f.model + (f.scope === 'question' ? '（只发问题，不带页面正文）' : '（连本页正文一起发）'));
+      say('✅ 已启用 ' + f.model + '（上限 ' + f.maxTok + ' tokens）'
+        + (f.scope === 'question' ? '（只发问题，不带页面正文）' : '（连本页正文一起发）'));
       setTimeout(function () { wrap.remove(); if (typeof done === 'function') done(); }, 700);
     });
     /* ★ 修复126：网页里直接下载模型 —— 不用开命令行，进度就在这一行里走 */
