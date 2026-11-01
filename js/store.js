@@ -62,12 +62,33 @@ window.LMStore = (function () {
     } catch (e) { return { ok: false, why: '结构异常：' + ((e && e.message) || e) }; }
   }
 
+  /* ★ 修复147：内容版本戳（与协同通道同一口径：config.collab.syncTs 越大越新） */
+  function tsOf(c) {
+    try { return +(((c || {}).config || {}).collab || {}).syncTs || 0; } catch (e) { return 0; }
+  }
+  /* ★ 修复147：「仓库里的新内容」vs「浏览器里的旧存档」—— 谁的版本戳新用谁的。
+     以前 load() 无条件优先 localStorage：只要这台浏览器存过一份内容，之后仓库里推上去的
+     新内容就进不来（只能等云端轮询把它合过来，或手动清缓存），
+     表现正是「脚本/样式都更新了（管理条变了），内容却没变」。
+     规则很保守：只有文件版本**严格更新**才换，且换之前把旧存档留在 lm_prev_v1 备查；
+     本机自己编辑过（版本戳等于或新于文件）时一律保留本机内容，不会误删本地改动。 */
+  function pickNewer(local, bundled) {
+    try {
+      if (!bundled || !Array.isArray(bundled.pages) || !bundled.pages.length) return local;
+      if (!local || !Array.isArray(local.pages)) return bundled;
+      if (tsOf(bundled) <= tsOf(local)) return local;
+      try { localStorage.setItem('lm_prev_v1', JSON.stringify(local)); } catch (eP) { /* 配额满就跳过备份 */ }
+      try { saveLocal(bundled); } catch (eS) { /* 写不进也只是下次再判一次 */ }
+      return bundled;
+    } catch (e) { return local; }
+  }
   function load() {
+    const bundled = deepCopy(window.SITE_CONTENT);
     try {
       const raw = localStorage.getItem(LS_KEY);
       if (raw) {
         const v = validateContent(JSON.parse(raw));   /* ★ 修复122：结构坏也算坏 */
-        if (v.ok) return v.content;
+        if (v.ok) return pickNewer(v.content, bundled);   /* ★ 修复147：文件里的更新版优先 */
         throw new Error(v.why);
       }
     } catch (e) {
@@ -77,12 +98,12 @@ window.LMStore = (function () {
         for (let i = snaps.length - 1; i >= 0; i--) {
           try {
             const v = validateContent(JSON.parse(snaps[i]).c);   /* ★ 修复122：快照同样要过校验 */
-            if (v.ok) return v.content;
+            if (v.ok) return pickNewer(v.content, bundled);
           } catch (e3) { /* 这份也坏 → 试上一份 */ }
         }
       } catch (e2) { /* 快照也没有 → 落回默认内容 */ }
     }
-    return deepCopy(window.SITE_CONTENT);
+    return bundled;
   }
   /* ★ 修复122：写盘失败（最常见是 localStorage 约 5MB 配额被大图吃满）时先腾空间再重试 ——
      崩溃快照 lm_snap_v1 是「可再生的副本」，主内容写不进去才是真的丢数据。

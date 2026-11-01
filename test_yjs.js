@@ -3589,10 +3589,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=146 · LM_ASSET_VER=146',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=147 · LM_ASSET_VER=147',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=145/g) || []).length === 0 && /\?v=146/.test(html)
-      && /LM_ASSET_VER = '146'/.test(appJs));
+      && (html.match(/\?v=146/g) || []).length === 0 && /\?v=147/.test(html)
+      && /LM_ASSET_VER = '147'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4493,10 +4493,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 146（?v=146 共 22 处 · v145 无残留 · LM_ASSET_VER=146）',
-    (html.match(/\?v=146/g) || []).length === 22 && (html.match(/\?v=145/g) || []).length === 0
-      && /LM_ASSET_VER = '146'/.test(appJs),
-    'v146=' + (html.match(/\?v=146/g) || []).length + ' v143=' + (html.match(/\?v=145/g) || []).length);
+  T('版本已升到 147（?v=147 共 22 处 · v146 无残留 · LM_ASSET_VER=147）',
+    (html.match(/\?v=147/g) || []).length === 22 && (html.match(/\?v=146/g) || []).length === 0
+      && /LM_ASSET_VER = '147'/.test(appJs),
+    'v147=' + (html.match(/\?v=147/g) || []).length + ' v143=' + (html.match(/\?v=146/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -5010,7 +5010,7 @@ console.log('【修复146】底部管理条 8 → 3（其余收进「⚙️ 页�
       && edt3.indexOf('要重训吗？') > 0);
 
   /* ★ 示例条目：结构必须真的能用（不是一段死文字）—— 直接解析 data/content.js 校验 */
-  T('修复146 · 示例条目 demo-rag：挂在领域地图下 · 覆盖 9 种块 · 表格/图表/来源自洽且链接是真的',
+  T('修复147 · 示例条目 demo-rag：一级页（顶部导航直接可见，不必翻到领域地图底部）· 覆盖 9 种块 · 表格/图表/来源自洽且链接是真的',
     (function () {
       const fs4 = require('fs');
       const path4 = require('path');
@@ -5019,7 +5019,9 @@ console.log('【修复146】底部管理条 8 → 3（其余收进「⚙️ 页�
       new Function('window', 'var module={};' + srcC)(w);
       const ps = (w.SITE_CONTENT && w.SITE_CONTENT.pages) || [];
       const dm = ps.filter(function (p) { return p.id === 'demo-rag'; })[0];
-      if (!dm || dm.parent !== 'domain' || !Array.isArray(dm.blocks)) return false;
+      if (!dm || dm.parent || !Array.isArray(dm.blocks)) return false;
+      /* renderNav 的可见条件：没有 parent（不是子页）+ 有 label/title/icon → 一定会出现在顶部导航 */
+      if (!(dm.label || dm.title || dm.icon)) return false;
       const types = {};
       dm.blocks.forEach(function (b) { types[b.type] = 1; });
       const need = ['paragraph', 'callout', 'heading', 'table', 'chart', 'related', 'sources', 'files', 'hr'];
@@ -5049,7 +5051,82 @@ console.log('【修复146】底部管理条 8 → 3（其余收进「⚙️ 页�
     })());
 })();
 
+/* ---------- 修复147：新内容推上去，「老访客刷新即见」（load 不再无条件优先本地存档） ---------- */
+console.log('【修复147】load() 比较 syncTs：文件里的内容比浏览器存档新 → 采用文件；本机编辑过 → 保留本机');
+
+(function () {
+  const TSRC = srcOf('js/store.js');
+
+  /* 真跑：把 store.js 整段 IIFE 放进桩环境（window / localStorage），直接调 load() */
+  function runLoad(localMap, bundled) {
+    const win = {};
+    const ls = {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(localMap, k) ? localMap[k] : null; },
+      setItem: function (k, v) { localMap[k] = String(v); },
+      removeItem: function (k) { delete localMap[k]; }
+    };
+    const doc = {
+      readyState: 'complete', addEventListener: function () {},
+      querySelector: function () { return null; }, createElement: function () { return {}; }
+    };
+    const noop = function () {};
+    new Function('window', 'document', 'localStorage', 'sessionStorage', 'navigator', 'console', TSRC)(
+      win, doc, ls, ls, { userAgent: 'node' }, { log: noop, warn: noop, error: noop });
+    win.SITE_CONTENT = bundled;
+    return { api: win.LMStore, map: localMap };
+  }
+  function mkC(ts, withDemo) {
+    const pages = [{ id: 'home', blocks: [] }];
+    if (withDemo) pages.push({ id: 'demo-rag', blocks: [{ type: 'hr' }] });
+    return { config: { collab: { syncTs: ts } }, pages: pages };
+  }
+
+  T('修复147 · 真跑 load()：文件版更新 → 采用文件版（并刷新存档、旧档存 lm_prev_v1）；本机更新 → 保留本机；无存档 → 用文件版',
+    (function () {
+      /* A：浏览器存档旧（无示例页），文件里更新（有示例页） → 必须采用文件版 */
+      const mapA = { lm_content_v1: JSON.stringify(mkC(1000, false)) };
+      const a = runLoad(mapA, mkC(2000, true));
+      const ra = a.api.load();
+      const okA = ra.pages.some(function (p) { return p.id === 'demo-rag'; })
+        && /demo-rag/.test(String(a.map.lm_content_v1 || ''))
+        && !!a.map.lm_prev_v1;
+
+      /* B：本机改过（版本戳更新） → 绝不能被文件版盖掉 */
+      const mapB = { lm_content_v1: JSON.stringify(mkC(3000, false)) };
+      const b = runLoad(mapB, mkC(2000, true));
+      const rb = b.api.load();
+      const okB = !rb.pages.some(function (p) { return p.id === 'demo-rag'; })
+        && rb.config.collab.syncTs === 3000;
+
+      /* C：第一次访问（没有存档） → 文件版 */
+      const c = runLoad({}, mkC(2000, true));
+      const rc = c.api.load();
+      const okC = rc.pages.some(function (p) { return p.id === 'demo-rag'; });
+
+      return okA && okB && okC;
+    })());
+
+  T('修复147 · 用真实的 data/content.js 跑 load()（存档=用户那台机器上一版 1793547842003）→ 9 页且含示例页',
+    (function () {
+      const fs2 = require('fs'), path2 = require('path');
+      const real = {};
+      new Function('window', 'var module={};' + fs2.readFileSync(path2.join(DIR, 'data/content.js'), 'utf8'))(real);
+      const d = runLoad({ lm_content_v1: JSON.stringify(mkC(1793547842003, false)) }, real.SITE_CONTENT);
+      const r = d.api.load();
+      return r.pages.length === 9 && r.pages.some(function (p) { return p.id === 'demo-rag'; });
+    })());
+
+  T('修复147 · 源码标记：tsOf / pickNewer / 只有严格更新才换 / 保留本机不变 / lm_prev_v1 备查',
+    TSRC.indexOf('function tsOf(c) {') > 0
+      && TSRC.indexOf('function pickNewer(local, bundled) {') > 0
+      && TSRC.indexOf('if (tsOf(bundled) <= tsOf(local)) return local;') > 0
+      && TSRC.indexOf("localStorage.setItem('lm_prev_v1'") > 0
+      && TSRC.indexOf('if (v.ok) return pickNewer(v.content, bundled);') > 0);
+})();
+
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
+
+
 function finishAll() {
   console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);
