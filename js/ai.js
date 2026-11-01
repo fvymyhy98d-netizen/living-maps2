@@ -694,21 +694,131 @@ W.LMAI = (function () {
           下次打开还在 —— 看起来就是"在这里和 DeepSeek 聊天"。
      为什么不能真把官网的回答拉进页面：chat.deepseek.com 有 X-Frame-Options/CSP 禁止被 iframe 嵌；
      跨域也拿不到别的标签页的输入框与回答（同源策略）；不接 API 就没有合法的机器可读通道。 */
-  const CHAT_KEY = 'lm_ai_chat_v1';
-  function chatAll() {
-    try {
-      const j = JSON.parse(localStorage.getItem(CHAT_KEY) || '{}');
-      return (j && typeof j === 'object') ? j : {};
-    } catch (e) { return {}; }
+  const CHAT_KEY = 'lm_ai_chat_v1';   /* 旧结构 { 页面id: [消息…] } —— 现在只读（迁移用），不再写 */
+  /* ★ 修复132：一页可以有**好几个对话**（像 DeepSeek 左侧那种列表），每个对话单独存、可单独删。
+     新结构：{ v:2, cur:{ 页面id: 对话id }, pages:{ 页面id: [ { id, title, ts, msgs:[…] } … ] } }
+     还是只存在你这台电脑的浏览器里（localStorage），别人看不到、也不上传。 */
+  const TH_KEY = 'lm_ai_threads_v1';
+  const PER_THREAD = 12;              /* 每个对话最多留 12 条（和以前一样，防 localStorage 越用越大） */
+  const MAX_THREADS = 30;             /* 每一页最多留 30 个对话 */
+  function uid() { return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
+  /* 对话标题 = 第一句「我说的」话（超过 18 字截断），没有就用「新对话」 */
+  function titleOf(msgs) {
+    const m = (msgs || []).filter(function (x) { return x && x.r === 'me' && x.t; })[0];
+    const s = m ? String(m.t).replace(/\s+/g, ' ').trim() : '';
+    return s ? (s.length > 18 ? s.slice(0, 18) + '…' : s) : '新对话';
   }
-  function chatOf(id) {
-    const a = chatAll()[id];
+  /* 老版本存的 {页面:[消息…]} → 每页折成 1 个对话。旧键不清：万一又想退回老版本，记录还在。 */
+  function tMigrate() {
+    const st = { v: 2, cur: {}, pages: {} };
+    let old = null;
+    try { old = JSON.parse(localStorage.getItem(CHAT_KEY) || 'null'); } catch (e) { old = null; }
+    if (old && typeof old === 'object') {
+      Object.keys(old).forEach(function (pid) {
+        const msgs = Array.isArray(old[pid]) ? old[pid] : [];
+        if (!msgs.length) return;
+        const t = { id: uid(), title: titleOf(msgs), ts: msgs[msgs.length - 1].ts || Date.now(), msgs: msgs.slice(-PER_THREAD) };
+        st.pages[pid] = [t];
+        st.cur[pid] = t.id;
+      });
+    }
+    return st;
+  }
+  function tList(st, id) {
+    const a = (st && st.pages) ? st.pages[id] : null;
     return Array.isArray(a) ? a : [];
+  }
+  function tSave(st) {
+    try { localStorage.setItem(TH_KEY, JSON.stringify(st)); } catch (e) { /* 隐私模式：只在本次页面里生效 */ }
+  }
+  function tStore() {
+    let st = null;
+    try { st = JSON.parse(localStorage.getItem(TH_KEY) || 'null'); } catch (e) { st = null; }
+    if (!st || typeof st !== 'object' || Number(st.v) !== 2 || !st.pages || typeof st.pages !== 'object') {
+      st = tMigrate();          /* 第一次用新结构：顺手把老记录搬过来 */
+      tSave(st);
+    }
+    if (!st.cur || typeof st.cur !== 'object') st.cur = {};
+    return st;
+  }
+  /* 当前对话（没有就建一个空的并切过去）。内部用：拿到后改完自己 tSave(st) */
+  function tCur(st, pageId) {
+    let arr = tList(st, pageId);
+    let t = arr.filter(function (x) { return x && x.id === st.cur[pageId]; })[0];
+    if (!t) {
+      t = arr[0];
+      if (!t) {
+        t = { id: uid(), title: '新对话', ts: Date.now(), msgs: [] };
+        arr = [t];
+        st.pages[pageId] = arr;
+      }
+      st.cur[pageId] = t.id;
+    }
+    if (!Array.isArray(t.msgs)) t.msgs = [];
+    return t;
+  }
+  /* 这一页所有对话的摘要（标题 / 条数 / 时间 / 是不是当前这个），给列表用 */
+  function threadsOf(pageId) {
+    const st = tStore();
+    return tList(st, pageId).map(function (t) {
+      return {
+        id: t.id, title: t.title || '新对话', ts: t.ts || 0,
+        n: Array.isArray(t.msgs) ? t.msgs.length : 0, cur: t.id === st.cur[pageId]
+      };
+    });
+  }
+  function curTid(pageId) { const st = tStore(); return tCur(st, pageId).id; }
+  function ensureThread(pageId) { const st = tStore(); tCur(st, pageId); tSave(st); }
+  function threadNew(pageId) {
+    const st = tStore();
+    const t = { id: uid(), title: '新对话', ts: Date.now(), msgs: [] };
+    st.pages[pageId] = tList(st, pageId).concat([t]).slice(-MAX_THREADS);
+    st.cur[pageId] = t.id;
+    tSave(st);
+    return t.id;
+  }
+  function threadSet(pageId, id) {
+    const st = tStore();
+    const hit = tList(st, pageId).filter(function (t) { return t.id === id; })[0];
+    if (!hit) return false;
+    st.cur[pageId] = id;
+    tSave(st);
+    return true;
+  }
+  /* 批量删（ids 传数组，也接受单个 id）。删光了自动补一个空对话，面板不会变白。 */
+  function threadDel(pageId, ids) {
+    const st = tStore();
+    const kill = {};
+    (Array.isArray(ids) ? ids : [ids]).forEach(function (x) { if (x) kill[x] = 1; });
+    const left = tList(st, pageId).filter(function (t) { return !kill[t.id]; });
+    if (!left.length) {
+      const t = { id: uid(), title: '新对话', ts: Date.now(), msgs: [] };
+      st.pages[pageId] = [t];
+      st.cur[pageId] = t.id;
+    } else {
+      st.pages[pageId] = left;
+      if (!left.filter(function (t) { return t.id === st.cur[pageId]; }).length) st.cur[pageId] = left[0].id;
+    }
+    tSave(st);
+    return left.length;
+  }
+  function threadRename(pageId, id, title) {
+    const st = tStore();
+    const hit = tList(st, pageId).filter(function (t) { return t.id === id; })[0];
+    if (!hit) return false;
+    hit.title = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 24) || '新对话';
+    tSave(st);
+    return true;
+  }
+  /* —— 下面三个是老接口（站内别处 + 单元测试都在用）：一律作用在「当前对话」上 —— */
+  function chatOf(id) {
+    const st = tStore();
+    const arr = tList(st, id);
+    const t = arr.filter(function (x) { return x.id === st.cur[id]; })[0] || arr[0];
+    return (t && Array.isArray(t.msgs)) ? t.msgs.slice() : [];
   }
   function chatPush(id, msg) {
     if (!id || !msg) return;
-    const all = chatAll();
-    const arr = Array.isArray(all[id]) ? all[id] : [];
     const rec = { r: msg.r || 'me', t: String(msg.t || '').slice(0, 4000), ts: Date.now(), src: msg.src || null };
     if (msg.q) rec.q = String(msg.q).slice(0, 120);   /* ★ 修复117：记下这一问，供出处高亮用 */
     /* ★ 修复131：「这次送了什么」那行小字也要存，否则重绘就没了 */
@@ -725,14 +835,21 @@ W.LMAI = (function () {
       }).filter(function (c) { return c.pageId && c.text; });
       if (!rec.cite.length) delete rec.cite;
     }
-    arr.push(rec);
-    all[id] = arr.slice(-12);                       /* 每页最多留 12 条，防 localStorage 膨胀 */
-    try { localStorage.setItem(CHAT_KEY, JSON.stringify(all)); } catch (e) { /* 隐私模式：只在本页内存生效 */ }
+    const st = tStore();
+    const t = tCur(st, id);
+    t.msgs.push(rec);
+    t.msgs = t.msgs.slice(-PER_THREAD);             /* 每个对话最多留 12 条，防 localStorage 膨胀 */
+    t.ts = rec.ts;
+    if (!t.title || t.title === '新对话') t.title = titleOf(t.msgs);
+    tSave(st);
   }
+  /* 清空 = 只清「当前这个对话」的内容，别的对话一条不动、对话本身也还在（标题回到「新对话」） */
   function chatClear(id) {
-    const all = chatAll();
-    delete all[id];
-    try { localStorage.setItem(CHAT_KEY, JSON.stringify(all)); } catch (e) { /* noop */ }
+    const st = tStore();
+    const arr = tList(st, id);
+    const t = arr.filter(function (x) { return x.id === st.cur[id]; })[0] || arr[0];
+    if (t) { t.msgs = []; t.title = '新对话'; t.ts = Date.now(); }
+    tSave(st);
   }
   /* ---------- ⑨.2 ★ 修复108：可选的「浏览器扩展」桥 ----------
      装仓里的 ext/ 扩展后：问题经扩展送进 chat.deepseek.com，DeepSeek 的回答再**自动**回到
@@ -910,6 +1027,113 @@ W.LMAI = (function () {
   /* ★ 修复107：这里原本有一个「带 Key 直连官方接口」的函数 —— 已按要求**整块删除**。
      现在本站**没有任何 API 调用、不读写任何 Key**，`test_yjs` 断言「ai.js 全文 0 处 fetch」。 */
 
+  /* ★ 修复132：面板大小 —— 标准 / 加宽 / 加高 / 满屏 四档（点 ⤢ 轮换），桌面端还能拖左上角那个
+     小把手自由缩放（记成「自定义」）。选过的档位存在本机，下次打开还是这个大小。
+     手机端不进拖拽逻辑（手指拖角落很容易和滚动打架），只用这四档。 */
+  const SIZE_KEY = 'lm_ai_size_v1';
+  const SIZES = ['std', 'wide', 'tall', 'max'];
+  const SIZE_NAME = { std: '标准', wide: '加宽', tall: '加高', max: '满屏', custom: '自定义' };
+  let sizeMode = 'std', sizeCus = null;
+  function sizeLoad() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SIZE_KEY) || 'null');
+      if (!s) return;
+      if (s.mode === 'custom' && s.w && s.h) { sizeMode = 'custom'; sizeCus = { w: s.w, h: s.h }; return; }
+      if (SIZES.indexOf(s.mode) >= 0) sizeMode = s.mode;
+    } catch (e) { sizeMode = 'std'; sizeCus = null; }
+  }
+  function sizeSave() {
+    try {
+      localStorage.setItem(SIZE_KEY, JSON.stringify({ mode: sizeMode, w: sizeCus ? sizeCus.w : 0, h: sizeCus ? sizeCus.h : 0 }));
+    } catch (e) { /* 隐私模式：这次有效，下次回到标准 */ }
+  }
+  function applySize() {
+    if (!panel) return;
+    panel.setAttribute('data-size', sizeMode);
+    if (sizeMode === 'custom' && sizeCus) {
+      /* 自定义：宽高写死，对话区跟着长高（面板本身不再整体滚，对话区自己滚） */
+      panel.style.width = sizeCus.w + 'px';
+      panel.style.height = sizeCus.h + 'px';
+      panel.style.maxHeight = 'none';
+      panel.style.setProperty('--chat', Math.max(120, sizeCus.h - 300) + 'px');
+    } else {
+      panel.style.width = '';
+      panel.style.height = '';
+      panel.style.maxHeight = '';
+      try { panel.style.removeProperty('--chat'); } catch (e) { /* 老浏览器：忽略 */ }
+    }
+    const b = panel.querySelector('.lm-ai-size');
+    if (b) {
+      b.textContent = (sizeMode === 'max') ? '⤡' : '⤢';
+      b.title = '面板大小：' + (SIZE_NAME[sizeMode] || '标准') + '（点一下换下一档'
+        + (isNarrow() ? '' : '；拖左上角可自由缩放，双击把手回到标准') + '）';
+    }
+  }
+  function sizeNext() {
+    const i = SIZES.indexOf(sizeMode);            /* 自定义(=-1) → 回到标准 */
+    sizeMode = SIZES[(i + 1) % SIZES.length];
+    sizeCus = null;
+    applySize(); sizeSave();
+    if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('面板：' + SIZE_NAME[sizeMode]);
+  }
+  /* ★ 修复132：对话列表（顶栏 ☰ 点开）。每行 = 勾选框 + 标题（点它切过去）+ 单个删除；
+     顶部「全选 / 删除选中」，删之前要点两次（第一次变成「再点一次确认」，3 秒不管就复原）。 */
+  function renderThreads(pageId) {
+    const box = panel && panel.querySelector('.lm-ai-threads');
+    if (!box) return;
+    const id = pageId || curId();
+    const ths = threadsOf(id);
+    let h = '<div class="lm-ai-th-top">'
+      + '<label class="lm-ai-th-all"><input type="checkbox" class="lm-ai-thallck"> 全选</label>'
+      + '<span class="lm-ai-th-n">共 ' + ths.length + ' 个对话</span>'
+      + '<button type="button" class="btn lm-ai-th-del" disabled>删除选中</button>'
+      + '</div>';
+    if (!ths.length) {
+      h += '<p class="lm-ai-tip">这一页还没有对话。点下面的「新对话」开一个。</p>';
+    } else {
+      h += '<div class="lm-ai-th-list">' + ths.map(function (t) {
+        const d = t.ts ? new Date(t.ts) : null;
+        const when = d ? ((d.getMonth() + 1) + '-' + d.getDate() + ' ' + d.getHours() + ':' + ('0' + d.getMinutes()).slice(-2)) : '';
+        return '<div class="lm-ai-th-row' + (t.cur ? ' on' : '') + '" data-tid="' + esc(t.id) + '">'
+          + '<input type="checkbox" class="lm-ai-th-ck" data-tid="' + esc(t.id) + '" aria-label="选择这个对话">'
+          + '<button type="button" class="lm-ai-th-go" data-tid="' + esc(t.id) + '">' + esc(t.title)
+          + '<em>' + t.n + ' 条' + (when ? ' · ' + when : '') + (t.cur ? ' · 当前' : '') + '</em></button>'
+          + '<button type="button" class="lm-ai-th-one" data-tid="' + esc(t.id) + '" title="删掉这个对话">🗑</button>'
+          + '</div>';
+      }).join('') + '</div>';
+    }
+    h += '<div class="lm-ai-th-foot"><button type="button" class="btn lm-ai-new2">＋ 新对话</button>'
+      + '<button type="button" class="btn lm-ai-th-close">收起</button></div>';
+    box.innerHTML = h;
+  }
+  /* 勾选框一变就刷新「删除选中（n）」和「全选」的半选状态 */
+  function thSyncDel() {
+    const box = panel && panel.querySelector('.lm-ai-threads');
+    if (!box) return;
+    const cks = box.querySelectorAll('.lm-ai-th-ck');
+    const on = box.querySelectorAll('.lm-ai-th-ck:checked');
+    const del = box.querySelector('.lm-ai-th-del');
+    if (del) {
+      del.disabled = on.length === 0;
+      del.textContent = on.length ? ('删除选中（' + on.length + '）') : '删除选中';
+      del.classList.remove('arm');
+    }
+    const all = box.querySelector('.lm-ai-thallck');
+    if (all) {
+      all.checked = cks.length > 0 && on.length === cks.length;
+      try { all.indeterminate = on.length > 0 && on.length < cks.length; } catch (e) { /* noop */ }
+    }
+  }
+
+  /* 顶栏那个「☰ 对话 n」的数字，顺带把开着的列表重画一遍 */
+  function syncThreads(pageId) {
+    if (!panel) return;
+    const cnt = panel.querySelector('.lm-ai-cnt');
+    if (cnt) cnt.textContent = String(threadsOf(pageId).length);
+    const box = panel.querySelector('.lm-ai-threads');
+    if (box && !box.hidden) renderThreads(pageId);
+  }
+
   function renderPanel() {
     if (!panel) return;
     const body = panel.querySelector('.lm-ai-body');
@@ -920,6 +1144,8 @@ W.LMAI = (function () {
     const ix = indexNow();
     if (!ix) { body.innerHTML = '<p class="lm-ai-tip">内容还在加载，稍等一下下…</p>'; return; }
     const id = curId();
+    ensureThread(id);            /* ★ 修复132：这一页至少留一个对话（新页面打开面板就有一个「新对话」） */
+    syncThreads(id);
     const pts = summarize(ix, id, 3);
     const kws = keywords(ix, id, 8);
     const rel = related(ix, id, 3);
@@ -975,7 +1201,7 @@ W.LMAI = (function () {
       + (llmFound && !llmReady()
         ? '<button class="btn lm-llm-use" type="button" title="点一下就用它：只在本机通信，不经过任何服务器">🧠 检测到 ' + esc(llmFound.ep.name) + ' · ' + esc(llmFound.model) + ' · 点此启用</button>'
         : '')
-      + '<button class="btn lm-ai-clear" type="button" title="清空这一页的对话">🗑 清空</button>'
+      + '<button class="btn lm-ai-clear" type="button" title="只清空当前这个对话（其它对话一条不动）">🗑 清空</button>'
       + '</div>'
       + '<div class="lm-ai-pastebox" hidden><textarea class="lm-ai-pasteta" placeholder="把 DeepSeek 的回答粘到这里（Ctrl/⌘+V），再点「保存到对话」"></textarea>'
       + '<button class="btn lm-ai-pastesave" type="button">保存到对话</button></div>'
@@ -1212,7 +1438,7 @@ W.LMAI = (function () {
     const clrBtn = body.querySelector('.lm-ai-clear');
     if (clrBtn) clrBtn.addEventListener('click', function () {
       chatClear(id);
-      if (window.LMApp && LMApp.toast) LMApp.toast('已清空这一页的对话');
+      if (window.LMApp && LMApp.toast) LMApp.toast('已清空当前对话（其它对话一条没动）');
       renderPanel();
     });
     /* ★ 修复126：把「检测到 XXX」那个按钮点掉 → 自动接上并切成这个模式，不用填任何东西 */
@@ -1262,7 +1488,7 @@ W.LMAI = (function () {
     const open = force === true ? true : (force === false ? false : panel.hidden);
     panel.hidden = !open;
     if (fab) fab.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) { lockScroll(); renderPanel(); } else unlockScroll();
+    if (open) { lockScroll(); applySize(); renderPanel(); } else unlockScroll();
   }
   function mount() {
     if (fab || typeof document === 'undefined') return;
@@ -1285,8 +1511,15 @@ W.LMAI = (function () {
     panel.setAttribute('aria-label', '提问 · 这一页的要点与问答');
     panel.innerHTML = '<div class="lm-ai-head"><b>💬 提问</b>'
       + '<span class="lm-ai-badge">不用 API · 不存 Key</span>'
+      /* ★ 修复132：三个小键 —— 开新对话 / 这一页的所有对话（可勾选批量删）/ 面板放大缩小 */
+      + '<button type="button" class="lm-ai-hbtn lm-ai-new" title="开一个新对话（这一页可以有多个对话，各存各的，互不干扰）">＋<span class="lm-ai-hbtn-t"> 新对话</span></button>'
+      + '<button type="button" class="lm-ai-hbtn lm-ai-list" title="这一页的所有对话 · 可勾选批量删除">☰<span class="lm-ai-hbtn-t"> 对话</span><i class="lm-ai-cnt">0</i></button>'
+      + '<button type="button" class="lm-ai-hbtn lm-ai-size" title="放大 / 缩小">⤢</button>'
       + '<button type="button" class="lm-ai-x" aria-label="关闭">×</button></div>'
-      + '<div class="lm-ai-body"></div>';
+      + '<div class="lm-ai-threads" hidden></div>'
+      + '<div class="lm-ai-body"></div>'
+      /* 左上角的小把手：桌面上拖动可自由缩放；双击回到标准大小 */
+      + '<div class="lm-ai-resize" title="拖左上角可放大 / 缩小；双击回到标准大小"></div>';
     document.body.appendChild(panel);
     /* ★ 修复119：「展开全文」用事件委托 —— 面板每次都是整段重绘，绑在按钮上重绘一次就失效 */
     panel.addEventListener('click', function (e) {
@@ -1321,6 +1554,136 @@ W.LMAI = (function () {
     });
     const x = panel.querySelector('.lm-ai-x');
     if (x) x.addEventListener('click', function () { toggle(false); });
+
+    /* ---------- ★ 修复132：多对话 / 批量删除 / 面板缩放 ---------- */
+    sizeLoad();
+    applySize();
+    /* 「＋ 新对话」：开一个空的并切过去（旧对话留着） */
+    const newBtn = panel.querySelector('.lm-ai-new');
+    if (newBtn) newBtn.addEventListener('click', function () {
+      const pid = curId();
+      if (!pid) return;
+      threadNew(pid);
+      const box = panel.querySelector('.lm-ai-threads');
+      if (box) box.hidden = true;
+      const lb = panel.querySelector('.lm-ai-list');
+      if (lb) lb.classList.remove('on');
+      renderPanel();
+      if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('开了一个新对话（旧对话还在，点 ☰ 对话 能找回来）');
+      const inp = panel.querySelector('.lm-ai-input');
+      if (inp) inp.focus();
+    });
+    /* 「☰ 对话」：展开 / 收起这一页的对话列表 */
+    const listBtn = panel.querySelector('.lm-ai-list');
+    const thBox = panel.querySelector('.lm-ai-threads');
+    if (listBtn && thBox) listBtn.addEventListener('click', function () {
+      const open = thBox.hidden;
+      if (open) renderThreads();
+      thBox.hidden = !open;
+      listBtn.classList.toggle('on', open);
+    });
+    const closeTh = function () {
+      if (thBox) thBox.hidden = true;
+      if (listBtn) listBtn.classList.remove('on');
+    };
+    /* 列表整段重绘，所以点击 / 勾选都走事件委托 */
+    if (thBox) {
+      thBox.addEventListener('change', function (e) {
+        const el = e.target;
+        if (!el || !el.classList) return;
+        if (el.classList.contains('lm-ai-thallck')) {
+          const want = !!el.checked;
+          const cks = thBox.querySelectorAll('.lm-ai-th-ck');
+          for (let i = 0; i < cks.length; i++) cks[i].checked = want;
+        }
+        if (el.classList.contains('lm-ai-thallck') || el.classList.contains('lm-ai-th-ck')) thSyncDel();
+      });
+      thBox.addEventListener('click', function (e) {
+        const b = (e.target && e.target.closest) ? e.target.closest('button') : null;
+        if (!b) return;
+        const pid = curId();
+        if (b.classList.contains('lm-ai-th-go')) {
+          if (threadSet(pid, b.getAttribute('data-tid'))) { closeTh(); renderPanel(); }
+          return;
+        }
+        if (b.classList.contains('lm-ai-th-one')) {          /* 删单个：第一次只是「上膛」 */
+          if (!b.classList.contains('arm')) {
+            b.classList.add('arm');
+            b.textContent = '确认？';
+            setTimeout(function () {
+              if (!b.parentNode) return;
+              b.classList.remove('arm');
+              b.textContent = '🗑';
+            }, 3000);
+            return;
+          }
+          threadDel(pid, [b.getAttribute('data-tid')]);
+          renderThreads(); renderPanel();
+          if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('已删掉这个对话');
+          return;
+        }
+        if (b.classList.contains('lm-ai-th-del')) {          /* 批量删：也要点两次 */
+          const ids = [];
+          const cks = thBox.querySelectorAll('.lm-ai-th-ck');
+          for (let i = 0; i < cks.length; i++) if (cks[i].checked) ids.push(cks[i].getAttribute('data-tid'));
+          if (!ids.length) return;
+          if (!b.classList.contains('arm')) {
+            b.classList.add('arm');
+            b.textContent = '再点一次确认删除 ' + ids.length + ' 个';
+            setTimeout(function () { thSyncDel(); }, 3000);
+            return;
+          }
+          threadDel(pid, ids);
+          renderThreads(); renderPanel();
+          if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('已删掉 ' + ids.length + ' 个对话');
+          return;
+        }
+        if (b.classList.contains('lm-ai-new2')) {
+          threadNew(pid); closeTh(); renderPanel();
+          if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('开了一个新对话');
+          return;
+        }
+        if (b.classList.contains('lm-ai-th-close')) closeTh();
+      });
+    }
+    /* 「⤢」：标准 → 加宽 → 加高 → 满屏 → 标准 */
+    const sizeBtn = panel.querySelector('.lm-ai-size');
+    if (sizeBtn) sizeBtn.addEventListener('click', sizeNext);
+    /* 左上角把手拖动自由缩放（只在桌面；手机上靠 ⤢ 的四档，避免和页面滚动抢手指） */
+    const grip = panel.querySelector('.lm-ai-resize');
+    if (grip) {
+      let drag = null;
+      grip.addEventListener('pointerdown', function (e) {
+        if (isNarrow()) return;
+        e.preventDefault();
+        const r = panel.getBoundingClientRect();
+        drag = { x: e.clientX, y: e.clientY, w: r.width, h: r.height };
+        try { grip.setPointerCapture(e.pointerId); } catch (err) { /* 没有指针捕获也能拖 */ }
+        panel.classList.add('is-resizing');
+      });
+      grip.addEventListener('pointermove', function (e) {
+        if (!drag) return;
+        const maxW = Math.max(320, Math.min(760, window.innerWidth - 40));
+        const maxH = Math.max(320, window.innerHeight - 110);
+        const w = Math.max(320, Math.min(maxW, drag.w + (drag.x - e.clientX)));
+        const h = Math.max(320, Math.min(maxH, drag.h + (drag.y - e.clientY)));
+        sizeMode = 'custom';
+        sizeCus = { w: Math.round(w), h: Math.round(h) };
+        applySize();
+      });
+      const stopDrag = function () {
+        if (!drag) return;
+        drag = null;
+        panel.classList.remove('is-resizing');
+        sizeSave();
+      };
+      grip.addEventListener('pointerup', stopDrag);
+      grip.addEventListener('pointercancel', stopDrag);
+      grip.addEventListener('dblclick', function () {
+        sizeMode = 'std'; sizeCus = null; applySize(); sizeSave();
+        if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('面板回到标准大小');
+      });
+    }
 
     /* ★ 修复124：从 DeepSeek 标签页切回来的那一刻，自动把回答读进「粘回」框 ——
        以前必须自己点「粘回回答」再按 Ctrl+V。剪贴板里还是我们复制的那段提问时会跳过，
@@ -1374,6 +1737,10 @@ W.LMAI = (function () {
     aiMode: aiMode, setAiMode: setAiMode,
     pageDigest: pageDigest, promptFor: promptFor,
     chatOf: chatOf, chatPush: chatPush, chatClear: chatClear,
+    /* ★ 修复132：多对话（每页多个，各存各的）+ 面板大小 */
+    threadsOf: threadsOf, threadNew: threadNew, threadSet: threadSet, threadDel: threadDel,
+    threadRename: threadRename, curTid: curTid, ensureThread: ensureThread,
+    sizeMode: function () { return sizeMode; }, sizeNext: sizeNext,
     listenBridge: listenBridge, bridgeSeen: function () { return bridgeSeen; },
     mount: mount, version: '1.3'
   };

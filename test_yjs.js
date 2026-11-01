@@ -2862,7 +2862,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && s.indexOf("document.body.style.top = (-lockY) + 'px';") > 0
         && s.indexOf('window.scrollTo(0, lockY)') > 0
         && s.indexOf("matchMedia('(max-width:640px)')") > 0
-        && s.indexOf('lockScroll(); renderPanel();') > 0
+        && s.indexOf('lockScroll(); applySize(); renderPanel();') > 0
         && s.indexOf('else unlockScroll();') > 0
         && s.indexOf('|| !isNarrow()) unlockScroll();') > 0
         && s.indexOf("document.body.style.overflow = 'hidden'") < 0
@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=131 · LM_ASSET_VER=131',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=132 · LM_ASSET_VER=132',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=130/g) || []).length === 0 && /\?v=131/.test(html)
-      && /LM_ASSET_VER = '131'/.test(appJs));
+      && (html.match(/\?v=131/g) || []).length === 0 && /\?v=132/.test(html)
+      && /LM_ASSET_VER = '132'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3967,10 +3967,122 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       } catch (e) { return false; }
     })());
 
-  T('版本已升到 131（?v=131 共 22 处 · v130 无残留 · LM_ASSET_VER=131）',
-    (html.match(/\?v=131/g) || []).length === 22 && (html.match(/\?v=130/g) || []).length === 0
-      && /LM_ASSET_VER = '131'/.test(appJs),
-    'v131=' + (html.match(/\?v=131/g) || []).length + ' v130=' + (html.match(/\?v=130/g) || []).length);
+  /* —— ★ 修复132：一页多个对话（像 DeepSeek 左侧列表）+ 勾选批量删 + 面板放大缩小 —— */
+  T('修复132 · 多对话真跑：一页开多个对话各存各的 · 切换不串 · 批量删 · 删光自动补一个空的',
+    (function () {
+      const ai = require(path.join(DIR, 'js/ai.js'));
+      const mem = {};
+      const oldLS = global.localStorage;
+      global.localStorage = {
+        getItem: function (k) { return (k in mem) ? mem[k] : null; },
+        setItem: function (k, v) { mem[k] = String(v); },
+        removeItem: function (k) { delete mem[k]; }
+      };
+      let ok = false;
+      try {
+        ai.ensureThread('md');
+        const t1 = ai.curTid('md');
+        ai.chatPush('md', { r: 'me', t: '第一个问题' });
+        ai.chatPush('md', { r: 'ds', t: '第一个回答' });
+        const t2 = ai.threadNew('md');                         /* 新对话：切过去 */
+        ok = !!t2 && t2 !== t1 && ai.threadsOf('md').length === 2
+          && ai.chatOf('md').length === 0                      /* 新对话是空的，老内容不串过来 */
+          && ai.threadsOf('md')[0].title === '第一个问题';      /* 标题＝第一句「我说的」 */
+        ai.chatPush('md', { r: 'me', t: '第二个问题' });
+        ok = ok && ai.chatOf('md').length === 1 && ai.chatOf('md')[0].t === '第二个问题';
+        ok = ok && ai.threadSet('md', t1) && ai.chatOf('md').length === 2
+          && ai.chatOf('md')[1].t === '第一个回答';             /* 切回去还是原来那两条 */
+        ok = ok && ai.threadsOf('md2').length === 0;           /* 按页隔离 */
+        ai.chatClear('md');
+        ok = ok && ai.chatOf('md').length === 0
+          && ai.threadsOf('md').length === 2;                  /* 清空只清当前那个，别的对话还在 */
+        ok = ok && ai.threadDel('md', [t2]) === 1 && ai.threadsOf('md').length === 1;
+        const t3 = ai.threadNew('md');
+        ok = ok && ai.threadDel('md', [t1, t3]) === 0 && ai.threadsOf('md').length === 1
+          && ai.threadsOf('md')[0].title === '新对话' && ai.chatOf('md').length === 0;
+        ai.threadRename('md', ai.curTid('md'), '  改个名字  ');
+        ok = ok && ai.threadsOf('md')[0].title === '改个名字';   /* 改名会顺手去空白 */
+      } finally {
+        if (oldLS === undefined) { try { delete global.localStorage; } catch (e) { global.localStorage = undefined; } }
+        else global.localStorage = oldLS;
+      }
+      return ok;
+    })());
+
+  T('修复132 · 老记录自动迁移：旧版 {页面:[消息]} 一次性搬进新结构（旧键保留，历史不丢）',
+    (function () {
+      const ai = require(path.join(DIR, 'js/ai.js'));
+      const mem = {};
+      const oldLS = global.localStorage;
+      global.localStorage = {
+        getItem: function (k) { return (k in mem) ? mem[k] : null; },
+        setItem: function (k, v) { mem[k] = String(v); },
+        removeItem: function (k) { delete mem[k]; }
+      };
+      let ok = false;
+      try {
+        mem['lm_ai_chat_v1'] = JSON.stringify({
+          old: [{ r: 'me', t: '老问题', ts: 1 }, { r: 'ds', t: '老回答', ts: 2 }]
+        });
+        const got = ai.chatOf('old');
+        ok = got.length === 2 && got[1].t === '老回答'
+          && ai.threadsOf('old').length === 1 && ai.threadsOf('old')[0].title === '老问题'
+          && JSON.parse(mem['lm_ai_chat_v1'] || '{}').old.length === 2   /* 旧键没被清掉 */
+          && !!JSON.parse(mem['lm_ai_threads_v1'] || 'null');            /* 新结构已写好 */
+      } finally {
+        if (oldLS === undefined) { try { delete global.localStorage; } catch (e) { global.localStorage = undefined; } }
+        else global.localStorage = oldLS;
+      }
+      return ok;
+    })());
+
+  T('修复132 · 面板大小：⤢ 四档轮换（标准→加宽→加高→满屏→标准）· 选过的档位记在本机',
+    (function () {
+      const ai = require(path.join(DIR, 'js/ai.js'));
+      const mem = {};
+      const oldLS = global.localStorage;
+      global.localStorage = {
+        getItem: function (k) { return (k in mem) ? mem[k] : null; },
+        setItem: function (k, v) { mem[k] = String(v); },
+        removeItem: function (k) { delete mem[k]; }
+      };
+      let ok = false;
+      try {
+        ok = ai.sizeMode() === 'std';
+        ai.sizeNext(); ok = ok && ai.sizeMode() === 'wide';
+        ai.sizeNext(); ok = ok && ai.sizeMode() === 'tall';
+        ai.sizeNext(); ok = ok && ai.sizeMode() === 'max';
+        ai.sizeNext(); ok = ok && ai.sizeMode() === 'std';
+        ok = ok && JSON.parse(mem['lm_ai_size_v1'] || '{}').mode === 'std';
+      } finally {
+        if (oldLS === undefined) { try { delete global.localStorage; } catch (e) { global.localStorage = undefined; } }
+        else global.localStorage = oldLS;
+      }
+      return ok;
+    })());
+
+  T('修复132 · 界面接线：顶栏 ＋新对话 / ☰对话(n) / ⤢ · 勾选批量删（点两次确认）· 拖左上角缩放 · 手机藏把手',
+    (function () {
+      const a = srcOf('js/ai.js');
+      const c = srcOf('css/style.css');
+      return a.indexOf('lm-ai-threads') > 0 && a.indexOf('lm-ai-thallck') > 0
+        && a.indexOf('lm-ai-th-one') > 0 && a.indexOf('lm-ai-th-del') > 0
+        && a.indexOf('再点一次确认删除') > 0                 /* 批量删要二次确认，不会手一滑就没了 */
+        && a.indexOf('lm-ai-hbtn lm-ai-new') > 0 && a.indexOf('lm-ai-hbtn lm-ai-size') > 0
+        && a.indexOf('lm-ai-resize') > 0 && a.indexOf('sizeLoad();') > 0
+        && a.indexOf("sizeCus = { w:") > 0 && a.indexOf("sizeMode = 'custom'") > 0
+        && a.indexOf('ensureThread(id)') > 0 && a.indexOf('syncThreads(id)') > 0
+        && c.indexOf('max-height:var(--chat)') > 0
+        && c.indexOf('[data-size="wide"]') > 0 && c.indexOf('[data-size="tall"]') > 0
+        && c.indexOf('[data-size="max"]') > 0 && c.indexOf('.lm-ai-resize{') > 0
+        && c.indexOf('.lm-ai-th-row.on{') > 0
+        && c.indexOf('.lm-ai-resize{display:none}') > 0;      /* 手机上藏把手：不跟页面滚动抢手势 */
+    })());
+
+  T('版本已升到 132（?v=132 共 22 处 · v131 无残留 · LM_ASSET_VER=132）',
+    (html.match(/\?v=132/g) || []).length === 22 && (html.match(/\?v=131/g) || []).length === 0
+      && /LM_ASSET_VER = '132'/.test(appJs),
+    'v132=' + (html.match(/\?v=132/g) || []).length + ' v131=' + (html.match(/\?v=131/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

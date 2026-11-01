@@ -1180,8 +1180,51 @@ body.mobile-view .kid-pick{max-height:34vh}
 .lm-ai-fab:hover{transform:translateY(-1px);box-shadow:0 12px 34px rgba(0,0,0,.2)}
 .lm-ai-fab:active{transform:scale(.96)}
 .lm-ai-fab[hidden]{display:none}
-.lm-ai-panel{position:fixed;right:22px;bottom:78px;z-index:121;width:min(380px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:auto;overscroll-behavior:contain;border-radius:20px;background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);box-shadow:0 18px 60px rgba(0,0,0,.22);border:1px solid rgba(0,0,0,.06);padding:14px 16px 16px}
+.lm-ai-panel{position:fixed;right:22px;bottom:78px;z-index:121;width:min(380px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:auto;overscroll-behavior:contain;border-radius:20px;background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);box-shadow:0 18px 60px rgba(0,0,0,.22);border:1px solid rgba(0,0,0,.06);padding:14px 16px 16px;--chat:min(38vh,300px)}
 .lm-ai-panel[hidden]{display:none}
+/* ★ 修复132：面板大小四档（点顶栏 ⤢ 轮换）—— 对话区跟着变高，不用再在 300px 的小窗里翻 */
+.lm-ai-panel[data-size="wide"]{width:min(560px,calc(100vw - 32px));--chat:min(48vh,420px)}
+.lm-ai-panel[data-size="tall"]{width:min(560px,calc(100vw - 32px));max-height:min(86vh,820px);--chat:min(56vh,520px)}
+.lm-ai-panel[data-size="max"]{right:auto;left:50%;transform:translateX(-50%);width:min(720px,calc(100vw - 24px));max-height:min(90vh,900px);--chat:min(62vh,620px)}
+/* ★ 修复132：左上角把手 —— 桌面上拖它自由缩放，双击回到标准；平时半透明，鼠标移上去才明显 */
+.lm-ai-panel.is-resizing{user-select:none;transition:none}
+.lm-ai-resize{position:absolute;left:0;top:0;width:26px;height:26px;border-radius:20px 0 8px 0;cursor:nwse-resize;z-index:2;opacity:.4;transition:opacity .15s ease;background:linear-gradient(135deg,rgba(0,113,227,.14) 0 36%,transparent 36%)}
+.lm-ai-resize::after{content:'';position:absolute;left:5px;top:5px;width:9px;height:9px;border-left:2px solid rgba(0,113,227,.7);border-top:2px solid rgba(0,113,227,.7);border-radius:2px 0 0 0}
+.lm-ai-panel:hover .lm-ai-resize{opacity:1}
+/* ★ 修复132：顶栏三个小键 —— ＋新对话 / ☰对话(n) / ⤢放大缩小 */
+.lm-ai-hbtn{display:inline-flex;flex:none;align-items:center;gap:3px;border:1px solid rgba(0,113,227,.16);background:rgba(0,113,227,.07);color:var(--blue);font-size:12.5px;font-weight:600;line-height:1;padding:6px 9px;border-radius:999px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s ease,color .15s ease}
+/* 标准 380px 面板上只留图标（＋ / ☰ / ⤢），把面板放大后才显示「新对话 / 对话」文字，顶栏不挤 */
+.lm-ai-hbtn-t{display:none}
+.lm-ai-panel[data-size="wide"] .lm-ai-hbtn-t,
+.lm-ai-panel[data-size="tall"] .lm-ai-hbtn-t,
+.lm-ai-panel[data-size="max"] .lm-ai-hbtn-t{display:inline}
+.lm-ai-hbtn:hover{background:rgba(0,113,227,.16)}
+.lm-ai-hbtn.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+.lm-ai-cnt{font-style:normal;display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:rgba(0,113,227,.16);font-size:10.5px;font-weight:700}
+.lm-ai-hbtn.on .lm-ai-cnt{background:rgba(255,255,255,.3);color:#fff}
+.lm-ai-head .lm-ai-badge{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* ★ 修复132：一页多个对话的列表（☰ 展开）—— 勾选可多选，批量删 */
+.lm-ai-threads{margin-top:8px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.72);overflow:hidden}
+.lm-ai-threads[hidden]{display:none}
+.lm-ai-th-top{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--line);background:rgba(0,113,227,.04)}
+.lm-ai-th-all{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer}
+.lm-ai-th-n{font-size:11.5px;color:var(--text2)}
+.lm-ai-th-del{margin-left:auto;font-size:12px;padding:5px 9px;border-radius:8px}
+.lm-ai-th-del.arm{background:#d93025;border-color:#d93025;color:#fff}
+.lm-ai-th-list{max-height:min(30vh,220px);overflow:auto;overscroll-behavior:contain}
+.lm-ai-th-row{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid rgba(0,0,0,.05)}
+.lm-ai-th-row:last-child{border-bottom:0}
+.lm-ai-th-row.on{background:rgba(0,113,227,.07)}
+.lm-ai-th-ck{flex:none;width:16px;height:16px;accent-color:#0071e3;cursor:pointer}
+.lm-ai-th-go{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:0;background:none;padding:2px 0;font-family:inherit;font-size:13px;color:var(--text);text-align:left;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lm-ai-th-go:hover{color:var(--blue)}
+.lm-ai-th-row.on .lm-ai-th-go{font-weight:600}
+.lm-ai-th-go em{font-style:normal;font-size:11px;color:var(--text2);font-weight:400}
+.lm-ai-th-one{flex:none;border:0;background:none;font-size:13px;line-height:1;padding:4px 6px;border-radius:7px;cursor:pointer;color:var(--text2)}
+.lm-ai-th-one:hover{background:rgba(217,48,37,.1);color:#d93025}
+.lm-ai-th-one.arm{background:#d93025;color:#fff;font-size:11px}
+.lm-ai-th-foot{display:flex;gap:8px;padding:7px 9px;border-top:1px solid var(--line)}
+.lm-ai-th-foot .btn{font-size:12px;padding:5px 10px;border-radius:8px}
 .lm-ai-head{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--line)}
 .lm-ai-badge{font-size:11px;color:#007a55;background:rgba(0,170,120,.12);border-radius:999px;padding:2px 8px;white-space:nowrap}
 .lm-ai-x{margin-left:auto;font-size:20px;line-height:1;color:var(--text2);padding:2px 6px}
@@ -1218,7 +1261,7 @@ body.mobile-view .kid-pick{max-height:34vh}
 .lm-ai-tip{font-size:13px;color:var(--text2);margin:6px 0}
 /* ★ 修复107：和 DeepSeek 对话（不用 API · 不存 Key）—— 对话框在面板最上面，消息气泡 + 粘回回答 */
 /* ★ 修复130：面板内滚动不再「带动」后面的主页面 —— 以前在对话区滚到底会滚动整站，看着像页面乱跳 */
-.lm-ai-chat{display:flex;flex-direction:column;gap:8px;max-height:min(38vh,300px);overflow:auto;overscroll-behavior:contain;padding:4px 2px 2px;margin-top:2px}
+.lm-ai-chat{display:flex;flex-direction:column;gap:8px;max-height:var(--chat);overflow:auto;overscroll-behavior:contain;padding:4px 2px 2px;margin-top:2px}
 .lm-ai-msg{max-width:92%;border-radius:14px;padding:7px 10px;font-size:13.5px;line-height:1.5}
 .lm-ai-msg p{margin:2px 0 0;white-space:pre-wrap;word-break:break-word}
 .lm-ai-who{font-size:11px;color:var(--text2)}
@@ -1285,3 +1328,22 @@ body.lm-lock{position:fixed;left:0;right:0;width:100%;overflow:hidden}
 @media (prefers-reduced-motion:reduce){
   .lm-ai-fab,.lm-ai-mode,.lm-ai-cite>summary::before{transition:none!important}
 }
+
+/* ★ 修复132：手机端单独适配 —— 窄屏一律当「抽屉」用：
+   ① 加宽/加高 两档在手机上就是「更高一点的抽屉」；满屏档真的铺满整屏（带刘海安全区）；
+   ② 左上角那个拖拽把手直接藏掉（手指拖角落会和页面滚动抢手势，很容易拖坏）；
+   ③ 顶栏三个键只留图标，徽标让位，免得挤成两行。 */
+@media (max-width:640px){
+  .lm-ai-panel[data-size="wide"],.lm-ai-panel[data-size="tall"]{left:8px;right:8px;width:auto;max-height:82vh;--chat:70vh}
+  .lm-ai-panel[data-size="max"]{left:0;right:0;top:0;bottom:0;width:auto;height:100%;max-height:none;transform:none;border-radius:0;padding-top:calc(14px + env(safe-area-inset-top,0px))}
+  .lm-ai-resize{display:none}
+  .lm-ai-hbtn{padding:8px 10px;min-height:36px}
+  .lm-ai-th-list{max-height:min(24vh,170px)}
+  .lm-ai-th-top{padding:8px 9px}
+  .lm-ai-th-go{font-size:13.5px}
+}
+@media (max-width:560px){
+  .lm-ai-head .lm-ai-badge{display:none}     /* 窄屏先让位给三个按钮 */
+  .lm-ai-head{gap:6px}
+}
+
