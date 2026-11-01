@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '142';
+var LM_ASSET_VER = '143';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -3122,6 +3122,25 @@ window.LMApp = (function () {
     } catch (e3) { /* noop */ }
   }
 
+  /* ★ 修复143：首屏加载层 —— 首次 render() 完成后淡出并移除。
+     兜底：若本函数因异常没跑，index.html 里 #bootLoader 的 CSS `blSafety` 也会在 16s 后自动隐藏。 */
+  function hideBootLoader() {
+    try {
+      const el = document.getElementById('bootLoader');
+      if (!el) return;
+      if (el.dataset.gone) return;   /* 幂等：重复调用只处理一次 */
+      el.dataset.gone = '1';
+      el.classList.add('done');
+      const kill = function () { try { if (el.parentNode) el.parentNode.removeChild(el); } catch (eK) { /* noop */ } };
+      if (document.body && document.body.classList.contains('no-anim')) {
+        el.style.opacity = '0'; el.style.visibility = 'hidden';
+        setTimeout(kill, 40);
+      } else {
+        setTimeout(kill, 560);      /* 略长于 .5s 的淡出，保证过渡播完再摘除 */
+      }
+    } catch (e) { /* noop */ }
+  }
+
   function init() {
     state.content = LMStore.load();
     ensureConfig();
@@ -3142,7 +3161,7 @@ window.LMApp = (function () {
     } catch (eD) { if (!Array.isArray(state.content.discuss)) state.content.discuss = []; }
     try { state.view = localStorage.getItem('lm_view') || 'auto'; } catch (e) { /* noop */ }
     applyView(); /* 先按 设备/手动选择 挂上手机版或电脑版类，再渲染（图表按正确宽度测量） */
-    render();
+    try { render(); } finally { hideBootLoader(); }   /* ★ 修复143：首次渲染完（无论成败）都撤掉加载层 */
     state.ready = true;
     window.addEventListener('hashchange', render);
     window.addEventListener('scroll', function () {

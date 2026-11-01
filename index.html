@@ -14,9 +14,77 @@
 <title>三张活地图 · 人工智能前沿与创新</title>
 <meta name="description" content="课程大作业：三张活地图 —— 领域、生态、认知，持续更新的思考外脑。">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=142">
+<!-- ★ 修复143：首屏「正在加载」层 —— 纯内联 CSS + 系统 emoji（🐶🐱🐰🦊 在路上蹦跳），
+     不依赖任何外链资源/脚本，也不碰 CSP（内联 <style> 在 style-src 白名单里）。
+     脚本全部下载并完成首次 render() 后由 app.js 调 hideBootLoader() 平滑淡出。
+     另外带一条 16s 的 CSS 兜底：万一脚本异常，也不会把页面永远罩住。 -->
+<style>
+#bootLoader{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(120% 90% at 50% 0%,#eef4ff 0%,#ffffff 46%,#fff6f0 100%);
+  transition:opacity .5s ease,visibility .5s ease;animation:blSafety .01s linear 16s forwards}
+#bootLoader.done{opacity:0;visibility:hidden;pointer-events:none}
+@keyframes blSafety{to{opacity:0;visibility:hidden;pointer-events:none}}
+.bl-inner{display:flex;flex-direction:column;align-items:center;gap:9px;padding:0 24px;max-width:430px;width:100%;text-align:center;animation:blIn .6s cubic-bezier(.16,1,.3,1)}
+@keyframes blIn{from{opacity:0;transform:translateY(16px)}}
+.bl-ico{font-size:54px;line-height:1;animation:blFloat 3.4s ease-in-out infinite;filter:drop-shadow(0 10px 20px rgba(0,113,227,.18))}
+@keyframes blFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
+.bl-title{font-size:27px;font-weight:700;letter-spacing:-.02em;
+  background:linear-gradient(94deg,#0090f7 0%,#6a5df9 38%,#e64ac0 72%,#f5a623 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent}
+.bl-sub{font-size:14px;color:#86868b}
+.bl-road{position:relative;width:320px;max-width:82vw;height:76px;margin-top:6px;overflow:hidden}
+.bl-ground{position:absolute;left:0;right:0;bottom:10px;height:2px;border-radius:2px;
+  background:repeating-linear-gradient(90deg,#d6d6db 0 10px,transparent 10px 20px);
+  animation:blRoad .72s linear infinite}
+@keyframes blRoad{from{background-position-x:0}to{background-position-x:20px}}
+.bl-run{position:absolute;bottom:12px;width:36px;height:46px;display:flex;flex-direction:column;align-items:center;
+  --d:0s;animation:blHop .9s cubic-bezier(.34,1.56,.64,1) var(--d) infinite}
+.bl-run .be{font-size:30px;line-height:1;transform-origin:50% 100%}
+.bl-run .bs{width:22px;height:6px;border-radius:50%;background:rgba(29,29,31,.15);margin-top:3px;
+  animation:blShadow .9s cubic-bezier(.34,1.56,.64,1) var(--d) infinite}
+.bl-run.r1{left:2%;--d:0s}
+.bl-run.r2{left:29%;--d:.24s}
+.bl-run.r3{left:56%;--d:.48s}
+.bl-run.r4{left:82%;--d:.12s}
+@keyframes blHop{0%,100%{transform:translateY(0)}50%{transform:translateY(-17px)}}
+@keyframes blShadow{0%,100%{transform:scaleX(1);opacity:1}50%{transform:scaleX(.5);opacity:.5}}
+.bl-dot{position:absolute;bottom:16px;width:5px;height:5px;border-radius:50%;background:rgba(0,113,227,.28);animation:blDrift 3.2s linear infinite}
+.bl-dot.d1{left:100%;animation-delay:0s}
+.bl-dot.d2{left:100%;animation-delay:1.1s}
+.bl-dot.d3{left:100%;animation-delay:2.2s}
+@keyframes blDrift{0%{transform:translateX(0);opacity:0}12%{opacity:1}100%{transform:translateX(-380px);opacity:0}}
+.bl-dots{display:flex;gap:6px;margin-top:3px}
+.bl-dots i{width:7px;height:7px;border-radius:50%;background:#0071e3;animation:blDot 1.2s ease-in-out infinite}
+.bl-dots i:nth-child(2){animation-delay:.18s}
+.bl-dots i:nth-child(3){animation-delay:.36s}
+@keyframes blDot{0%,100%{opacity:.22;transform:translateY(0)}50%{opacity:1;transform:translateY(-5px)}}
+.bl-tip{margin-top:3px;font-size:12px;color:#aeaeb2}
+@media (prefers-reduced-motion:reduce){
+  #bootLoader,#bootLoader *{animation:none !important;transition:none !important}
+}
+</style>
+<link rel="stylesheet" href="css/style.css?v=143">
 </head>
 <body>
+
+<!-- ★ 修复143：首屏加载层 —— 首次渲染完成后由 app.js 的 hideBootLoader() 平滑淡出并移除 -->
+<div id="bootLoader" role="status" aria-label="页面正在加载">
+  <div class="bl-inner">
+    <div class="bl-ico" aria-hidden="true">🗺️</div>
+    <div class="bl-title">三张活地图</div>
+    <div class="bl-sub">正在加载，请耐心等待…</div>
+    <div class="bl-road" aria-hidden="true">
+      <span class="bl-ground"></span>
+      <span class="bl-dot d1"></span><span class="bl-dot d2"></span><span class="bl-dot d3"></span>
+      <span class="bl-run r1"><i class="be">🐶</i><i class="bs"></i></span>
+      <span class="bl-run r2"><i class="be">🐱</i><i class="bs"></i></span>
+      <span class="bl-run r3"><i class="be">🐰</i><i class="bs"></i></span>
+      <span class="bl-run r4"><i class="be">🦊</i><i class="bs"></i></span>
+    </div>
+    <div class="bl-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="bl-tip">第一次打开会慢一点，之后会快很多</div>
+  </div>
+</div>
 
 <!-- 顶部导航栏（毛玻璃效果） -->
 <header class="nav" id="topnav">
@@ -52,28 +120,28 @@
 <div id="toast" class="toast" hidden></div>
 
 <!-- 脚本：按依赖顺序加载 -->
-<script src="data/content.js?v=142"></script>
-<script src="js/charts.js?v=142"></script>
-<script src="js/store.js?v=142"></script>
-<script src="js/md.js?v=142"></script>
-<script src="data/sensitive-words.js?v=142"></script>
-<script src="js/community.js?v=142"></script>
-<script src="js/editor.js?v=142"></script>
-<script src="js/fbsync.js?v=142"></script><!-- ★ 修复92：反馈跨设备同步（只写数据分支，不触发构建） -->
-<script src="js/app.js?v=142"></script>
-<script src="js/lm.js?v=142"></script><!-- ★ 修复112：本站语料训练的字符级 n-gram 语言模型（只做重排/纠错，不生成文字） -->
-<script src="js/ai-ollama.js?v=142"></script><!-- ★ 修复125：本机大模型连接器（可选 · 只连 127.0.0.1，不接云、不存 Key） -->
-<script src="js/ai.js?v=142"></script><!-- ★ 修复91：本地 AI 能力（要点/关键词/相关条目/站内问答，离线可用、零额度） -->
-<script src="js/cloud-config.js?v=142"></script>
-<script src="js/collab.js?v=142"></script>
+<script src="data/content.js?v=143"></script>
+<script src="js/charts.js?v=143"></script>
+<script src="js/store.js?v=143"></script>
+<script src="js/md.js?v=143"></script>
+<script src="data/sensitive-words.js?v=143"></script>
+<script src="js/community.js?v=143"></script>
+<script src="js/editor.js?v=143"></script>
+<script src="js/fbsync.js?v=143"></script><!-- ★ 修复92：反馈跨设备同步（只写数据分支，不触发构建） -->
+<script src="js/app.js?v=143"></script>
+<script src="js/lm.js?v=143"></script><!-- ★ 修复112：本站语料训练的字符级 n-gram 语言模型（只做重排/纠错，不生成文字） -->
+<script src="js/ai-ollama.js?v=143"></script><!-- ★ 修复125：本机大模型连接器（可选 · 只连 127.0.0.1，不接云、不存 Key） -->
+<script src="js/ai.js?v=143"></script><!-- ★ 修复91：本地 AI 能力（要点/关键词/相关条目/站内问答，离线可用、零额度） -->
+<script src="js/cloud-config.js?v=143"></script>
+<script src="js/collab.js?v=143"></script>
 <!-- Yjs 套件：本地 lib/（build-libs.js 从 npm 包打包生成，零 CDN 依赖），必须先于 ycollab.js 加载。
      y-webrtc.js 已弃用但文件保留（lib 完整性守护），运行时不再使用 -->
-<script src="lib/yjs.js?v=142"></script>
-<script src="lib/y-protocols.js?v=142"></script>
-<script src="lib/mqtt.js?v=142"></script><!-- MQTT 信令（EMQX 公共 Broker，免费匿名） -->
-<script src="lib/y-indexeddb.js?v=142"></script>
-<script src="js/yjs-config.js?v=142"></script>
-<script src="js/yjstcb.js?v=142"></script>
-<script src="js/ycollab.js?v=142"></script>
+<script src="lib/yjs.js?v=143"></script>
+<script src="lib/y-protocols.js?v=143"></script>
+<script src="lib/mqtt.js?v=143"></script><!-- MQTT 信令（EMQX 公共 Broker，免费匿名） -->
+<script src="lib/y-indexeddb.js?v=143"></script>
+<script src="js/yjs-config.js?v=143"></script>
+<script src="js/yjstcb.js?v=143"></script>
+<script src="js/ycollab.js?v=143"></script>
 </body>
 </html>

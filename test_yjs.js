@@ -3583,10 +3583,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=142 · LM_ASSET_VER=142',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=143 · LM_ASSET_VER=143',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=141/g) || []).length === 0 && /\?v=142/.test(html)
-      && /LM_ASSET_VER = '142'/.test(appJs));
+      && (html.match(/\?v=142/g) || []).length === 0 && /\?v=143/.test(html)
+      && /LM_ASSET_VER = '143'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4487,10 +4487,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 142（?v=142 共 22 处 · v141 无残留 · LM_ASSET_VER=142）',
-    (html.match(/\?v=142/g) || []).length === 22 && (html.match(/\?v=141/g) || []).length === 0
-      && /LM_ASSET_VER = '142'/.test(appJs),
-    'v142=' + (html.match(/\?v=142/g) || []).length + ' v141=' + (html.match(/\?v=141/g) || []).length);
+  T('版本已升到 143（?v=143 共 22 处 · v142 无残留 · LM_ASSET_VER=143）',
+    (html.match(/\?v=143/g) || []).length === 22 && (html.match(/\?v=142/g) || []).length === 0
+      && /LM_ASSET_VER = '143'/.test(appJs),
+    'v143=' + (html.match(/\?v=143/g) || []).length + ' v142=' + (html.match(/\?v=142/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -4854,6 +4854,29 @@ console.log('【修复142】工具条展开穿透 · 热节拍跨设备失效 ·
 
   T('修复142 · README 记录「工具条穿透 + 同步慢的三个环节」',
     srcOf('README.md').indexOf('修复142') > 0);
+})();
+
+/* ---------- 修复143：首屏「正在加载」层（纯内联 CSS + emoji 动画，加载完平滑淡出） ---------- */
+console.log('【修复143】首屏加载层：内联样式（不碰 CSP）+ 蹦跳动物 + 16s CSS 兜底 + app.js 首次渲染后撤掉');
+
+(function () {
+  const html = srcOf('index.html'), appSrc2 = srcOf('js/app.js');
+
+  T('修复143 · 首屏加载层存在：内联 <style>（style-src 白名单内）+ #bootLoader + 蹦跳场景 + 16s 兜底',
+    html.indexOf('<style>') > 0
+      && html.indexOf('id="bootLoader"') > 0
+      && html.indexOf('bl-road') > 0
+      && html.indexOf('blSafety') > 0
+      && html.indexOf('正在加载，请耐心等待') > 0);
+
+  T('修复143 · app.js 首次 render 完（无论成败）撤掉加载层 · 幂等 · no-anim 直收',
+    appSrc2.indexOf('function hideBootLoader() {') > 0
+      && appSrc2.indexOf('try { render(); } finally { hideBootLoader(); }') > 0
+      && appSrc2.indexOf('if (el.dataset.gone) return;') > 0
+      && appSrc2.indexOf('classList.add(\'done\')') > 0);
+
+  T('修复143 · README 记录首屏加载层',
+    srcOf('README.md').indexOf('修复143') > 0);
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
