@@ -882,6 +882,8 @@ W.LMAI = (function () {
   /* ★ 修复126：打开面板时**自动探一次**本机模型服务（每种最多 1.2 秒、失败静默；一次会话只探一次）。
      探到就把「检测到 Ollama · qwen2.5:7b · 点此启用」摆出来 —— 一按就接管，不用手填地址。 */
   let llmProbed = false, llmFound = null;
+  /* ★ 修复133：面板浮层（四档菜单 / 对话列表）的「点别处收起」监听只挂一次 */
+  let outsideHooked = false;
   function probeLLM() {
     if (llmProbed || llmReady() || !W.LMOllama || typeof W.LMOllama.autoDetect !== 'function') return;
     llmProbed = true;
@@ -1735,26 +1737,38 @@ W.LMAI = (function () {
       szMenu.hidden = true;
       if (sizeBtn) sizeBtn.classList.remove('on');
     });
-    /* 点别处 / 按 Esc 收起菜单与对话列表（不自作多情地一直挡着） */
-    document.addEventListener('click', function (e) {
-      const t = e.target;
-      if (szMenu && !szMenu.hidden && szMenu !== t && !szMenu.contains(t) && sizeBtn && !sizeBtn.contains(t)) {
-        szMenu.hidden = true;
-        if (sizeBtn) sizeBtn.classList.remove('on');
-      }
-      if (thBox && !thBox.hidden && thBox !== t && !thBox.contains(t) && listBtn && !listBtn.contains(t)) {
-        thBox.hidden = true;
-        listBtn.classList.remove('on');
-      }
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key !== 'Escape') return;
-      /* 先收浮层：这里有东西开着就别顺手把整个面板也关了 */
-      let hit = false;
-      if (szMenu && !szMenu.hidden) { szMenu.hidden = true; if (sizeBtn) sizeBtn.classList.remove('on'); hit = true; }
-      if (thBox && !thBox.hidden) { thBox.hidden = true; if (listBtn) listBtn.classList.remove('on'); hit = true; }
-      if (hit) { e.stopImmediatePropagation(); e.preventDefault(); }
-    });
+    /* 点别处 / 按 Esc 收起浮层（四档菜单、对话列表）。★ 修复133：只在第一次挂一次监听，
+       每次现查当前 DOM —— 否则 renderPanel 重绘一次就多一份监听、还握着已经作废的节点。 */
+    if (!outsideHooked) {
+      outsideHooked = true;
+      document.addEventListener('click', function (e) {
+        const t = e.target;
+        const sz = panel.querySelector('.lm-ai-sizemenu');
+        const sb = panel.querySelector('.lm-ai-size');
+        if (sz && !sz.hidden && sz !== t && !sz.contains(t) && !(sb && sb.contains(t))) {
+          sz.hidden = true;
+          if (sb) sb.classList.remove('on');
+        }
+        const tb = panel.querySelector('.lm-ai-threads');
+        const lb = panel.querySelector('.lm-ai-list');
+        if (tb && !tb.hidden && tb !== t && !tb.contains(t) && !(lb && lb.contains(t))) {
+          tb.hidden = true;
+          if (lb) lb.classList.remove('on');
+        }
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        /* 先收浮层：这里有东西开着就别顺手把整个面板也关了 */
+        let hit = false;
+        const sz = panel.querySelector('.lm-ai-sizemenu');
+        const sb = panel.querySelector('.lm-ai-size');
+        const tb = panel.querySelector('.lm-ai-threads');
+        const lb = panel.querySelector('.lm-ai-list');
+        if (sz && !sz.hidden) { sz.hidden = true; if (sb) sb.classList.remove('on'); hit = true; }
+        if (tb && !tb.hidden) { tb.hidden = true; if (lb) lb.classList.remove('on'); hit = true; }
+        if (hit) { e.stopImmediatePropagation(); e.preventDefault(); }
+      });
+    }
     /* 左上角把手拖动自由缩放（只在桌面；手机上靠 ⤢ 的四档，避免和页面滚动抢手指） */
     const grip = panel.querySelector('.lm-ai-resize');
     if (grip) {
