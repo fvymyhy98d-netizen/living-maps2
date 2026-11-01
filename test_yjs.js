@@ -1855,6 +1855,49 @@ T('editor.js：单元格里没选中文字也能清（清整格 ==…==）；sof
     ok137, d137);
 })();
 
+/* ---------- 9.52c) 修复138：拖动排序「移不到自由框（表格）上面」 ---------- */
+console.log('【9.52c】修复138：把块拖到自由框（表格）上面 —— 以前插入线永远画不到框上方');
+T('editor.js：拖动落点认自由框（dropAboveBox 判「指针在框的上半部分」）+ 松手后按 ↑↓ 同一套算法让框下移',
+  edt2.indexOf('function dropAboveBox(p, r) {') > 0
+    && edt2.indexOf('if (!dropAboveBox({ x: lastX, y: lastY }, r2)) return;') > 0
+    && edt2.indexOf('boxYield.b.free.y = Math.round(natMe + rMe.height + 16);') > 0
+    && edt2.indexOf('lastX = ev.clientX;') > 0);
+T('editor.js：拖回原位但框要让路时不再提前 return（旧版 if (same) return 会把这次放置整条吞掉）',
+  edt2.indexOf('if (same && !yielded) return;') > 0
+    && edt2.indexOf('      if (same) return;') < 0
+    && edt2.indexOf("LMApp.toast(yielded ? '已放到那个框的上面（框让到了下面）' : '顺序已调整');") > 0);
+T('editor.js：手动给定框位置时 free.ride 归零（否则 commitFreeRide 会把它拉回上面，块再被推下去）',
+  edt2.indexOf('boxYield.b.free.ride = 0;') > 0
+    && edt2.indexOf('other.free.ride = 0;') > 0
+    && edt2.indexOf('mine.free.ride = 0;') > 0);
+
+/* 真跑：dropAboveBox 的判定（拖动「放到框上面」认的就是这几种姿势） */
+(function () {
+  const srcP = edt2.replace(/\r\n/g, '\n');
+  const aP = srcP.indexOf('  function dropAboveBox(p, r) {');
+  const bP = srcP.indexOf('\n  }\n', aP);
+  const codeP = (aP >= 0 && bP > aP) ? srcP.slice(aP, bP + 4) : '';
+  let okP = false, dP = '切片不可用';
+  if (codeP) {
+    try {
+      const dropAboveBox = new Function(codeP + '\nreturn dropAboveBox;')();
+      const box = { top: 1177, left: 20, right: 900, height: 500 }; /* 截图那个表格：free.y = 1177 */
+      const c1 = dropAboveBox({ x: 400, y: 1200 }, box) === true;    /* 框的上半部分：放到框上面 */
+      const c2 = dropAboveBox({ x: 400, y: 1500 }, box) === false;   /* 下半部分：不算 */
+      const c3 = dropAboveBox({ x: 400, y: 1150 }, box) === true;    /* 框顶上方 27px 仍算 */
+      const c4 = dropAboveBox({ x: 400, y: 1100 }, box) === false;   /* 离太远（>60px）不算 */
+      const c5 = dropAboveBox({ x: 990, y: 1200 }, box) === false;   /* 水平不在框内 */
+      const c6 = dropAboveBox({ x: 906, y: 1200 }, box) === true;    /* 水平擦边 8px 内算 */
+      const c7 = dropAboveBox({ x: 400, y: 1200 }, { top: 0, left: 0, width: 100, height: 0 }) === false;
+      const c8 = dropAboveBox({ x: 50, y: 0 }, { top: 0, left: 0, width: 100, height: 40, right: null }) === true;
+      okP = c1 && c2 && c3 && c4 && c5 && c6 && c7 && c8;
+      if (!okP) dP = JSON.stringify({ c1: c1, c2: c2, c3: c3, c4: c4, c5: c5, c6: c6, c7: c7, c8: c8 });
+    } catch (e) { okP = false; dP = '抛出 ' + e.message; }
+  }
+  T('真跑：dropAboveBox —— 上半部分=放到上面 · 下半部分不算 · 框顶上方 60px 内算 · 远离/出框不算 · 无 right 按 width 算 · 量不到不算',
+    okP, dP);
+})();
+
 /* ---------- 9.53) 修复88：在线协同提速（有人在线自动更快）+ 结构冲突可见化 ---------- */
 console.log('【9.53】修复88：有人在线时轮询/推送自动提速 · 回前台立刻补拉 · 结构冲突不再静默覆盖');
 const cs88 = srcOf('js/collab.js'), ys88 = srcOf('js/ycollab.js');
@@ -3455,10 +3498,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=137 · LM_ASSET_VER=137',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=138 · LM_ASSET_VER=138',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=136/g) || []).length === 0 && /\?v=137/.test(html)
-      && /LM_ASSET_VER = '137'/.test(appJs));
+      && (html.match(/\?v=137/g) || []).length === 0 && /\?v=138/.test(html)
+      && /LM_ASSET_VER = '138'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4359,10 +4402,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 137（?v=137 共 22 处 · v136 无残留 · LM_ASSET_VER=137）',
-    (html.match(/\?v=137/g) || []).length === 22 && (html.match(/\?v=136/g) || []).length === 0
-      && /LM_ASSET_VER = '137'/.test(appJs),
-    'v137=' + (html.match(/\?v=137/g) || []).length + ' v136=' + (html.match(/\?v=136/g) || []).length);
+  T('版本已升到 138（?v=138 共 22 处 · v137 无残留 · LM_ASSET_VER=138）',
+    (html.match(/\?v=138/g) || []).length === 22 && (html.match(/\?v=137/g) || []).length === 0
+      && /LM_ASSET_VER = '138'/.test(appJs),
+    'v138=' + (html.match(/\?v=138/g) || []).length + ' v137=' + (html.match(/\?v=137/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

@@ -457,7 +457,7 @@ window.LMEditor = (function () {
         + '<span class="sep" title=""></span>';
     }
     return '<div class="block-tools">'
-      + (isFree ? '' : '<button type="button" data-drag="' + i + '" title="按住拖动调整顺序：其他块自动让路，拖到屏幕上下边缘会自动滚页">⠿</button>')
+      + (isFree ? '' : '<button type="button" data-drag="' + i + '" title="按住拖动调整顺序：其他块自动让路，拖到屏幕上下边缘会自动滚页；拖到浮框（表格/图表）的上半部分松手 = 放到它上面，框会让到下面">⠿</button>')
       + alignBtns
       + '<button type="button" data-act="up" data-page="' + pageId + '" data-idx="' + i + '" title="与上面的模块互换位置（整块换，只换这一对）">↑</button>'
       + '<button type="button" data-act="down" data-page="' + pageId + '" data-idx="' + i + '" title="与下面的模块互换位置（整块换，只换这一对）">↓</button>'
@@ -638,8 +638,10 @@ window.LMEditor = (function () {
          · 我（流块）↑/↓：对方框让到我的另一侧（我上去了→框下沉；我下去了→框上浮） */
     else if (mine.free) {
       mine.free.y = up ? Math.max(0, otherNat - myH - GAP) : otherNat + otherH + GAP;
+      mine.free.ride = 0; /* ★ 修复138：绝对位置已给定 → 「随上文下移」的记账过期，归零免得被拉回去 */
     } else if (other.free) {
       other.free.y = up ? myNat + myH + GAP : Math.max(0, myNat - otherH - GAP);
+      other.free.ride = 0; /* ★ 同上 */
     }
     /* 工具条跟着被移动的块走（只有两块都在文档流、真的换过数组时才需要跟着走） */
     if (bothFlow) {
@@ -4340,6 +4342,20 @@ window.LMEditor = (function () {
     };
     document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
   }
+  /* ★ 修复138：拖动排序的「落点判定」纯函数 —— 指针是否落在某个自由框的上半部分
+     （= 用户想把正拖着的块放到这个框上面）。抽成纯函数：第一好测（真跑用例直接喂数值），
+     第二不必在热路径里反复 getBoundingClientRect 拼条件。
+     p = {x,y} 指针视口坐标；r = {top,left,right,height} 框的实测矩形（宽度缺失时用 right-left 兜底） */
+  function dropAboveBox(p, r) {
+    if (!p || !r) return false;
+    const h = +r.height || 0;
+    const left = +r.left || 0;
+    const right = (r.right != null) ? +r.right : left + (+r.width || 0);
+    if (!h || right <= left) return false;
+    if (p.x < left - 8 || p.x > right + 8) return false; /* 水平擦边 8px 内才算「对着这个框」 */
+    if (p.y < r.top - 60) return false;                  /* 离得太远（还在很上面）不算 */
+    return p.y <= r.top + h / 2;                         /* 只认框的上半部分：下半部分=放到下面 */
+  }
   /* ---------- 块拖拽排序：拖动让位动画 + 屏幕边缘自动滚页 ---------- */
   function startBlockDrag(e, handle) {
     const wrap = handle.closest('.block-wrap');
@@ -4370,7 +4386,7 @@ window.LMEditor = (function () {
        把手在操作栏里、位于块的中偏右，钳制后克隆整体左跳几百像素，鼠标对着的地方变成克隆左上角
        ——「我抓的地方不对」。水平必须跟手：抓哪儿，克隆上对应哪儿就还在鼠标下） */
     const offX = e.clientX - r0.left, offY = Math.min(e.clientY - r0.top, 12);
-    let scrollDir = 0, raf = null, moved = false, lastY = e.clientY;
+    let scrollDir = 0, raf = null, moved = false, lastY = e.clientY, lastX = e.clientX;
 
     function flowList() {
       return Array.prototype.filter.call(
@@ -4407,6 +4423,7 @@ window.LMEditor = (function () {
     }
     const mv = function (ev) {
       lastY = ev.clientY;
+      lastX = ev.clientX;
       moved = true;
       wrap.style.left = (ev.clientX - offX) + 'px';
       wrap.style.top = (ev.clientY - offY) + 'px';
@@ -4432,7 +4449,41 @@ window.LMEditor = (function () {
         function (w) { return +w.getAttribute('data-idx'); }
       ).filter(function (n) { return !isNaN(n); });
       const same = order.every(function (n, i2) { return n === i2; });
-      if (same) return; /* 拖回原位 = 数据没变：同理不重绘（防闪屏） */
+      /* ★ 修复138：把块「放到自由框上面」—— 自由框绝对定位、不占文档流，光靠数组顺序永远
+         表达不出「在框的上方」：拖动时插入线最上也只能落到框下面那块之前（flowList 只收流块），
+         松手一看什么都没有变 —— 这正是反复报的「核心概念移不到那个表格上面」。
+         现在按 ↑↓ 换位（修复104）同一套算法让框让路：松手时指针落在某个自由框的**上半部分**
+         → 把那个框整体挪到这一块的下方（框的下缘 = 块的自然底 + 16px 标准缝）。 */
+      const boxYield = (function () {
+        const col0 = wrap.parentNode;
+        if (!col0 || !col0.querySelectorAll) return null;
+        let hit = null;
+        col0.querySelectorAll(':scope > .block-wrap.free-box').forEach(function (w2) {
+          const r2 = w2.getBoundingClientRect();
+          if (!dropAboveBox({ x: lastX, y: lastY }, r2)) return;
+          const b2 = page.blocks[+w2.getAttribute('data-idx')];
+          if (b2 && b2.free) hit = { b: b2, w: w2, r: r2 };
+        });
+        return hit;
+      })();
+      const yielded = (function () {
+        if (!boxYield) return false;
+        const rMe = wrap.getBoundingClientRect();
+        if (!rMe.height) return false;
+        if (rMe.top + 2 < boxYield.r.top) return false; /* 已经落在框上方了：不用动框 */
+        const colTop = wrap.parentNode.getBoundingClientRect().top;
+        let m0 = 0; /* 让位量（margin-top）：实测顶端 − 让位量 = 块的自然顶端 */
+        try { m0 = parseFloat(getComputedStyle(wrap).marginTop) || 0; } catch (eM) { m0 = 0; }
+        const natMe = Math.max(0, Math.round(rMe.top - colTop - m0));
+        boxYield.b.free.y = Math.round(natMe + rMe.height + 16); /* 16px = 让位引擎的 FREE_GAP */
+        /* ★ 修复138：连 free.ride 一起归零 —— 那是「随上文下移」的记账量，手动给定绝对位置后
+           它就过期了；不归零的话 commitFreeRide 会算 d = 0 − ride 把框又往上拉回去，
+           框重新压住块、块又被推下去 → 看着就是「怎么都移不上去」 */
+        boxYield.b.free.ride = 0;
+        boxYield.w.style.top = boxYield.b.free.y + 'px';
+        return true;
+      })();
+      if (same && !yielded) return; /* 拖回原位、也没有框要让路 = 数据没变：同理不重绘（防闪屏） */
       /* 只重排文档流块；自由文本框（绝对定位）对象保留、集中到数组尾部（渲染先后不影响其摆放位置） */
       const frees = page.blocks.filter(function (b3) { return b3 && b3.free; });
       /* ★ 修复70（"移动块之后，文本框和表格重叠了"）：data-idx 是「DOM 包裹 ↔ 块数据」的唯一映射
@@ -4460,7 +4511,7 @@ window.LMEditor = (function () {
       LMApp.commit({ silent: true, rerender: false });
       markSaved();
       if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout();
-      LMApp.toast('顺序已调整');
+      LMApp.toast(yielded ? '已放到那个框的上面（框让到了下面）' : '顺序已调整');
     };
     const up = function () { finish(true); };
     const esc = function (ev) { if (ev.key === 'Escape') finish(false); };
