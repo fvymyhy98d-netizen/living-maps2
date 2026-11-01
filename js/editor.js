@@ -2191,6 +2191,9 @@ window.LMEditor = (function () {
       + '<button class="tb-btn" data-tb="imgins" tabindex="-1" title="插入图片（本地 / 链接）">🖼 图片</button>'
       + '<button class="tb-btn" data-tb="mdins" tabindex="-1" title="插入 Markdown 块">📝 Markdown</button>'
       + '<button class="tb-btn" data-tb="boxins" tabindex="-1" title="插入文本框（可拖动缩放）">▢ 文本框</button>'
+      /* ★ 修复148：提示框（带底色的文本框）原来只能靠已有内容改，工具栏没有入口 ——
+         就是想做「一句话解释」那种带浅蓝/浅粉底的框，找不到地方点 */
+      + '<button class="tb-btn" data-tb="callins" tabindex="-1" title="插入提示框：带底色的文本框（浅灰 / 浅蓝 / 浅绿 / 浅橙 / 浅粉），可加小标题；点完立刻弹出设置，选底色、写文字。与「▢ 文本框」的区别：提示框随正文排版、自带底色和内边距">🟦 提示框</button>'
       /* ★ 修复75：第 3 层嵌套条目的入口 —— 插入一个「条目块」，卡片内容自动跟本页子条目走 */
       + '<button class="tb-btn" data-tb="entriesins" tabindex="-1" title="插入嵌套条目块：自动列出本页的子条目（在「🛠️ → 🗂 条目树」里增删分支）">▤ 条目</button>'
       /* ★ 修复80：跨母项的「关联条目」块 —— 把别的母项下的条目也连到这一页，点卡片就跳 */
@@ -5232,6 +5235,14 @@ window.LMEditor = (function () {
       case 'imgins': if (popEl && popEl._for === 'imgins') closePop(); else imgInsertPop(btn); break;
       case 'mdins': closePop(); insertAt(defaultsFor('md'), false, '已插入 Markdown 块：写完点「✓ 转换保存」'); break;
       case 'boxins': closePop(); insertAt(textBoxDefault(), true, '已插入文本框（在文档流里，随内容自动排版）：要自由摆放点工具条 ⤢'); break;
+      case 'callins': {
+        /* ★ 修复148：提示框 = callout 块（浅色底 + 圆角 + 内边距，随正文排版）。
+           插完直接打开设置：底色五选一 + 小标题 + 文字，省得再去找块右上角的 ⚙ */
+        closePop();
+        const atC = LMApp.insertBlock(defaultsFor('callout'), insertAnchor());
+        if (atC >= 0) openBlockForm(LMApp.state.pageId, atC);
+        break;
+      }
       case 'entriesins': {
         /* ★ 修复75：插入条目块 → 直接打开它的设置（栏目标题 / 版式 / 列数） */
         closePop();

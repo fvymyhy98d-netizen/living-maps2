@@ -3589,10 +3589,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=147 · LM_ASSET_VER=147',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=148 · LM_ASSET_VER=148',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=146/g) || []).length === 0 && /\?v=147/.test(html)
-      && /LM_ASSET_VER = '147'/.test(appJs));
+      && (html.match(/\?v=147/g) || []).length === 0 && /\?v=148/.test(html)
+      && /LM_ASSET_VER = '148'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4493,10 +4493,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 147（?v=147 共 22 处 · v146 无残留 · LM_ASSET_VER=147）',
-    (html.match(/\?v=147/g) || []).length === 22 && (html.match(/\?v=146/g) || []).length === 0
-      && /LM_ASSET_VER = '147'/.test(appJs),
-    'v147=' + (html.match(/\?v=147/g) || []).length + ' v143=' + (html.match(/\?v=146/g) || []).length);
+  T('版本已升到 148（?v=148 共 22 处 · v147 无残留 · LM_ASSET_VER=148）',
+    (html.match(/\?v=148/g) || []).length === 22 && (html.match(/\?v=147/g) || []).length === 0
+      && /LM_ASSET_VER = '148'/.test(appJs),
+    'v148=' + (html.match(/\?v=148/g) || []).length + ' v143=' + (html.match(/\?v=147/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -5122,6 +5122,53 @@ console.log('【修复147】load() 比较 syncTs：文件里的内容比浏览�
       && TSRC.indexOf('if (tsOf(bundled) <= tsOf(local)) return local;') > 0
       && TSRC.indexOf("localStorage.setItem('lm_prev_v1'") > 0
       && TSRC.indexOf('if (v.ok) return pickNewer(v.content, bundled);') > 0);
+})();
+
+/* ---------- 修复148：工具栏「🟦 提示框」（带底色的文本框） ---------- */
+console.log('【修复148】工具栏新增「🟦 提示框」：插入 callout 块并立刻打开设置（底色五选一）');
+
+(function () {
+  const E = srcOf('js/editor.js');
+  const CSSC = srcOf('css/style.css');
+
+  T('修复148 · 工具栏插入组有「🟦 提示框」按钮（data-tb="callins"），紧随「▢ 文本框」，且有分发分支',
+    E.indexOf('data-tb="callins"') > 0
+      && E.indexOf('🟦 提示框') > 0
+      && E.indexOf('data-tb="callins"') > E.indexOf('data-tb="boxins"')
+      && E.indexOf("case 'callins': {") > 0
+      && E.indexOf("insertBlock(defaultsFor('callout'), insertAnchor())") > 0
+      && E.indexOf('if (atC >= 0) openBlockForm(LMApp.state.pageId, atC);') > 0);
+
+  T('修复148 · 真跑 defaultsFor("callout")：默认浅蓝底 · 小标题与正文留空（插完就能直接选底色写字）',
+    (function () {
+      const i0 = E.indexOf('function defaultsFor(type) {');
+      let d = 0, end = -1;
+      for (let j = E.indexOf('{', i0); j < E.length; j++) {
+        if (E[j] === '{') d++;
+        else if (E[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+      }
+      if (i0 < 0 || end < 0) return false;
+      const fn = new Function(E.slice(i0, end) + '; return defaultsFor;')();
+      const b = fn('callout');
+      return b.type === 'callout' && b.tone === 'blue' && b.title === '' && b.text === '';
+    })());
+
+  T('修复148 · 提示框设置表单：小标题 + 内容 + 底色五种（浅灰/浅蓝/浅绿/浅橙/浅粉）',
+    (function () {
+      const a = E.indexOf("case 'callout': return ''");
+      const z = E.indexOf("case 'image': return ''");
+      if (a < 0 || z <= a) return false;
+      const seg = E.slice(a, z);
+      return ['小标题', '内容', '底色', "'gray'", "'blue'", "'green'", "'orange'", "'pink'"].every(function (k) {
+        return seg.indexOf(k) > 0;
+      });
+    })());
+
+  T('修复148 · 五种底色都有样式（.callout 圆角内边距 + tone-* 浅色背景），不是你手动加的行内样式',
+    CSSC.indexOf('.callout{border-radius:var(--radius);padding:22px 24px}') > 0
+      && ['gray', 'blue', 'green', 'orange', 'pink'].every(function (t) {
+        return CSSC.indexOf('.tone-' + t + '{background:') > 0;
+      }));
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
