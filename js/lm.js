@@ -24,11 +24,15 @@
   function ready() { return !!M; }
   function info() { return M ? { order: M.order, chars: M.chars } : null; }
 
-  /* 浏览器侧：拿不到就返回 false，调用方照常走纯 BM25（不报错、不挡路） */
+  /* 浏览器侧：拿不到就返回 false，调用方照常走纯 BM25（不报错、不挡路）
+     ★ 修复144：以前是 cache:'force-cache' —— 它的语义是「有缓存就用，哪怕是过期的」，
+     于是你在电脑上重训了 data/lm.json、推上去了，**老访客那边永远是旧语料**的重排/纠错，
+     而且没有任何提示（URL 又没有版本参数，不存在「换地址自然失效」）。
+     改成 no-cache：照样吃缓存，但每次先向服务器确认（Pages 带 ETag → 没变就 304，几乎零流量）。 */
   function load(url) {
     if (M) return Promise.resolve(true);
     if (typeof fetch !== 'function') return Promise.resolve(false);
-    return fetch(url, { cache: 'force-cache' })
+    return fetch(url, { cache: 'no-cache' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) { return !!fromJSON(j); })
       .catch(function () { return false; });

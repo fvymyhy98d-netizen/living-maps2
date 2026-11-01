@@ -2588,6 +2588,12 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return lmPayload.chars === chars;
     })(), 'lm=' + lmPayload.chars + ' 语料=' + pages.map(function (p) { return ai.pageText(p); }).join('\n').length);
 
+  T('小模型8：★ 模型用 no-cache 重新校验（修复144：force-cache 会让重训后的模型永远不生效）',
+    (function () {
+      const s = srcOf('js/lm.js');
+      return s.indexOf("cache: 'no-cache'") > 0 && s.indexOf("cache: 'force-cache'") < 0;
+    })());
+
   T('检索升级7：PRF 扩展只追加「索引里真有」的词（≤4 个，绝不造词）',
     (function () {
       const q0 = 'RAG 是什么';
@@ -3583,10 +3589,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=143 · LM_ASSET_VER=143',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=144 · LM_ASSET_VER=144',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=142/g) || []).length === 0 && /\?v=143/.test(html)
-      && /LM_ASSET_VER = '143'/.test(appJs));
+      && (html.match(/\?v=143/g) || []).length === 0 && /\?v=144/.test(html)
+      && /LM_ASSET_VER = '144'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4487,10 +4493,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 143（?v=143 共 22 处 · v142 无残留 · LM_ASSET_VER=143）',
-    (html.match(/\?v=143/g) || []).length === 22 && (html.match(/\?v=142/g) || []).length === 0
-      && /LM_ASSET_VER = '143'/.test(appJs),
-    'v143=' + (html.match(/\?v=143/g) || []).length + ' v142=' + (html.match(/\?v=142/g) || []).length);
+  T('版本已升到 144（?v=144 共 22 处 · v143 无残留 · LM_ASSET_VER=144）',
+    (html.match(/\?v=144/g) || []).length === 22 && (html.match(/\?v=143/g) || []).length === 0
+      && /LM_ASSET_VER = '144'/.test(appJs),
+    'v144=' + (html.match(/\?v=144/g) || []).length + ' v143=' + (html.match(/\?v=143/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
