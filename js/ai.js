@@ -823,6 +823,8 @@ W.LMAI = (function () {
     if (msg.q) rec.q = String(msg.q).slice(0, 120);   /* ★ 修复117：记下这一问，供出处高亮用 */
     /* ★ 修复131：「这次送了什么」那行小字也要存，否则重绘就没了 */
     if (msg.note) rec.note = String(msg.note).slice(0, 120);
+    /* ★ 修复133：思考过程也存进对话（截断到 1200 字，别撑爆 localStorage），重绘后还能点开看 */
+    if (msg.think) rec.think = String(msg.think).slice(0, 1200);
     /* ★ 修复115：以前这里只存 {r,t,ts,src}，把 cite 悄悄丢了 → 「📄 原文出处」存不进对话、重绘就消失。
        现在把出处一起存（≤4 条 / 每条 ≤200 字），并做长度裁剪防膨胀。 */
     if (Array.isArray(msg.cite) && msg.cite.length) {
@@ -1065,16 +1067,38 @@ W.LMAI = (function () {
     const b = panel.querySelector('.lm-ai-size');
     if (b) {
       b.textContent = (sizeMode === 'max') ? '⤡' : '⤢';
-      b.title = '面板大小：' + (SIZE_NAME[sizeMode] || '标准') + '（点一下换下一档'
-        + (isNarrow() ? '' : '；拖左上角可自由缩放，双击把手回到标准') + '）';
+      b.title = '面板大小：' + (SIZE_NAME[sizeMode] || '标准') + '（点一下弹出四档'
+        + (isNarrow() ? '' : '；也可以拖左上角自由缩放') + '）';
     }
+    const mb = panel.querySelector('.lm-ai-sizemenu');
+    if (mb && !mb.hidden) renderSizeMenu();   /* 菜单开着就顺手把打勾挪过去 */
   }
   function sizeNext() {
     const i = SIZES.indexOf(sizeMode);            /* 自定义(=-1) → 回到标准 */
-    sizeMode = SIZES[(i + 1) % SIZES.length];
+    sizeSet(SIZES[(i + 1) % SIZES.length]);
+  }
+  /* ★ 修复133：直接选某一档（菜单用）。以前只能一格一格点 ⤢ 轮换，太绕。 */
+  function sizeSet(m) {
+    if (SIZES.indexOf(m) < 0) return false;
+    sizeMode = m;
     sizeCus = null;
     applySize(); sizeSave();
-    if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('面板：' + SIZE_NAME[sizeMode]);
+    if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('面板：' + SIZE_NAME[m]);
+    return true;
+  }
+  const SIZE_HINT = { std: '380px · 贴着右下角', wide: '560px · 宽一点', tall: '560px · 高一点', max: '720px · 居中满屏' };
+  /* 点 ⤢ 弹出的四档菜单（当前档打勾；拖过大小就多一行提示） */
+  function renderSizeMenu() {
+    const box = panel && panel.querySelector('.lm-ai-sizemenu');
+    if (!box) return;
+    let h = '<div class="lm-ai-sz-hd">面板大小</div>';
+    SIZES.forEach(function (s) {
+      h += '<button type="button" class="lm-ai-sz-it' + (s === sizeMode ? ' on' : '') + '" data-size="' + s + '">'
+        + '<span>' + SIZE_NAME[s] + '<em>' + (SIZE_HINT[s] || '') + '</em></span>'
+        + (s === sizeMode ? '<i class="lm-ai-sz-ck">✓</i>' : '') + '</button>';
+    });
+    if (sizeMode === 'custom') h += '<div class="lm-ai-sz-tip">当前是你拖出来的大小 · 选上面任一档即可覆盖</div>';
+    box.innerHTML = h;
   }
   /* ★ 修复132：对话列表（顶栏 ☰ 点开）。每行 = 勾选框 + 标题（点它切过去）+ 单个删除；
      顶部「全选 / 删除选中」，删之前要点两次（第一次变成「再点一次确认」，3 秒不管就复原）。 */
@@ -1171,8 +1195,13 @@ W.LMAI = (function () {
             }).join('')
             + '</details>'
           : '';
-        return '<div class="lm-ai-msg ' + cls + '"><span class="lm-ai-who">' + who + '</span><p>'
-          + esc(m.t).replace(/\n/g, '<br>') + '</p>'
+        return '<div class="lm-ai-msg ' + cls + '"><span class="lm-ai-who">' + who + '</span>'
+          /* ★ 修复133：思考过程放在正文**上方**，默认收起（点开才看）—— 和 DeepSeek 一样 */
+          + (m.think
+            ? '<details class="lm-ai-thk"><summary>💭 思考过程 · ' + String(m.think).length + ' 字（点开看）</summary>'
+              + '<div class="lm-ai-thk-bd">' + esc(String(m.think)).replace(/\n/g, '<br>') + '</div></details>'
+            : '')
+          + '<p>' + esc(m.t).replace(/\n/g, '<br>') + '</p>'
           + (m.note ? '<span class="lm-ai-note">' + esc(String(m.note)) + '</span>' : '')
           + src + cite + '</div>';
       }).join('')
@@ -1188,9 +1217,11 @@ W.LMAI = (function () {
       + '⚡ 本站速答<em>免配置 · 只用站里写过的内容</em></button>'
       + '<button type="button" class="lm-ai-mode' + (mode === 'ds' ? ' on' : '') + '" data-mode="ds" role="tab" aria-selected="' + (mode === 'ds') + '">'
       + '🐋 DeepSeek<em>更全面 · 需装扩展或手动粘贴</em></button>'
-      /* ★ 修复125：本机模型（可选）—— 只有自己配过才出现，访客看不到这一项 */
-      + (llmReady() ? '<button type="button" class="lm-ai-mode' + (mode === 'ollama' ? ' on' : '') + '" data-mode="ollama" role="tab" aria-selected="' + (mode === 'ollama') + '">'
-        + '🧠 本机模型<em>你电脑上的 Ollama · 会组织语言</em></button>' : '')
+      /* ★ 修复133：三格**固定都在**。没接本机模型时这一格写「未检测到 · 点此配置」，
+         点它直接打开配置面板（以前整格会隐藏，用户以为功能没了）。 */
+      + '<button type="button" class="lm-ai-mode' + ((mode === 'ollama' && llmReady()) ? ' on' : '') + (llmReady() ? '' : ' off')
+      + '" data-mode="ollama" role="tab" aria-selected="' + (mode === 'ollama' && llmReady()) + '">'
+      + '🧠 本机模型<em>' + (llmReady() ? '你电脑上的 Ollama · 会组织语言' : '未检测到 · 点此配置') + '</em></button>'
       + '</div>';
     h += '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="' + ph + '" aria-label="提问">'
       + '<button class="btn btn-primary lm-ai-go" type="button">' + goLabel + '</button></div>'
@@ -1316,10 +1347,41 @@ W.LMAI = (function () {
       chatPush(id, { r: 'me', t: q });
       if (input) input.value = '';        /* 发出去就清空（同 runLocal） */
       renderPanel();
-      const live = panel.querySelector('.lm-ai-ans');
-      if (live) live.innerHTML = '<p class="lm-ai-tip">🧠 本机模型（' + esc(model) + '）正在读这一页并回答…首次加载模型会慢几秒。</p>';
-      W.LMOllama.ask(q, digest, function (txt) {
-        if (live) live.innerHTML = '<div class="lm-ai-live">' + esc(String(txt || '')).replace(/\n/g, '<br>') + '</div>';
+      const chatBox = panel.querySelector('.lm-ai-chat');
+      let streamEl = null;
+      let thinkTxt = '';
+      /* ★ 修复133：流式内容画在**对话区**里（以前画在输入框下面那块 .lm-ai-ans，面板一滚就看不见了）。
+         思考过程在气泡上方浅色实时打，正文在下面跟着长；思考完自动收起，点标题还能展开。 */
+      const drawLive = function (txt, think) {
+        if (!chatBox) return;
+        if (!streamEl || streamEl.parentNode !== chatBox) {
+          streamEl = document.createElement('div');
+          streamEl.className = 'lm-ai-msg ollama lm-ai-stream';
+          chatBox.appendChild(streamEl);
+        }
+        let s = '';
+        if (think) {
+          s += '<details class="lm-ai-thk live" open><summary>💭 思考中… · ' + String(think).length
+            + ' 字（点标题可收起）</summary><div class="lm-ai-thk-bd">'
+            + esc(String(think)).replace(/\n/g, '<br>') + '</div></details>';
+        }
+        if (txt) s += '<p>' + esc(String(txt)).replace(/\n/g, '<br>') + '</p>';
+        if (!think && !txt) s += '<p class="lm-ai-tip">正在读这一页…（' + esc(model) + '，首次加载会慢几秒）</p>';
+        streamEl.innerHTML = '<span class="lm-ai-who">🧠 本机模型（你的显卡）</span>' + s;
+        try { chatBox.scrollTop = chatBox.scrollHeight; } catch (eS) { /* noop */ }
+      };
+      drawLive('', '');
+      W.LMOllama.ask(q, digest, function (txt, final, think) {
+        if (think) thinkTxt = String(think);
+        if (final) {
+          /* 思考结束：把那个框自己收起来（内容还在，点一下还能展开看） */
+          if (streamEl) {
+            const d = streamEl.querySelector('.lm-ai-thk');
+            if (d) d.removeAttribute('open');
+          }
+          return;
+        }
+        drawLive(String(txt || ''), thinkTxt);
       }, history).then(function (txt) {
         let t = String(txt || '').trim();
         /* ★ 修复131：模型明明收到了正文却说「没有页面内容」—— 站点直接把矛盾点摆出来，别让用户以为功能坏了 */
@@ -1328,8 +1390,7 @@ W.LMAI = (function () {
           t += '\n\n（说明：这一问确实把本页正文 ' + info.pageChars + ' 字一起发出去了，'
             + '上面那句是模型自己判断失误；换个具体点的问法、或再问一次通常就好。）';
         }
-        chatPush(id, { r: 'ollama', t: t || '（本机模型没返回内容：模型可能还在加载，稍等几秒再问一次。）', note: llmNote() });
-        if (live) live.innerHTML = '';
+        chatPush(id, { r: 'ollama', t: t || '（本机模型没返回内容：模型可能还在加载，稍等几秒再问一次。）', note: llmNote(), think: thinkTxt });
         renderPanel();
       }, function (e) {
         chatPush(id, {
@@ -1338,7 +1399,6 @@ W.LMAI = (function () {
             + (W.LMOllama.helpText ? W.LMOllama.helpText() : '')
             + '\n\n（现在可以直接用 ⚡ 本站速答，不受影响。）'
         });
-        if (live) live.innerHTML = '';
         renderPanel();
       });
     };
@@ -1394,6 +1454,16 @@ W.LMAI = (function () {
     body.querySelectorAll('.lm-ai-mode').forEach(function (b) {
       b.addEventListener('click', function () {
         const m = b.getAttribute('data-mode');
+        /* ★ 修复133：本机模型还没接上 —— 不静默失败，直接说清楚并把配置面板打开 */
+        if (m === 'ollama' && !llmReady()) {
+          if (window.LMApp && LMApp.toast) LMApp.toast('还没接本机模型：下面按提示配一下（只用你电脑的显卡，不填 Key）');
+          if (W.LMOllama && typeof W.LMOllama.openSettings === 'function') {
+            W.LMOllama.openSettings(function () { renderPanel(); });
+          } else if (ans) {
+            ans.innerHTML = '<p class="lm-ai-tip">本机模型模块没加载（js/ai-ollama.js）。刷新一下页面再试；这一步是可选的，不影响站内速答。</p>';
+          }
+          return;
+        }
         if (m === aiMode()) return;
         setAiMode(m);
         renderPanel();
@@ -1517,6 +1587,8 @@ W.LMAI = (function () {
       + '<button type="button" class="lm-ai-hbtn lm-ai-size" title="放大 / 缩小">⤢</button>'
       + '<button type="button" class="lm-ai-x" aria-label="关闭">×</button></div>'
       + '<div class="lm-ai-threads" hidden></div>'
+      /* ★ 修复133：⤢ 的四个选项（弹出来选，不用一格一格点） */
+      + '<div class="lm-ai-sizemenu" hidden></div>'
       + '<div class="lm-ai-body"></div>'
       /* 左上角的小把手：桌面上拖动可自由缩放；双击回到标准大小 */
       + '<div class="lm-ai-resize" title="拖左上角可放大 / 缩小；双击回到标准大小"></div>';
@@ -1646,9 +1718,43 @@ W.LMAI = (function () {
         if (b.classList.contains('lm-ai-th-close')) closeTh();
       });
     }
-    /* 「⤢」：标准 → 加宽 → 加高 → 满屏 → 标准 */
+    /* 「⤢」：弹出四档菜单（标准 / 加宽 / 加高 / 满屏），选完自动收起 */
     const sizeBtn = panel.querySelector('.lm-ai-size');
-    if (sizeBtn) sizeBtn.addEventListener('click', sizeNext);
+    const szMenu = panel.querySelector('.lm-ai-sizemenu');
+    if (sizeBtn && szMenu) sizeBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      const open = szMenu.hidden;
+      if (open) renderSizeMenu();
+      szMenu.hidden = !open;
+      sizeBtn.classList.toggle('on', open);
+    });
+    if (szMenu) szMenu.addEventListener('click', function (e) {
+      const b = (e.target && e.target.closest) ? e.target.closest('.lm-ai-sz-it') : null;
+      if (!b) return;
+      sizeSet(b.getAttribute('data-size'));
+      szMenu.hidden = true;
+      if (sizeBtn) sizeBtn.classList.remove('on');
+    });
+    /* 点别处 / 按 Esc 收起菜单与对话列表（不自作多情地一直挡着） */
+    document.addEventListener('click', function (e) {
+      const t = e.target;
+      if (szMenu && !szMenu.hidden && szMenu !== t && !szMenu.contains(t) && sizeBtn && !sizeBtn.contains(t)) {
+        szMenu.hidden = true;
+        if (sizeBtn) sizeBtn.classList.remove('on');
+      }
+      if (thBox && !thBox.hidden && thBox !== t && !thBox.contains(t) && listBtn && !listBtn.contains(t)) {
+        thBox.hidden = true;
+        listBtn.classList.remove('on');
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      /* 先收浮层：这里有东西开着就别顺手把整个面板也关了 */
+      let hit = false;
+      if (szMenu && !szMenu.hidden) { szMenu.hidden = true; if (sizeBtn) sizeBtn.classList.remove('on'); hit = true; }
+      if (thBox && !thBox.hidden) { thBox.hidden = true; if (listBtn) listBtn.classList.remove('on'); hit = true; }
+      if (hit) { e.stopImmediatePropagation(); e.preventDefault(); }
+    });
     /* 左上角把手拖动自由缩放（只在桌面；手机上靠 ⤢ 的四档，避免和页面滚动抢手指） */
     const grip = panel.querySelector('.lm-ai-resize');
     if (grip) {
@@ -1740,7 +1846,7 @@ W.LMAI = (function () {
     /* ★ 修复132：多对话（每页多个，各存各的）+ 面板大小 */
     threadsOf: threadsOf, threadNew: threadNew, threadSet: threadSet, threadDel: threadDel,
     threadRename: threadRename, curTid: curTid, ensureThread: ensureThread,
-    sizeMode: function () { return sizeMode; }, sizeNext: sizeNext,
+    sizeMode: function () { return sizeMode; }, sizeNext: sizeNext, sizeSet: sizeSet,
     listenBridge: listenBridge, bridgeSeen: function () { return bridgeSeen; },
     mount: mount, version: '1.3'
   };

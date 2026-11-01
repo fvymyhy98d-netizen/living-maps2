@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=132 · LM_ASSET_VER=132',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=133 · LM_ASSET_VER=133',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=131/g) || []).length === 0 && /\?v=132/.test(html)
-      && /LM_ASSET_VER = '132'/.test(appJs));
+      && (html.match(/\?v=132/g) || []).length === 0 && /\?v=133/.test(html)
+      && /LM_ASSET_VER = '133'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3902,7 +3902,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
           && oll.visible('<think>推理过程</think>答案') === '答案'
           && oll.visible('前言<think>还没想完') === '前言'
           && oll.visible('直接答案') === '直接答案'
-          && oll.version === '4'
+          && oll.version === '5'
           && o.indexOf('maxTok') > 0 && o.indexOf('max_tokens: mt') > 0
           && o.indexOf('思考中…') > 0 && o.indexOf('lmLlmTxCopy') > 0
           && html.indexOf('http://[::1]:*') > 0
@@ -3963,7 +3963,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
           && a.indexOf('note: llmNote()') > 0 && a.indexOf('if (msg.note) rec.note') > 0
           && a.indexOf('lm-ai-note') > 0 && c131.indexOf('.lm-ai-note{') > 0
           && a.indexOf('上面那句是模型自己判断失误') > 0        /* 模型错判「没有页面内容」时的自动纠正说明 */
-          && typeof oll.lastAsk === 'function' && oll.version === '4';
+          && typeof oll.lastAsk === 'function' && oll.version === '5';
       } catch (e) { return false; }
     })());
 
@@ -4079,10 +4079,80 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && c.indexOf('.lm-ai-resize{display:none}') > 0;      /* 手机上藏把手：不跟页面滚动抢手势 */
     })());
 
-  T('版本已升到 132（?v=132 共 22 处 · v131 无残留 · LM_ASSET_VER=132）',
-    (html.match(/\?v=132/g) || []).length === 22 && (html.match(/\?v=131/g) || []).length === 0
-      && /LM_ASSET_VER = '132'/.test(appJs),
-    'v132=' + (html.match(/\?v=132/g) || []).length + ' v131=' + (html.match(/\?v=131/g) || []).length);
+  /* —— ★ 修复133：思考过程实时显示 / 四档弹出菜单 / 对话列表浮窗 / 三个模式固定 —— */
+  T('修复133 · 思考过程真跑：splitThink 把「思考」和「正文」拆开（闭合 / 没闭合 / 没有，三种都认）· visible 行为不变',
+    (function () {
+      const oll = require(path.join(DIR, 'js/ai-ollama.js'));
+      const a = oll.splitThink('先想一下<think>abc\nxyz</think>结论在这');
+      const b = oll.splitThink('<think>还没想完');
+      const c = oll.splitThink('只有正文');
+      return typeof oll.splitThink === 'function'
+        && a.think === 'abc\nxyz' && a.body === '先想一下结论在这'
+        && b.think === '还没想完' && b.body === ''
+        && c.think === '' && c.body === '只有正文'
+        && oll.visible('x<think>y</think>z') === 'xz';
+    })());
+
+  T('修复133 · 思考过程接线：流式回调带「思考」第 3 参 · 气泡上方默认收起 · 思考完自动收 · 存进对话重绘还在',
+    (function () {
+      const a = srcOf('js/ai.js');
+      const c = srcOf('css/style.css');
+      const o = srcOf('js/ai-ollama.js');
+      return o.indexOf('j.message.thinking') > 0 && o.indexOf('reasoning_content') > 0
+        && o.indexOf('return { think: think, body: body };') > 0
+        && a.indexOf('function (txt, final, think)') > 0
+        && a.indexOf('lm-ai-thk') > 0 && a.indexOf('思考过程 · ') > 0
+        && a.indexOf("d.removeAttribute('open')") > 0            /* 思考完 → 自己收起来 */
+        && a.indexOf('think: thinkTxt') > 0 && a.indexOf('if (msg.think) rec.think') > 0
+        && a.indexOf('lm-ai-stream') > 0                          /* 流式内容画在对话区里 */
+        && c.indexOf('.lm-ai-thk{') > 0 && c.indexOf('.lm-ai-thk-bd{') > 0;
+    })());
+
+  T('修复133 · 面板大小改成弹出四档菜单（不用一格一格点）：sizeSet 真跑 · 非法档位拒绝',
+    (function () {
+      const a = srcOf('js/ai.js');
+      const c = srcOf('css/style.css');
+      const ai = require(path.join(DIR, 'js/ai.js'));
+      const mem = {};
+      const oldLS = global.localStorage;
+      global.localStorage = {
+        getItem: function (k) { return (k in mem) ? mem[k] : null; },
+        setItem: function (k, v) { mem[k] = String(v); },
+        removeItem: function (k) { delete mem[k]; }
+      };
+      let ok = false;
+      try {
+        ok = a.indexOf('lm-ai-sizemenu') > 0 && a.indexOf('function sizeSet(m)') > 0
+          && a.indexOf('function renderSizeMenu()') > 0
+          && c.indexOf('.lm-ai-sizemenu{') > 0 && c.indexOf('.lm-ai-sz-it{') > 0
+          && ai.sizeSet('max') === true && ai.sizeMode() === 'max'
+          && ai.sizeSet('no-such') === false && ai.sizeMode() === 'max'
+          && ai.sizeSet('tall') === true && ai.sizeMode() === 'tall'
+          && ai.sizeSet('std') === true && ai.sizeMode() === 'std';
+      } finally {
+        if (oldLS === undefined) { try { delete global.localStorage; } catch (e) { global.localStorage = undefined; } }
+        else global.localStorage = oldLS;
+      }
+      return ok;
+    })());
+
+  T('修复133 · 布局与模式：对话列表是浮窗（不顶开聊天框）· 缩放把手不跟着滚 · 三个模式固定（没接本机模型也显示「未检测到」）',
+    (function () {
+      const a = srcOf('js/ai.js');
+      const c = srcOf('css/style.css');
+      return c.indexOf('.lm-ai-threads{position:absolute') > 0
+        && c.indexOf('.lm-ai-body{flex:1 1 auto;min-height:0;overflow:auto') > 0
+        && c.indexOf('overflow:hidden;display:flex;flex-direction:column') > 0
+        && a.indexOf('未检测到 · 点此配置') > 0
+        && a.indexOf("(llmReady() ? '' : ' off')") > 0
+        && a.indexOf("m === 'ollama' && !llmReady()") > 0          /* 点了就直接打开配置 */
+        && a.indexOf('lm-llm-cfg') > 0 && a.indexOf('lm-llm-use') > 0;
+    })());
+
+  T('版本已升到 133（?v=133 共 22 处 · v132 无残留 · LM_ASSET_VER=133）',
+    (html.match(/\?v=133/g) || []).length === 22 && (html.match(/\?v=132/g) || []).length === 0
+      && /LM_ASSET_VER = '133'/.test(appJs),
+    'v133=' + (html.match(/\?v=133/g) || []).length + ' v132=' + (html.match(/\?v=132/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

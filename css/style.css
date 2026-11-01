@@ -1180,7 +1180,7 @@ body.mobile-view .kid-pick{max-height:34vh}
 .lm-ai-fab:hover{transform:translateY(-1px);box-shadow:0 12px 34px rgba(0,0,0,.2)}
 .lm-ai-fab:active{transform:scale(.96)}
 .lm-ai-fab[hidden]{display:none}
-.lm-ai-panel{position:fixed;right:22px;bottom:78px;z-index:121;width:min(380px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:auto;overscroll-behavior:contain;border-radius:20px;background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);box-shadow:0 18px 60px rgba(0,0,0,.22);border:1px solid rgba(0,0,0,.06);padding:14px 16px 16px;--chat:min(38vh,300px)}
+.lm-ai-panel{position:fixed;right:22px;bottom:78px;z-index:121;width:min(380px,calc(100vw - 32px));max-height:min(70vh,560px);overflow:hidden;display:flex;flex-direction:column;overscroll-behavior:contain;border-radius:20px;background:rgba(255,255,255,.94);backdrop-filter:saturate(180%) blur(24px);-webkit-backdrop-filter:saturate(180%) blur(24px);box-shadow:0 18px 60px rgba(0,0,0,.22);border:1px solid rgba(0,0,0,.06);padding:14px 16px 16px;--chat:min(38vh,300px)}
 .lm-ai-panel[hidden]{display:none}
 /* ★ 修复132：面板大小四档（点顶栏 ⤢ 轮换）—— 对话区跟着变高，不用再在 300px 的小窗里翻 */
 .lm-ai-panel[data-size="wide"]{width:min(560px,calc(100vw - 32px));--chat:min(48vh,420px)}
@@ -1204,7 +1204,8 @@ body.mobile-view .kid-pick{max-height:34vh}
 .lm-ai-hbtn.on .lm-ai-cnt{background:rgba(255,255,255,.3);color:#fff}
 .lm-ai-head .lm-ai-badge{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
 /* ★ 修复132：一页多个对话的列表（☰ 展开）—— 勾选可多选，批量删 */
-.lm-ai-threads{margin-top:8px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.72);overflow:hidden}
+/* ★ 修复133：改成**浮窗覆盖**在对话区上面（以前是插在文档流里，一展开就把下面的聊天框整个顶下去） */
+.lm-ai-threads{position:absolute;left:8px;right:8px;top:50px;z-index:9;max-height:calc(100% - 62px);overflow:auto;overscroll-behavior:contain;border:1px solid var(--line);border-radius:14px;background:#fff;box-shadow:0 14px 40px rgba(0,0,0,.18)}
 .lm-ai-threads[hidden]{display:none}
 .lm-ai-th-top{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--line);background:rgba(0,113,227,.04)}
 .lm-ai-th-all{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer}
@@ -1225,7 +1226,34 @@ body.mobile-view .kid-pick{max-height:34vh}
 .lm-ai-th-one.arm{background:#d93025;color:#fff;font-size:11px}
 .lm-ai-th-foot{display:flex;gap:8px;padding:7px 9px;border-top:1px solid var(--line)}
 .lm-ai-th-foot .btn{font-size:12px;padding:5px 10px;border-radius:8px}
-.lm-ai-head{display:flex;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+/* ★ 修复133：⤢ 弹出的「面板大小」四档菜单（当前档打勾） */
+.lm-ai-sizemenu{position:absolute;right:10px;top:50px;z-index:10;width:186px;padding:6px;border:1px solid var(--line);border-radius:14px;background:#fff;box-shadow:0 14px 40px rgba(0,0,0,.18)}
+.lm-ai-sizemenu[hidden]{display:none}
+.lm-ai-sz-hd{font-size:11.5px;color:var(--text2);padding:4px 8px 6px}
+.lm-ai-sz-it{display:flex;align-items:center;gap:6px;width:100%;border:0;background:none;padding:7px 8px;border-radius:9px;cursor:pointer;font-family:inherit;font-size:13px;color:var(--text);text-align:left}
+.lm-ai-sz-it:hover{background:rgba(0,113,227,.08)}
+.lm-ai-sz-it.on{background:rgba(0,113,227,.1);font-weight:600;color:var(--blue)}
+.lm-ai-sz-it span{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.lm-ai-sz-it em{font-style:normal;font-size:11px;color:var(--text2);font-weight:400}
+.lm-ai-sz-ck{font-style:normal;color:var(--blue);font-weight:700}
+.lm-ai-sz-tip{font-size:11px;color:var(--text2);padding:6px 8px 2px;line-height:1.4}
+/* ★ 修复133：思考过程 —— 流式时浅色实时打出来，思考完自动收起；点标题还能展开看。
+   内容和「正文」分开：思考在气泡上方，正文在下面，一眼分得清哪段是给用户的答案。 */
+.lm-ai-thk{margin:2px 0 6px;border-radius:10px;background:rgba(0,0,0,.035);border:1px solid rgba(0,0,0,.05)}
+.lm-ai-thk>summary{cursor:pointer;list-style:none;font-size:11.5px;color:var(--text2);padding:5px 8px;display:flex;align-items:center;gap:4px}
+.lm-ai-thk>summary::-webkit-details-marker{display:none}
+.lm-ai-thk>summary::before{content:'▸';display:inline-block;transition:transform .15s}
+.lm-ai-thk[open]>summary::before{transform:rotate(90deg)}
+.lm-ai-thk-bd{max-height:150px;overflow:auto;overscroll-behavior:contain;padding:0 9px 7px;font-size:12px;line-height:1.55;color:var(--text2);word-break:break-word}
+.lm-ai-thk.live>summary{color:#7a5cff}
+.lm-ai-stream p{white-space:pre-wrap}
+/* 没接本机模型时那一格：淡一点，但**仍然在**（点了会告诉你怎么配） */
+.lm-ai-mode.off{opacity:.75}
+.lm-ai-mode.off em{color:#b26a00}
+.lm-ai-head{display:flex;flex:none;align-items:center;gap:8px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.lm-ai-head>b{flex:none;white-space:nowrap}
+/* ★ 修复133：滚动交给里面这层 —— 这样面板本身不滚，左上角的缩放把手、顶栏、浮层都不再跟着滚走 */
+.lm-ai-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .lm-ai-badge{font-size:11px;color:#007a55;background:rgba(0,170,120,.12);border-radius:999px;padding:2px 8px;white-space:nowrap}
 .lm-ai-x{margin-left:auto;font-size:20px;line-height:1;color:var(--text2);padding:2px 6px}
 .lm-ai-cur{font-size:13px;color:var(--text2);margin:10px 0 2px}
@@ -1341,6 +1369,10 @@ body.lm-lock{position:fixed;left:0;right:0;width:100%;overflow:hidden}
   .lm-ai-th-list{max-height:min(24vh,170px)}
   .lm-ai-th-top{padding:8px 9px}
   .lm-ai-th-go{font-size:13.5px}
+  /* ★ 修复133：手机上浮层（四档菜单 / 对话列表）跟着顶栏往下挪一点，思考框也收窄 */
+  .lm-ai-sizemenu{top:46px;right:8px;width:172px}
+  .lm-ai-threads{top:46px;left:8px;right:8px;max-height:calc(100% - 56px)}
+  .lm-ai-thk-bd{max-height:120px}
 }
 @media (max-width:560px){
   .lm-ai-head .lm-ai-badge{display:none}     /* 窄屏先让位给三个按钮 */

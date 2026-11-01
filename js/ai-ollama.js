@@ -292,13 +292,27 @@
   /* ★ 修复129：Qwen3-Thinking 这类「会思考」的模型会把推理过程包在  thinking…<｜end▁of▁thinking｜> 里一起流出来。
      展示时整段隐去，只留最终答案；流式期间还没闭合就先显示「思考中…」（否则用户会看到一堆推理草稿）。
      附带的好处：发给模型的请求一字不改，只是「显示层」过滤，不影响隐私范围。 */
-  function visible(t) {
-    var s = String(t || '');
-    s = s.replace(/<think[^>]*>[\s\S]*?<\/think>/gi, '');
-    var open = s.search(/<think/i);
-    if (open >= 0) s = s.slice(0, open);
-    return s.replace(/^\s+/, '');
+  /* ★ 修复133：把「思考」和「正文」拆成两股 —— 思考过程要能实时打在回答上方（浅色、可折叠），
+     正文照旧只留最终答案。兼容三种来源：
+       ① Ollama 新版 /api/chat 的 message.thinking（Qwen3 这类思考模型）
+       ② OpenAI 兼容接口的 delta.reasoning_content / delta.reasoning（天禧 / DeepSeek 风格）
+       ③ 老式模板把推理包在  …  里一起吐出来
+     注意：这只是**显示层**，发给模型的内容一个字没多没少。 */
+  function splitThink(raw) {
+    var s = String(raw || '');
+    var think = '', body = '', rest = s, m;
+    var re = /<think[^>]*>([\s\S]*?)(<\/think>|$)/i;
+    for (;;) {
+      m = re.exec(rest);
+      if (!m) { body += rest; break; }
+      body += rest.slice(0, m.index);
+      think += m[1];
+      rest = rest.slice(m.index + m[0].length);
+      if (!m[2]) break;                    /* 没闭合 → 后面全都算思考 */
+    }
+    return { think: think, body: body };
   }
+  function visible(t) { return splitThink(t).body.replace(/^\s+/, ''); }
   /* ★ 修复131：上一次实际发出了什么（页面正文字数 / 带了几条历史 / 上限），
      给界面那行小字用 —— 用户一眼能看出「这次到底把页面发出去了没有」，不用再猜模型是不是撒谎。 */
   var lastAsk = null;
@@ -339,24 +353,40 @@
         });
       }
       var all = '';
+      var thinkAll = '';
       var take = function (j) {
+        /* ★ 修复133：思考模型会单独给一段推理（thinking / reasoning_content），先收着 */
+        var th = '';
+        if (isOll && j && j.message && typeof j.message.thinking === 'string') th = j.message.thinking;
+        if (!th && j && j.choices && j.choices[0]) {
+          var d0 = j.choices[0].delta || j.choices[0].message || {};
+          th = d0.reasoning_content || d0.reasoning || '';
+        }
+        if (typeof th === 'string' && th) thinkAll += th;
         var t = isOll
           ? (j && j.message && j.message.content)
           : (j && j.choices && j.choices[0]
             && ((j.choices[0].delta && j.choices[0].delta.content)
               || (j.choices[0].message && j.choices[0].message.content)));
-        if (typeof t === 'string' && t) {
-          all += t;
-          if (onText) onText(visible(all) || '思考中…', false);
+        if (typeof t !== 'string' || !t) {
+          /* 只有思考、还没有正文：也要把思考实时送出去（否则界面会干等一片空白） */
+          if (onText && thinkAll) onText('', false, thinkAll);
+          return;
         }
+        all += t;
+        var sp = splitThink(all);
+        var think = thinkAll + sp.think;
+        if (onText) onText(sp.body || (think ? '' : '思考中…'), false, think);
       };
       /* 收尾：思考块没闭合（输出上限被推理吃光）时，明确说清楚，而不是把一屏推理草稿丢给用户 */
       var done = function () {
-        var fin = visible(all);
+        var sp = splitThink(all);
+        var think = thinkAll + sp.think;
+        var fin = sp.body.replace(/^\s+/, '');
         if (!fin && String(all).trim()) {
           fin = '（模型的思考过程吃满了输出上限，没来得及给结论：把问题问短一点，或换个更小的模型试试）';
         }
-        if (onText) onText(fin, true);
+        if (onText) onText(fin, true, think);
         return fin;
       };
       if (!r.body || typeof r.body.getReader !== 'function') {
@@ -612,9 +642,10 @@
     /* ★ 修复126：自动识别 / 一键启用 / 显卡估算 / 网页内下载 */
     ENDPOINTS: ENDPOINTS, listAt: listAt, detect: detect, pickBest: pickBest,
     autoDetect: autoDetect, autoConnect: autoConnect, gpu: gpu, suggest: suggest, pull: pull,
-    visible: visible,
     userMsg: userMsg, histMsgs: histMsgs, lastAsk: function () { return lastAsk; },
-    version: '4'
+    /* ★ 修复133：思考过程拆分（渲染层用；不影响发给模型的内容） */
+    visible: visible, splitThink: splitThink,
+    version: '5'
   };
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {}));
 if (typeof module !== 'undefined' && module.exports) {
