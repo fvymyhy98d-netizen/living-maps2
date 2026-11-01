@@ -711,6 +711,8 @@ W.LMAI = (function () {
     const arr = Array.isArray(all[id]) ? all[id] : [];
     const rec = { r: msg.r || 'me', t: String(msg.t || '').slice(0, 4000), ts: Date.now(), src: msg.src || null };
     if (msg.q) rec.q = String(msg.q).slice(0, 120);   /* ★ 修复117：记下这一问，供出处高亮用 */
+    /* ★ 修复131：「这次送了什么」那行小字也要存，否则重绘就没了 */
+    if (msg.note) rec.note = String(msg.note).slice(0, 120);
     /* ★ 修复115：以前这里只存 {r,t,ts,src}，把 cite 悄悄丢了 → 「📄 原文出处」存不进对话、重绘就消失。
        现在把出处一起存（≤4 条 / 每条 ≤200 字），并做长度裁剪防膨胀。 */
     if (Array.isArray(msg.cite) && msg.cite.length) {
@@ -944,7 +946,9 @@ W.LMAI = (function () {
             + '</details>'
           : '';
         return '<div class="lm-ai-msg ' + cls + '"><span class="lm-ai-who">' + who + '</span><p>'
-          + esc(m.t).replace(/\n/g, '<br>') + '</p>' + src + cite + '</div>';
+          + esc(m.t).replace(/\n/g, '<br>') + '</p>'
+          + (m.note ? '<span class="lm-ai-note">' + esc(String(m.note)) + '</span>' : '')
+          + src + cite + '</div>';
       }).join('')
       : '<p class="lm-ai-tip">还没有对话。先在下面选一种模式，写个问题按回车：\n<b>⚡ 本站速答</b>＝只在站里找、自己组织成一段话（免配置）；<b>🐋 DeepSeek</b>＝把这页正文附上交给网页版（更全面，但要装扩展或手动粘贴）。</p>';
     h += '</div>';
@@ -1077,6 +1081,11 @@ W.LMAI = (function () {
     const runLLM = function (q) {
       if (!W.LMOllama || typeof W.LMOllama.ask !== 'function') { runLocal(q); return; }
       const digest = pageDigest(pageById(id));
+      /* ★ 修复131：追问（“我说明了什么”“上面那条”）必须有上下文 —— 取这一页最近的 2 轮对话一起发。
+         注意：必须在 chatPush 这一问**之前**取，否则历史里会混进重复的当前问题。 */
+      const history = chatOf(id).filter(function (m) {
+        return m && m.t && (m.r === 'me' || m.r === 'ollama' || m.r === 'local');
+      }).slice(-4);
       const model = (W.LMOllama.cfg() || {}).model || '本机模型';
       chatPush(id, { r: 'me', t: q });
       if (input) input.value = '';        /* 发出去就清空（同 runLocal） */
@@ -1085,9 +1094,15 @@ W.LMAI = (function () {
       if (live) live.innerHTML = '<p class="lm-ai-tip">🧠 本机模型（' + esc(model) + '）正在读这一页并回答…首次加载模型会慢几秒。</p>';
       W.LMOllama.ask(q, digest, function (txt) {
         if (live) live.innerHTML = '<div class="lm-ai-live">' + esc(String(txt || '')).replace(/\n/g, '<br>') + '</div>';
-      }).then(function (txt) {
-        const t = String(txt || '').trim();
-        chatPush(id, { r: 'ollama', t: t || '（本机模型没返回内容：模型可能还在加载，稍等几秒再问一次。）' });
+      }, history).then(function (txt) {
+        let t = String(txt || '').trim();
+        /* ★ 修复131：模型明明收到了正文却说「没有页面内容」—— 站点直接把矛盾点摆出来，别让用户以为功能坏了 */
+        const info = (W.LMOllama.lastAsk && W.LMOllama.lastAsk()) || {};
+        if (info.pageChars > 0 && /(没有|未包含|不含|缺少|无法看到).{0,8}页面内容|无页面内容/.test(t)) {
+          t += '\n\n（说明：这一问确实把本页正文 ' + info.pageChars + ' 字一起发出去了，'
+            + '上面那句是模型自己判断失误；换个具体点的问法、或再问一次通常就好。）';
+        }
+        chatPush(id, { r: 'ollama', t: t || '（本机模型没返回内容：模型可能还在加载，稍等几秒再问一次。）', note: llmNote() });
         if (live) live.innerHTML = '';
         renderPanel();
       }, function (e) {
@@ -1100,6 +1115,17 @@ W.LMAI = (function () {
         if (live) live.innerHTML = '';
         renderPanel();
       });
+    };
+    /* ★ 修复131：一行小字交代「这次到底送了什么」，避免再出现「明明有正文却答没正文」的困惑 */
+    const llmNote = function () {
+      try {
+        const i = (W.LMOllama.lastAsk && W.LMOllama.lastAsk()) || null;
+        if (!i) return '';
+        if (i.scope === 'question') return '本次只发了你的问题（设置里选了「只发我的问题」）';
+        return '本次已附本页正文 ' + i.pageChars + ' 字'
+          + (i.history ? ' + 上文 ' + Math.ceil(i.history / 2) + ' 轮' : ' + 无上文（第一问）')
+          + ' · 上限 ' + i.maxTok + ' tokens';
+      } catch (e) { return ''; }
     };
     /* 发送：按模式分流（默认「本站速答」；DeepSeek / 本机模型是备选） */
     const send = function () {

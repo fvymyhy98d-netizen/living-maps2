@@ -1228,6 +1228,8 @@ body.mobile-view .kid-pick{max-height:34vh}
 /* ★ 修复125：本机模型（Ollama）的回答 —— 用紫色边区分，一眼看出「这段是显卡里的模型写的」 */
 .lm-ai-msg.ollama{align-self:flex-start;background:#fff;border:1px solid rgba(120,80,220,.3);border-left:3px solid rgba(120,80,220,.65)}
 .lm-ai-live{font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;border-left:3px solid rgba(120,80,220,.5);padding-left:9px;margin:6px 0}
+/* ★ 修复131：答案下面那行「本次送了正文 765 字 + 上文 1 轮」小字 —— 透明、可核对 */
+.lm-ai-note{display:block;margin-top:5px;font-size:11px;line-height:1.4;color:var(--text2);opacity:.9}
 .lm-ai-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .lm-ai-row .btn{font-size:12px;padding:6px 10px;border-radius:9px}
 .lm-ai-pastebox{margin-top:8px;display:flex;flex-direction:column;gap:6px}

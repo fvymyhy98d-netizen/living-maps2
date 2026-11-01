@@ -228,15 +228,43 @@
   }
 
 
-  /* ★ 修复129：隐私范围=question 时正文一个字都不发，老提示词「页面里没有就说没有」会让模型只会回「没有」。
-     现在分两种情形说清楚：给了页面就只依页面；没给（或被关掉）就按常识答，并声明「不是本站内容」。 */
-  var SYS = '你是“三张活地图”学习站点的助教。'
-    + '如果用户消息里带有【页面内容】，就只依据它回答，里面没有的直接说没有，绝不编造；'
-    + '如果没有给【页面内容】，就用你自己的知识简短回答，并说明这不是本站页面的内容。'
+  /* ★ 修复131：上一版提示词给了模型一个「甩锅口」——
+     实测第二次追问时，4B 模型明明收到了 765 字页面正文，却回「您的消息中未包含【页面内容】」。
+     现在把「有没有页面」写成不可误判的标记，并明确禁止那句话。 */
+  var SYS = '你是“三张活地图”学习站点的助教。判断依据只有一条：'
+    + '只要用户消息里出现【页面内容（已提供…）】这几个字，就说明页面正文已经在你手上 —— '
+    + '必须只依据它回答，页里没有的直接说没有；'
+    + '绝对不要回答“未包含页面内容”“没有页面内容可参考”“请提供页面内容”这类话。'
+    + '只有当消息里明确写着【本次没有提供页面内容】时，才用你自己的知识简短回答，并说明这不是本站页面的内容。'
+    + '用户在追问（“这个”“上面那条”“我说明了什么”等）时，结合【之前的对话】判断他指的是什么。'
     + '回答用简体中文，简洁、分点。';
-  /* 隐私开关：scope=question 时**完全不带页面正文**，只把问题交给本机模型 */
+  /* 隐私开关：scope=question 时**完全不带页面正文**，只把问题交给本机模型。
+     ★ 修复131：三种情形各给一个明确的标记，模型不用猜、用户也能看出这次到底送了没送。 */
   function userMsg(c, q, digest) {
-    return (c.scope === 'question' ? '' : '【页面内容】\n' + String(digest || '') + '\n\n') + '【我的问题】\n' + String(q || '');
+    var d = String(digest || '').trim();
+    var s = '';
+    if (c.scope === 'question') {
+      s += '【本次没有提供页面内容】用户在设置里选了「只发我的问题」，你看不到页面正文；'
+        + '请用通用知识简短回答，并说明这不是本站页面的内容。\n\n';
+    } else if (d) {
+      s += '【页面内容（已提供，共 ' + d.length + ' 字）】\n' + d + '\n\n';
+    } else {
+      s += '【页面内容（已提供，但这一页几乎没有可提取的文字）】直接说明这一页缺少可读正文，不要编造。\n\n';
+    }
+    return s + '【我的问题】\n' + String(q || '');
+  }
+  /* ★ 修复131：把本页最近的对话折成多轮 messages，追问（“我说明了什么”）才有上下文。
+     只取最近 4 条（2 轮），每条截到 600 字 —— 别把上下文撑爆，4B 的窗口只有 8K。 */
+  function histMsgs(history) {
+    var out = [];
+    (history || []).forEach(function (m) {
+      if (!m || !m.t) return;
+      var txt = String(m.t).trim();
+      if (!txt) return;
+      if (txt.length > 600) txt = txt.slice(0, 600) + '…';
+      out.push({ role: (m.r === 'me') ? 'user' : 'assistant', content: txt });
+    });
+    return out.slice(-4);
   }
   /* 同时吃两种流：Ollama 的 NDJSON 与 OpenAI 兼容的 SSE（data: {...}） */
   function streamLines(r, got) {
@@ -271,7 +299,10 @@
     if (open >= 0) s = s.slice(0, open);
     return s.replace(/^\s+/, '');
   }
-  function ask(q, digest, onText) {
+  /* ★ 修复131：上一次实际发出了什么（页面正文字数 / 带了几条历史 / 上限），
+     给界面那行小字用 —— 用户一眼能看出「这次到底把页面发出去了没有」，不用再猜模型是不是撒谎。 */
+  var lastAsk = null;
+  function ask(q, digest, onText, history) {
     var c = cfg();
     if (!ALLOW.test(String(c.url || ''))) return Promise.reject(new Error('地址不在白名单（只允许 127.0.0.1 / localhost）'));
     var u = base(c.url);
@@ -279,14 +310,23 @@
     /* ★ 修复130：上限可调（默认 3072）。夹在 256~8192：太小答案会被掐断，太大则白等 */
     var mt = parseInt(c.maxTok, 10); if (!(mt > 0)) mt = 3072;
     mt = Math.max(256, Math.min(8192, mt));
+    /* ★ 修复131：系统提示 + 最近几轮对话 + 这一问（页面正文挂在最后一条 user 里） */
+    var hist = histMsgs(history);
+    var msgs = [{ role: 'system', content: SYS }].concat(hist);
+    msgs.push({ role: 'user', content: userMsg(c, q, digest) });
+    lastAsk = {
+      pageChars: (c.scope === 'question' ? 0 : String(digest || '').trim().length),
+      history: hist.length, scope: c.scope === 'question' ? 'question' : 'page',
+      model: String(c.model || ''), maxTok: mt
+    };
     var body = isOll
       ? {
         model: c.model, stream: true, options: { temperature: 0.2, num_predict: mt },
-        messages: [{ role: 'system', content: SYS }, { role: 'user', content: userMsg(c, q, digest) }]
+        messages: msgs
       }
       : {
         model: c.model, stream: true, temperature: 0.2, max_tokens: mt,
-        messages: [{ role: 'system', content: SYS }, { role: 'user', content: userMsg(c, q, digest) }]
+        messages: msgs
       };
     return fetchT(u + (isOll ? '/api/chat' : '/v1/chat/completions'), {
       method: 'POST',
@@ -573,7 +613,8 @@
     ENDPOINTS: ENDPOINTS, listAt: listAt, detect: detect, pickBest: pickBest,
     autoDetect: autoDetect, autoConnect: autoConnect, gpu: gpu, suggest: suggest, pull: pull,
     visible: visible,
-    version: '3'
+    userMsg: userMsg, histMsgs: histMsgs, lastAsk: function () { return lastAsk; },
+    version: '4'
   };
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {}));
 if (typeof module !== 'undefined' && module.exports) {

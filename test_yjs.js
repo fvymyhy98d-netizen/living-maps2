@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=130 · LM_ASSET_VER=130',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=131 · LM_ASSET_VER=131',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=129/g) || []).length === 0 && /\?v=130/.test(html)
-      && /LM_ASSET_VER = '130'/.test(appJs));
+      && (html.match(/\?v=130/g) || []).length === 0 && /\?v=131/.test(html)
+      && /LM_ASSET_VER = '131'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3902,7 +3902,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
           && oll.visible('<think>推理过程</think>答案') === '答案'
           && oll.visible('前言<think>还没想完') === '前言'
           && oll.visible('直接答案') === '直接答案'
-          && oll.version === '3'
+          && oll.version === '4'
           && o.indexOf('maxTok') > 0 && o.indexOf('max_tokens: mt') > 0
           && o.indexOf('思考中…') > 0 && o.indexOf('lmLlmTxCopy') > 0
           && html.indexOf('http://[::1]:*') > 0
@@ -3933,10 +3933,44 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       } catch (e) { return false; }
     })());
 
-  T('版本已升到 130（?v=130 共 22 处 · v129 无残留 · LM_ASSET_VER=130）',
-    (html.match(/\?v=130/g) || []).length === 22 && (html.match(/\?v=129/g) || []).length === 0
-      && /LM_ASSET_VER = '130'/.test(appJs),
-    'v130=' + (html.match(/\?v=130/g) || []).length + ' v129=' + (html.match(/\?v=129/g) || []).length);
+  /* —— ★ 修复131：追问要带上文 + 正文标记不可误判 + 答案下注明「这次送了什么」 —— */
+  T('修复131 · 本机模型：追问带上文(最近2轮) · 正文块写死「已提供，共 N 字」堵住模型甩锅 · 答案下小字注明本次送了什么',
+    (function () {
+      try {
+        const o = srcOf('js/ai-ollama.js');
+        const a = srcOf('js/ai.js');
+        const oll = require(path.join(DIR, 'js/ai-ollama.js'));
+        const c131 = srcOf('css/style.css');
+        const msgPage = oll.userMsg({ scope: 'page' }, '这是什么', new Array(766).join('X'));
+        const msgQ = oll.userMsg({ scope: 'question' }, '这是什么', new Array(766).join('X'));
+        const msgEmpty = oll.userMsg({ scope: 'page' }, '这是什么', '');
+        const hist = oll.histMsgs([
+          { r: 'me', t: '第一问' }, { r: 'ollama', t: '第一答' },
+          { r: 'me', t: '第二问' }, { r: 'ollama', t: '第二答' },
+          { r: 'me', t: '第三问' }, { r: 'ollama', t: '第三答' }
+        ]);
+        return msgPage.indexOf('【页面内容（已提供，共 765 字）】') === 0
+          && msgPage.indexOf('XXXX') > 0
+          && msgPage.indexOf('这是什么') > msgPage.indexOf('【我的问题】')
+          && msgQ.indexOf('【本次没有提供页面内容】') === 0
+          && msgQ.indexOf('XXXX') < 0                     /* 隐私模式：正文一个字都不许出现 */
+          && msgEmpty.indexOf('几乎没有可提取的文字') > 0
+          && hist.length === 4 && hist[0].role === 'user' && hist[1].role === 'assistant'
+          && hist[3].content === '第三答'                   /* 只留最近 2 轮 */
+          && o.indexOf('绝对不要回答') > 0
+          && a.indexOf('}, history).then(function (txt) {') > 0
+          && a.indexOf('const history = chatOf(id).filter(') > 0
+          && a.indexOf('note: llmNote()') > 0 && a.indexOf('if (msg.note) rec.note') > 0
+          && a.indexOf('lm-ai-note') > 0 && c131.indexOf('.lm-ai-note{') > 0
+          && a.indexOf('上面那句是模型自己判断失误') > 0        /* 模型错判「没有页面内容」时的自动纠正说明 */
+          && typeof oll.lastAsk === 'function' && oll.version === '4';
+      } catch (e) { return false; }
+    })());
+
+  T('版本已升到 131（?v=131 共 22 处 · v130 无残留 · LM_ASSET_VER=131）',
+    (html.match(/\?v=131/g) || []).length === 22 && (html.match(/\?v=130/g) || []).length === 0
+      && /LM_ASSET_VER = '131'/.test(appJs),
+    'v131=' + (html.match(/\?v=131/g) || []).length + ' v130=' + (html.match(/\?v=130/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
