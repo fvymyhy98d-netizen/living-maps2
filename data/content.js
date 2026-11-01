@@ -220,6 +220,155 @@ window.SITE_CONTENT = {
       "heroAlign": ""
     },
     {
+      "id": "demo-rag",
+      "kind": "page",
+      "icon": "🧩",
+      "label": "示例 · RAG",
+      "title": "示例条目：检索增强生成（RAG）",
+      "description": "一条「打样」示例：知识点 = 一句话 + 流程 + 图表 + 来源 + 待核实。把文字换成你们的选题即可直接用。",
+      "parent": "domain",
+      "heroAlign": "",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "size": "lead",
+          "text": "这一页是**示例条目**（打样用）：演示「三张活地图」里一条知识该长什么样 —— 一句话说清 → 讲清流程 → 给出可查证的来源 → 列出还没弄清的地方。\n内容讲 RAG，事实都来自公开资料；你们把文字换成自己的选题即可，**块的类型可以直接照抄**。"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "一句话解释",
+          "text": "RAG（检索增强生成）= 先**检索**外部资料，把片段塞进提示词，再让模型**基于这些片段**生成回答。它把「模型记住了什么」换成「这次给了它什么」，于是答案可以指名道姓地溯源。"
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "它是怎么工作的"
+        },
+        {
+          "type": "paragraph",
+          "text": "典型流水线四步：① 把资料切成几百 token 的小块；② 用嵌入模型把每块变成向量，存进向量库；③ 用户提问时按相似度取回最相关的若干块（实践中常与 BM25 这类关键词检索并用）；④ 把这些块连同问题一起送给生成模型。\n**关键在最后一步：模型只负责「照着材料说」，不负责「记得」。**"
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "关键概念（表格示例）"
+        },
+        {
+          "type": "table",
+          "title": "关键概念速览",
+          "headers": [
+            "概念",
+            "做什么",
+            "常见做法"
+          ],
+          "rows": [
+            [
+              "检索器 Retriever",
+              "把问题变成查询，从库里取回相关片段",
+              "稠密向量检索、BM25"
+            ],
+            [
+              "生成器 Generator",
+              "基于「问题 + 检索片段」写出回答",
+              "对话模型 / seq2seq"
+            ],
+            [
+              "参数记忆",
+              "训进模型权重里的知识",
+              "预训练得到，改起来很贵"
+            ],
+            [
+              "非参数记忆",
+              "存在模型之外的知识",
+              "文档库 + 向量数据库，随时可改"
+            ]
+          ]
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "一个可查证的进展（2024）"
+        },
+        {
+          "type": "paragraph",
+          "text": "Anthropic 在 2024-09-19 公开的 **Contextual Retrieval**：老做法先切块再嵌入，块一旦被切开就丢了上下文（一句话忽然没了主语），检索就容易找错。他们的做法是先给每块**补一段上下文说明**再嵌入 / 建索引（Contextual Embeddings + Contextual BM25）。\n公布的数字：检索失败率降低 **49%**；再加一步重排（rerank）后降低 **67%**（他们测的 top-20 检索失败率 5.7% → 1.9%）。"
+        },
+        {
+          "type": "chart",
+          "chartType": "bar",
+          "title": "检索失败率（Anthropic 2024 公布，越低越好）",
+          "labels": [
+            "仅向量检索（基线）",
+            "上下文检索 + 重排"
+          ],
+          "data": [
+            5.7,
+            1.9
+          ],
+          "unit": "%"
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "怎么用到我们的地图里"
+        },
+        {
+          "type": "paragraph",
+          "text": "建议每条知识固定四问：**是什么**（一句话）、**怎么做**（流程）、**凭什么**（来源 + 日期）、**还没弄清**（待核实清单）。\n本站里，第三问交给页面底部的「来源」块，第四问交给橙色提示块 —— 这一页就是按这个模板写的，结构可以直接复制到你们自己的条目里。"
+        },
+        {
+          "type": "related",
+          "title": "相关条目",
+          "mode": "card",
+          "cols": 3,
+          "links": [
+            "domain",
+            "ecology"
+          ]
+        },
+        {
+          "type": "sources",
+          "title": "本页来源",
+          "items": [
+            {
+              "label": "Lewis 等, Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks（NeurIPS 2020，arXiv:2005.11401）",
+              "url": "https://arxiv.org/abs/2005.11401",
+              "id": "r1"
+            },
+            {
+              "label": "Anthropic, Introducing Contextual Retrieval（2024-09-19）",
+              "url": "https://www.anthropic.com/news/contextual-retrieval",
+              "id": "r2"
+            }
+          ]
+        },
+        {
+          "type": "files",
+          "title": "延伸阅读",
+          "items": [
+            {
+              "name": "arXiv:2005.11401 原文（PDF）",
+              "url": "https://arxiv.org/pdf/2005.11401"
+            },
+            {
+              "name": "Anthropic · Contextual Retrieval 原文",
+              "url": "https://www.anthropic.com/news/contextual-retrieval"
+            }
+          ]
+        },
+        {
+          "type": "callout",
+          "tone": "orange",
+          "title": "待核实 / 还要讨论",
+          "text": "- 「49% / 67%」是 Anthropic 在自己选的数据集与嵌入模型上测的，换语料不一定一样，我们自己的地图要复测。\n- 2024 年之后还有 GraphRAG 等多跳检索方案，本页尚未核对原始论文，先不下结论。\n- 切块长度这类工程参数没有统一答案，属于实践取舍。"
+        },
+        {
+          "type": "hr"
+        }
+      ]
+    },
+    {
       "id": "ecology",
       "kind": "map",
       "icon": "🌐",

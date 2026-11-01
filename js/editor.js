@@ -944,18 +944,8 @@ window.LMEditor = (function () {
       + '<span class="bar-tip">✏️ 点击文字直接修改</span>'
       + '<span class="save-dot" id="saveDot">自动保存已开启</span>'
       + '<button class="btn btn-primary" data-panel="sync" type="button">☁️ 同步到 GitHub</button>'
-      + '<button class="btn btn-mini" data-panel="site" type="button">🏠 网站信息</button>'
-      + '<button class="btn btn-mini" data-panel="pages" type="button">📄 页面管理</button>'
-      + '<button class="btn btn-mini" data-panel="tree" type="button">🗂 条目树</button>'
-      + '<button class="btn btn-mini" data-panel="fixlayout" type="button" title="只重算「让位间距」（自由框与正文不重叠用的安全距离），不改内容、不做美化排版，也不负责把框往上贴；框顶留下的大空白请点「⇧ 收拢空隙」">🩺 整理布局</button>'
-      /* ★ 修复76：自由框悬空（框顶一条大空白）的专用解法 —— 把框上移贴紧上文，只动框位置、可撤销 */
-      + '<button class="btn btn-mini" data-panel="gaps" type="button" title="本页有自由框悬在半空？点这里把它上移贴紧上文（只动这些框的位置，正文不动，可按 Ctrl+Z 撤销）">⇧ 收拢空隙</button>'
-      + '<button class="btn btn-mini" data-panel="hist" type="button">🕘 历史版本</button>'
-      + '<button class="btn btn-mini" data-panel="backup" type="button">💾 备份 / 恢复</button>'
-      /* ★ 修复145：网页内重训小模型 —— 不用再回电脑敲 node tools/train_lm.js */
-      + '<button class="btn btn-mini" data-panel="trainlm" type="button" title="用当前内容重训站内小模型（只影响检索重排 + 英文词纠错），训完自动提交 data/lm.json；内容没改过就不用点">🧠 重训小模型</button>'
-      + '<button class="btn btn-mini" data-panel="discard" type="button">↩ 放弃修改</button>'
-      + '<button class="btn btn-mini" data-panel="password" type="button">🔑 修改密码</button>';
+      + '<button class="btn btn-mini" data-panel="settings" type="button" title="网站信息 / 页面管理 / 条目树 / 整理布局 / 收拢空隙 / 历史版本 / 备份恢复 / 重训小模型 / 修改密码 —— 全在这一处">⚙️ 页面设置</button>'
+      + '<button class="btn btn-mini" data-panel="discard" type="button">↩ 放弃修改</button>';
     if (!bar.dataset.init) {
       bar.dataset.init = '1';
       /* 手机端默认收起（只显示 🛠️ 把手，点一下展开）；电脑端常开展开态，行为不变 */
@@ -969,6 +959,7 @@ window.LMEditor = (function () {
     if (!p || !LMApp.state.admin) return;
     const k = p.getAttribute('data-panel');
     if (k === 'sync') syncModal();
+    else if (k === 'settings') settingsModal();   /* ★ 修复146：8 个按钮收拢成一处 */
     else if (k === 'site') siteModal();
     else if (k === 'hist') histModal();
     else if (k === 'pages') pagesModal();
@@ -1631,6 +1622,43 @@ window.LMEditor = (function () {
     });
   }
 
+  /* ---------- ★ 修复146：页面设置（把原来 8 个管理按钮收拢成一处） ----------
+     底部工具条常驻 8 个按钮，电脑上挤成一排、手机上要折两行（还挡内容）。
+     现在只留「同步」「页面设置」「放弃修改」，其余按用途分组放进这里；
+     每项仍然是原来那个 data-panel，点开就是原来那个弹窗/工具 —— 只是入口少了。 */
+  function settingsModal() {
+    const row = function (items) {
+      return '<div class="set-row">' + items.map(function (it) {
+        return '<button class="set-btn" type="button" data-panel="' + it[0] + '"'
+          + (it[3] ? ' title="' + it[3] + '"' : '') + '>'
+          + '<span class="set-ico">' + it[1] + '</span><span class="set-lab">' + it[2] + '</span>'
+          + (it[3] ? '<span class="set-desc">' + it[3] + '</span>' : '') + '</button>';
+      }).join('') + '</div>';
+    };
+    modal('<h3>⚙️ 页面设置</h3>'
+      + '<p class="modal-note">管理工具都在这里，底部只留最常用的两项。点任意一项即可打开（关掉本窗口不会丢改动）。</p>'
+      + '<div class="set-grp"><div class="set-hd">本页布局</div>'
+      + row([
+        ['fixlayout', '🩺', '整理布局', '只重算「让位间距」，不改内容、不做美化排版'],
+        ['gaps', '⇧', '收拢空隙', '本页自由框悬在半空？把它们上移贴紧上文（可 Ctrl+Z 撤销）']
+      ]) + '</div>'
+      + '<div class="set-grp"><div class="set-hd">页面与条目</div>'
+      + row([
+        ['site', '🏠', '网站信息', '站名、副标题、首页四张卡片、页脚'],
+        ['pages', '📄', '页面管理', '新建 / 重命名 / 排序 / 删除页面'],
+        ['tree', '🗂', '条目树', '三层嵌套条目的树状总览与跳转']
+      ]) + '</div>'
+      + '<div class="set-grp"><div class="set-hd">版本、备份与 AI</div>'
+      + row([
+        ['hist', '🕘', '历史版本', '查看 / 回到之前的修改'],
+        ['backup', '💾', '备份 / 恢复', '导出或导入整站内容 JSON'],
+        ['trainlm', '🧠', '重训小模型', '用当前内容重训站内小模型并提交 data/lm.json']
+      ]) + '</div>'
+      + '<div class="set-grp"><div class="set-hd">账号</div>'
+      + row([['password', '🔑', '修改密码', '改管理密码；忘记时仍可用团队密码登录']]) + '</div>'
+      + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>关闭</button></div>');
+  }
+
   /* ---------- ★ 修复145：小模型重训（网页内一键完成，替代命令行） ----------
      以前只能在自己电脑上跑 node tools/train_lm.js，再 git 提交 —— 对「不想碰命令行」的人不成立。
      现在：管理员模式本来就有 Token 和提交能力（写内容靠的就是它），所以训练、落盘、提交都能在页面里做完。 */
@@ -1649,18 +1677,29 @@ window.LMEditor = (function () {
       : ('当前模型：正在读取 data/lm.json…\n当前内容：' + corpusLen + ' 字');
 
     modal('<h3>🧠 重训站内小模型</h3>'
-      + '<p class="modal-note">它只做两件事：<b>给检索结果重排</b>、<b>纠正站内没有的英文词</b>。'
-      + '它不生成任何文字（答案永远逐字来自你的原文），所以<b>加内容后不重训也不会答错</b>，只是语感略旧。</p>'
-      + '<p class="modal-note" id="trNow" style="white-space:pre-line">' + nowTxt + '</p>'
+      /* —— 三个问题，直接答清楚 —— */
+      + '<div class="set-grp"><div class="set-hd">data/lm.json 是什么？</div>'
+      + '<p class="modal-note">一个 <b>20KB 左右的「字词搭配统计表」</b>，由你网站的内容统计出来。<br>'
+      + '它只做两件事：<b>给检索结果重排</b>、<b>纠正站内没有的英文词</b>。'
+      + '它<b>不生成任何文字</b>（答案永远逐字来自你的原文），所以加内容后不重训也不会答错，只是语感略旧。</p></div>'
+      + '<div class="set-grp"><div class="set-hd">现在什么状态？</div>'
+      + '<p class="modal-note" id="trNow" style="white-space:pre-line">' + nowTxt + '</p></div>'
+      + '<div class="set-grp"><div class="set-hd">什么时候需要「下载 lm.json」？</div>'
+      + '<p class="modal-note">只有一种情况：<b>没法自动上传</b>时（没配 Token / 仓库权限不够），'
+      + '你想把这个文件手动放进仓库的 <code>data/</code> 目录。<br>'
+      + '<b>只要点过「重训并上传」，就不需要再下载</b> —— 程序已经把它提交上去了。</p></div>'
+      + '<div class="set-grp"><div class="set-hd">要重训吗？</div>'
+      + '<p class="modal-note">不必每次。改错别字、换图、调排版 → 不用训；'
+      + '<b>加了一批新内容</b>（尤其带英文术语）→ 训一次就好。忘了也不影响答题，只影响英文纠错和排序手感。</p>'
       + (canUp
-        ? '<p class="modal-note">点「重训并上传」会依次做三件事：① 把当前内容同步到云端（顺带刷新新访客的首屏快照）'
+        ? '<p class="modal-note">点「重训并上传」会依次：① 把当前内容同步到云端（顺带刷新新访客的首屏快照）'
           + ' → ② 用这份内容重训 → ③ 提交 <code>data/lm.json</code>。几秒完成，Pages 重新发布约 1-2 分钟。</p>'
-        : '<p class="modal-note">⚠️ 还没配置云端（仓库名 / Token），只能在<b>本标签页</b>试算，刷新就没了。<br>'
-          + '想真正生效：先在「☁️ 同步到 GitHub」里把 Token 填好；也可以点「⤓ 下载 lm.json」手动放进仓库 <code>data/</code> 目录。</p>')
+        : '<p class="modal-note">⚠️ 现在没配云端（仓库名 / Token）：只能在本标签页试算，刷新就没了。'
+          + '想自动生效，先去「☁️ 同步到 GitHub」填 Token。</p>') + '</div>'
       + '<div id="trOut" class="modal-note" style="min-height:18px;white-space:pre-line"></div>'
       + '<div class="form-actions">'
       + '<button type="button" class="btn btn-ghost" data-close>关闭</button>'
-      + '<button type="button" class="btn btn-ghost" id="trDl">⤓ 下载 lm.json</button>'
+      + '<button type="button" class="btn btn-ghost" id="trDl" title="只有「不能自动上传、想手动放进仓库」时才需要点这个">⤓ 下载 lm.json（手动用）</button>'
       + '<button type="button" class="btn btn-primary" id="trGo">' + (canUp ? '🧠 重训并上传' : '🧠 重训（仅本机）') + '</button>'
       + '</div>', function (root) {
       const out = root.querySelector('#trOut');

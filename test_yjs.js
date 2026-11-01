@@ -172,7 +172,7 @@ console.log('【6】历史版本面板 / 访客互动开关 / 改动动态 / 同
 T('历史版本面板：快照带时间戳（hist.ts 平行数组）+ 列表/恢复导出（恢复走完整 commit 链，可再撤销）',
   appSrc.indexOf('hist.ts = (hist.ts || []).slice') > 0 && appSrc.indexOf('function historyList') > 0
     && appSrc.indexOf('function restoreVersion') > 0 && appSrc.indexOf('historyList: historyList') > 0
-    && edt.indexOf('data-panel="hist"') > 0 && edt.indexOf('function histModal') > 0);
+    && edt.indexOf("['hist', '🕘', '历史版本'") > 0 && edt.indexOf("k === 'hist'") > 0 && edt.indexOf('function histModal') > 0);
 T('访客互动开关：commentsOff 三通道拦截（留言/发帖/回复）+ 渲染层提示（反馈页/讨论区各自提示）+ 网站信息开关（管理员不受限）',
   appSrc.indexOf('function commentsOff') > 0 && (appSrc.match(/commentsOff\(\)\) \{ toast/g) || []).length >= 3
     && appSrc.indexOf('反馈已由管理员暂时关闭') > 0 && appSrc.indexOf('讨论区已由管理员暂时关闭') > 0
@@ -552,7 +552,7 @@ T('startFreeResize 开头调 beginFreeDrag（会话内引擎不每帧重算）+ 
 /* ---------- 9.29) 修复64：🩺 整理布局一键自愈（清残留让位边距+全量重算） ---------- */
 console.log('【9.29】修复64：管理条 🩺 按钮 → fixLayout 清 margin 重算 · 不改内容数据');
 T('管理条 🩺 整理布局按钮 + fixLayout 导出（清 _freeSession/margin-top + no-measure-anim 重算）',
-  edt2.indexOf('data-panel="fixlayout"') > 0
+  edt2.indexOf("['fixlayout', '🩺'") > 0
     && edt2.indexOf("k === 'fixlayout'") > 0
     && appSrc.indexOf('function fixLayout() {') > 0
     && appSrc.indexOf('fixLayout: fixLayout, /* ★ 修复64：一键整理布局') > 0
@@ -803,7 +803,7 @@ T('editor.js：TYPES/defaultsFor/formHTML/readForm 认 entries + 插入组「▤
     && edt2.indexOf("case 'entries': return { type: type, title: '下级条目', mode: 'card', cols: 3, note: '' };") > 0
     && edt2.indexOf('data-tb="entriesins"') > 0
     && edt2.indexOf("case 'entriesins': {") > 0
-    && edt2.indexOf('data-panel="tree"') > 0
+    && edt2.indexOf("['tree', '🗂'") > 0
     && edt2.indexOf("else if (k === 'tree') treeModal();") > 0
     && edt2.indexOf("const entryAdd = e.target.closest ? e.target.closest('[data-entryadd]') : null;") > 0);
 T('editor.js：条目树全操作（加分支/改名/调序/补条目块/级联删除 + 删页清跳转死链）',
@@ -884,7 +884,7 @@ T('app.js：scanFreeGaps 量「框顶 ↔ 上方最近块下缘」+ tidyGaps 只
     && appSrc.indexOf('scanFreeGaps: scanFreeGaps, tidyGaps: tidyGaps,') > 0);
 T('整理布局提示改造（悬空时报数量 + 最大空隙并指向新按钮）+ 管理条「⇧ 收拢空隙」按钮与确认弹窗',
   appSrc.indexOf("另有 ' + big.length + ' 个自由框悬空（最大 '") > 0
-    && edt2.indexOf('data-panel="gaps"') > 0
+    && edt2.indexOf("['gaps', '⇧'") > 0
     && edt2.indexOf("else if (k === 'gaps') {") > 0
     && edt2.indexOf('LMApp.tidyGaps(40);') > 0
     && edt2.indexOf('只重算「让位间距」') > 0);
@@ -3589,10 +3589,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=145 · LM_ASSET_VER=145',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=146 · LM_ASSET_VER=146',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=144/g) || []).length === 0 && /\?v=145/.test(html)
-      && /LM_ASSET_VER = '145'/.test(appJs));
+      && (html.match(/\?v=145/g) || []).length === 0 && /\?v=146/.test(html)
+      && /LM_ASSET_VER = '146'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4493,10 +4493,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 145（?v=145 共 22 处 · v144 无残留 · LM_ASSET_VER=145）',
-    (html.match(/\?v=145/g) || []).length === 22 && (html.match(/\?v=144/g) || []).length === 0
-      && /LM_ASSET_VER = '145'/.test(appJs),
-    'v145=' + (html.match(/\?v=145/g) || []).length + ' v143=' + (html.match(/\?v=144/g) || []).length);
+  T('版本已升到 146（?v=146 共 22 处 · v145 无残留 · LM_ASSET_VER=146）',
+    (html.match(/\?v=146/g) || []).length === 22 && (html.match(/\?v=145/g) || []).length === 0
+      && /LM_ASSET_VER = '146'/.test(appJs),
+    'v146=' + (html.match(/\?v=146/g) || []).length + ' v143=' + (html.match(/\?v=145/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -4930,7 +4930,7 @@ console.log('【修复145】网页内重训：训练算法唯一化（CLI / 浏�
   T('修复145 · 管理条「🧠 重训小模型」→ trainModal → LMApp.trainLM → store.saveFileToRepo(data/lm.json)',
     (function () {
       const e = srcOf('js/editor.js'), st = srcOf('js/store.js'), ap = srcOf('js/app.js');
-      return e.indexOf('data-panel="trainlm"') > 0
+      return e.indexOf("['trainlm', '🧠'") > 0
         && e.indexOf("k === 'trainlm'") > 0
         && e.indexOf('function trainModal()') > 0
         && e.indexOf('LMApp.trainLM({ order: 4, upload: canUp, pushContent: canUp })') > 0
@@ -4951,6 +4951,101 @@ console.log('【修复145】网页内重训：训练算法唯一化（CLI / 浏�
       const e = srcOf('js/editor.js');
       return e.indexOf('id="trDl"') > 0 && e.indexOf("a.download = 'lm.json'") > 0
         && srcOf('README.md').indexOf('修复145') > 0;
+    })());
+})();
+
+/* ---------- 修复146：管理条收拢成「页面设置」 + 示例条目 ---------- */
+console.log('【修复146】底部管理条 8 → 3（其余收进「⚙️ 页面设置」）· 新增一条可照抄的示例条目 · lm.json 文案改成问答式');
+
+(function () {
+  const edt3 = srcOf('js/editor.js');
+  const css3 = srcOf('css/style.css');
+
+  T('修复146 · 管理条只剩 3 个入口（同步 / 页面设置 / 放弃修改），其余 8 项全在「页面设置」里',
+    (function () {
+      const i0 = edt3.indexOf("bar.innerHTML = ''");
+      const i1 = edt3.indexOf('if (!bar.dataset.init)', i0);
+      if (i0 < 0 || i1 < 0) return false;
+      const seg = edt3.slice(i0, i1);
+      const panels = (seg.match(/data-panel="[a-z]+"/g) || []).map(function (s) { return s.slice(12, -1); });
+      const inSet = ['site', 'pages', 'tree', 'fixlayout', 'gaps', 'hist', 'backup', 'trainlm', 'password'];
+      const s0 = edt3.indexOf('function settingsModal()');
+      const s1 = edt3.indexOf('/* ---------- ★ 修复145', s0);
+      const setSeg = edt3.slice(s0, s1);
+      return panels.length === 3 && panels.join(',') === 'sync,settings,discard'
+        && s0 > 0 && s1 > s0
+        && inSet.every(function (k) { return setSeg.indexOf("['" + k + "'") > 0; })
+        && edt3.indexOf("else if (k === 'settings') settingsModal();") > 0;
+    })());
+
+  T('修复146 · 真跑 settingsModal：9 个工具按钮 + 关闭键 · 4 个分组 · 无 undefined',
+    (function () {
+      const i0 = edt3.indexOf('function settingsModal() {');
+      let d = 0, end = -1;
+      for (let j = edt3.indexOf('{', i0); j < edt3.length; j++) {
+        if (edt3[j] === '{') d++;
+        else if (edt3[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+      }
+      if (i0 < 0 || end < 0) return false;
+      let cap = '';
+      const mk = new Function('modal', edt3.slice(i0, end) + '; return settingsModal;');
+      mk(function (h) { cap = h; })();
+      const panels = (cap.match(/data-panel="[a-z]+"/g) || []).map(function (s) { return s.slice(12, -1); });
+      return panels.join(',') === 'fixlayout,gaps,site,pages,tree,hist,backup,trainlm,password'
+        && (cap.match(/<button/g) || []).length === 10
+        && /data-close/.test(cap) && !/undefined/.test(cap)
+        && (cap.match(/class="set-grp"/g) || []).length === 4
+        && (cap.match(/class="set-hd"/g) || []).length === 4;
+    })());
+
+  T('修复146 · 「页面设置」样式：分组/按钮/手机单列（沿用现有变量，不另造主题）',
+    css3.indexOf('.set-grp{') > 0 && css3.indexOf('.set-row{') > 0 && css3.indexOf('.set-btn{') > 0
+      && css3.indexOf('body.mobile-view .set-row{grid-template-columns:1fr}') > 0
+      && css3.indexOf('.set-btn:hover{border-color:var(--blue)') > 0);
+
+  T('修复146 · lm.json 文案改成问答式（是什么 / 什么时候要下载 / 有了还要不要下载）',
+    edt3.indexOf('data/lm.json 是什么？') > 0
+      && edt3.indexOf('什么时候需要「下载 lm.json」？') > 0
+      && edt3.indexOf('只要点过「重训并上传」，就不需要再下载') > 0
+      && edt3.indexOf('要重训吗？') > 0);
+
+  /* ★ 示例条目：结构必须真的能用（不是一段死文字）—— 直接解析 data/content.js 校验 */
+  T('修复146 · 示例条目 demo-rag：挂在领域地图下 · 覆盖 9 种块 · 表格/图表/来源自洽且链接是真的',
+    (function () {
+      const fs4 = require('fs');
+      const path4 = require('path');
+      const srcC = fs4.readFileSync(path4.join(DIR, 'data/content.js'), 'utf8');
+      const w = {};
+      new Function('window', 'var module={};' + srcC)(w);
+      const ps = (w.SITE_CONTENT && w.SITE_CONTENT.pages) || [];
+      const dm = ps.filter(function (p) { return p.id === 'demo-rag'; })[0];
+      if (!dm || dm.parent !== 'domain' || !Array.isArray(dm.blocks)) return false;
+      const types = {};
+      dm.blocks.forEach(function (b) { types[b.type] = 1; });
+      const need = ['paragraph', 'callout', 'heading', 'table', 'chart', 'related', 'sources', 'files', 'hr'];
+      if (!need.every(function (t) { return types[t]; })) return false;
+      const okTable = dm.blocks.filter(function (b) { return b.type === 'table'; }).every(function (b) {
+        return b.headers && b.rows.every(function (r) { return r.length === b.headers.length; });
+      });
+      const okChart = dm.blocks.filter(function (b) { return b.type === 'chart'; })
+        .every(function (b) { return b.labels.length === b.data.length && b.data.every(function (n) { return typeof n === 'number'; }); });
+      const srcs = dm.blocks.filter(function (b) { return b.type === 'sources'; })[0] || { items: [] };
+      const okSrc = srcs.items.length >= 2 && srcs.items.every(function (it) {
+        return it.id && it.label && /^https:\/\//.test(it.url || '');
+      });
+      const okRel = dm.blocks.filter(function (b) { return b.type === 'related'; })[0];
+      return okTable && okChart && okSrc && !!okRel && okRel.links.every(function (id) {
+        return ps.some(function (p) { return p.id === id; });
+      });
+    })());
+
+  T('修复146 · 示例条目用的是可核对的一手来源（arXiv 论文 / Anthropic 2024 原文）+ README 已记录',
+    (function () {
+      const fs5 = require('fs'), path5 = require('path');
+      const srcC = fs5.readFileSync(path5.join(DIR, 'data/content.js'), 'utf8');
+      return srcC.indexOf('arxiv.org/abs/2005.11401') > 0
+        && srcC.indexOf('anthropic.com/news/contextual-retrieval') > 0
+        && srcOf('README.md').indexOf('修复146') > 0;
     })());
 })();
 
