@@ -1304,5 +1304,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\import-gguf.ps1 `
 
 界面改动：`js/ai-ollama.js` 设置面板新增「我电脑上已经有 .gguf 模型（不用重新下载）」折叠块 +「复制这段命令」，并写明"桌面 App 不开本地 HTTP 接口，所以需要 Ollama 这层标准接口"。新增 `tools/import-gguf.ps1`。
 
-**回归（修复127）**：`node --check`（ai-ollama / ai / app / test_yjs）通过；`test_yjs.js` **435/435**（新增 1 条：面板导入指引 + `tools/import-gguf.ps1` 的 `param(` / `ollama create` / 文件存在性）；`tools/import-gguf.ps1` 实跑自检通过（识别到未装 Ollama → 打印指引 → `exit 1`；脚本必须存成 **UTF-8 BOM**，否则 PowerShell 5.1 会把中文注释读坏导致解析失败 —— 这个坑当场踩到了）；资源版本 `?v=127` / `LM_ASSET_VER='127'`。其余套件：comments 9/9、collab 9/9、marks 25/25、hist 15/15、yield PASS。
+**回归（修复127）**：`node --check`（ai-ollama / ai / app / test_yjs）通过；`test_yjs.js` **435/435**（新增 1 条：面板导入指引 + `tools/import-gguf.ps1` 的 `param(` / `ollama create` / 文件存在性）；`tools/import-gguf.ps1` 实跑自检通过（识别到未装 Ollama → 打印指引 → `exit 1`；脚本必须存成 **UTF-8 BOM**，否则 PowerShell 5.1 会把中文注释读坏导致解析失败 —— 这个坑当场踩到了）；资源版本 `?v=128` / `LM_ASSET_VER='128'`。其余套件：comments 9/9、collab 9/9、marks 25/25、hist 15/15、yield PASS。
+
+**资源版本 128（v127 的即时修正）**：面板里那段命令最初把反斜杠写多了一层，`<pre>` 会显示 `C:\\路径\\你的模型.gguf`，点「复制」出去就是坏路径。已修正为单反斜杠，并把两处 Markdown `**粗体**` 换成 `<strong>`（HTML 里不渲染）。验证方式：用 node 把这行字符串**求值**后断言无连续双反斜杠（而不是靠肉眼数 `\\`，工具链里的多重转义极易看错）。测试同口径更新到 `?v=128`（22 处）。
 
