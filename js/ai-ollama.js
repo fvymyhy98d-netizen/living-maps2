@@ -329,6 +329,23 @@
       + '2) 允许本站跨域（设完重启 Ollama）：\n'
       + '   setx OLLAMA_ORIGINS "' + (typeof location !== 'undefined' ? location.origin : 'https://你的站点') + '"\n'
       + '3) 回来点「⬇ 下载推荐模型」—— 网页里直接下，不用开命令行。</pre></details>'
+      /* ★ 修复127：本机已经有 gguf（例如联想天禧自带的 Qwen3）—— 登记进 Ollama 即可，不用重新下载 */
+      + '<details style="margin-top:10px"><summary style="cursor:pointer;color:#6e6e73">我电脑上已经有 .gguf 模型（不用重新下载）</summary>'
+      + '<div style="font-size:12.5px;color:#3a3a3c;margin:8px 0 0">'
+      + '桌面 App 自带的模型往往就是标准 GGUF（联想天禧的在 <code>C:\\ProgramData\\Lenovo\\AIAgent\\data\\</code> 这类目录下，'
+      + '文件名像 <code>Qwen3-4B-Thinking-...gguf</code>）。**登记**进 Ollama 即可，不复制、不下载，几秒钟：</div>'
+      + '<pre id="lmLlmImpCmd" style="white-space:pre-wrap;background:#f5f5f7;border-radius:10px;padding:10px;margin:8px 0 0;font-size:12.5px">'
+      + '# 1) 新建一个 Modelfile（和 gguf 放一起），内容一行：\n'
+      + 'FROM "C:\\\\路径\\\\你的模型.gguf"\n'
+      + 'PARAMETER num_ctx 8192\n\n'
+      + '# 2) 登记成 ollama 模型（不会额外占空间，只是算指纹）\n'
+      + 'ollama create my-qwen -f Modelfile</pre>'
+      + '<button type="button" id="lmLlmImpCopy" class="btn btn-ghost" style="margin-top:8px">复制这段命令</button>'
+      + '<div style="margin-top:6px;color:#6e6e73">懒得手敲？仓库里有现成脚本：'
+      + '<code>tools\\import-gguf.ps1 -Gguf "C:\\...\\xxx.gguf" -Name qwen3-4b</code></div>'
+      + '<div style="margin-top:6px;color:#6e6e73">为什么不能直接连天禧：这类桌面 App **不开本地 HTTP 接口**（它们只在进程内部推理），'
+      + '网页看不到也调不到，所以需要 Ollama 这层“标准接口”。</div>'
+      + '</details>'
       + '</div>';
     document.body.appendChild(wrap);
     var q = function (s) { return wrap.querySelector(s); };
@@ -393,6 +410,22 @@
         + '档位：' + (tierName[g.tier] || '看不出来') + '\n'
         + '建议模型：' + suggest(g.tier) + '\n'
         + '说明：浏览器**拿不到显存大小**，只能按型号粗估；能不能吃下，跑起来看速度就知道。';
+    });
+    /* ★ 修复127：一键复制「导入已有 gguf」的命令（不复制、不下载） */
+    var impCopy = q('#lmLlmImpCopy');
+    if (impCopy) impCopy.addEventListener('click', function () {
+      var pre = q('#lmLlmImpCmd');
+      var txt = String((pre && pre.textContent) || '');
+      if (!txt) return;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt).then(function () {
+            say('已复制。把 FROM 里的路径换成你 .gguf 的真实路径，再执行第二行。');
+          }, function () { say('浏览器不让写剪贴板，请手动选中上面那段复制。', true); });
+          return;
+        }
+      } catch (eC) { /* 落回提示 */ }
+      say('请手动选中上面那段复制。', true);
     });
     q('#lmLlmTest').addEventListener('click', function () {
       var f = readForm();

@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=126 · LM_ASSET_VER=126',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=127 · LM_ASSET_VER=127',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=125/g) || []).length === 0 && /\?v=126/.test(html)
-      && /LM_ASSET_VER = '126'/.test(appJs));
+      && (html.match(/\?v=126/g) || []).length === 0 && /\?v=127/.test(html)
+      && /LM_ASSET_VER = '127'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3873,10 +3873,25 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       } catch (e) { return false; }
     })());
 
-  T('版本已升到 126（?v=126 共 22 处 · v125 无残留 · LM_ASSET_VER=126）',
-    (html.match(/\?v=126/g) || []).length === 22 && (html.match(/\?v=125/g) || []).length === 0
-      && /LM_ASSET_VER = '126'/.test(appJs),
-    'v126=' + (html.match(/\?v=126/g) || []).length + ' v125=' + (html.match(/\?v=125/g) || []).length);
+  /* —— ★ 修复127：本机已有 gguf（天禧那类桌面 App 自带的模型）怎么接上 —— */
+  T('修复127 · 本机模型：面板给出「导入已有 gguf」路径（Modelfile + ollama create + 一键复制 + 现成脚本 tools/import-gguf.ps1）',
+    (function () {
+      try {
+        const o = srcOf('js/ai-ollama.js');
+        const ps1 = srcOf('tools/import-gguf.ps1');
+        return o.indexOf('lmLlmImpCmd') > 0 && o.indexOf('lmLlmImpCopy') > 0
+          && o.indexOf('我电脑上已经有 .gguf 模型（不用重新下载）') > 0
+          && o.indexOf('ollama create my-qwen -f Modelfile') > 0
+          && o.indexOf('不开本地 HTTP 接口') > 0
+          && ps1.indexOf('param(') > 0 && ps1.indexOf('ollama create $Name -f $mf') > 0
+          && ps1.indexOf('Get-Command ollama') > 0 && ps1.indexOf('Test-Path -LiteralPath $Gguf') > 0;
+      } catch (e) { return false; }
+    })());
+
+  T('版本已升到 127（?v=127 共 22 处 · v126 无残留 · LM_ASSET_VER=127）',
+    (html.match(/\?v=127/g) || []).length === 22 && (html.match(/\?v=126/g) || []).length === 0
+      && /LM_ASSET_VER = '127'/.test(appJs),
+    'v127=' + (html.match(/\?v=127/g) || []).length + ' v126=' + (html.match(/\?v=126/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

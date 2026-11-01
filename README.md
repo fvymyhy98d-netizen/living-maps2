@@ -1267,3 +1267,42 @@ node tools/train_lm.js 5          # 指定阶数（1-5）
 
 **回归（修复126）**：`node --check`（ai / ai-ollama / app / test_yjs）通过；`test_yjs.js` **434/434**（新增 1 条：7 个端口、`detect/autoConnect/pull/gpu/suggest` 存在性、`pickBest` 真跑、`/api/pull` 与 `/v1/chat/completions`、隐私字段、`probeLLM`/`lm-llm-use`/`setAiMode('ollama')`、`ai.js` 仍 0 处 fetch、CSP 新写法与 `?v=126`；`修复125` 里写死版本号的两处断言改成版本无关）；另用桩 fetch + 假 localStorage 真跑 9 项：探测出 2 个服务、一键接管选中 `qwen2.5:7b-instruct-q4_K_M`、下载进度 0→25→100→完成、OpenAI SSE 与 Ollama NDJSON 都能解析、`scope=question` 时请求体里确实没有正文标记、Node 里 `gpu()` 安静返回 `none`、外网地址 `setCfg` 被拒。其它套件：comments 9/9、collab 9/9、marks 25/25、hist 15/15、yield PASS。
 
+
+**v127（本机确实有模型 —— 联想天禧的 Qwen3；问题是它没有本地接口）**
+
+上一版我只查了 Ollama 的目录就说「本机没有模型」，这个结论下早了。实机扫描结果（不是猜的）：
+
+| 文件 | 大小 | 说明 |
+|---|---|---|
+| `C:\ProgramData\Lenovo\AIAgent\data\Qwen3-4B-Thinking\Qwen3-4B-Thinking-2507_IA_Q4_0.gguf` | 2,024.9 MB | 天禧的千问 4B（Q4_0） |
+| `C:\Program Files\Lenovo\AIAgent\Modules\Model\Model-7b\Qwen3-1.7B-ia_q40.gguf` | 1,095.6 MB | 天禧的小号千问 1.7B |
+
+**为什么网页还是接不上天禧**：`C:\Program Files\Lenovo\AIAgent\client_config.json` 里只有云端地址（volcengine / lenovomm），`serversettings.json` 是空的；本机监听端口里也没有任何 AI 服务（只有 LZTray、Nahimic、DingTalk 等）。桌面 App 是「进程内推理 + 私有 IPC」，**不开本地 HTTP 接口** —— 网页既看不到它的进程，也没法调用。这不是权限问题，是它没提供入口。
+
+**正确姿势：不重新下载，把已有的 gguf「登记」进一个标准接口**（Ollama / LM Studio 都直接吃 gguf）：
+
+```powershell
+# 1) 新建 Modelfile（内容一行，指向已有 gguf —— 不复制、不下载）
+FROM "C:\ProgramData\Lenovo\AIAgent\data\Qwen3-4B-Thinking\Qwen3-4B-Thinking-2507_IA_Q4_0.gguf"
+PARAMETER num_ctx 8192
+
+# 2) 登记成 ollama 模型（只算指纹，秒级完成）
+ollama create qwen3-4b -f Modelfile
+```
+
+懒得手敲就用仓库里的现成脚本（已实测可跑，缺 Ollama 会明确提示）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\import-gguf.ps1 `
+  -Gguf "C:\ProgramData\Lenovo\AIAgent\data\Qwen3-4B-Thinking\Qwen3-4B-Thinking-2507_IA_Q4_0.gguf" `
+  -Name qwen3-4b
+```
+
+登记完，网页「⚙ 接本机模型」→「一键检测并启用」会自动认到 `qwen3-4b`（LM Studio 则是 1234 端口）。
+
+**绕不过去的一步**：这台机器上没有任何「标准接口宿主」（Ollama / LM Studio），必须装一个 —— 浏览器不能装软件。装上之后两种取模型的方式都可用：有 gguf 就登记（零下载），没有就在网页里点「⬇ 下载推荐模型」（`/api/pull`，带进度）。
+
+界面改动：`js/ai-ollama.js` 设置面板新增「我电脑上已经有 .gguf 模型（不用重新下载）」折叠块 +「复制这段命令」，并写明"桌面 App 不开本地 HTTP 接口，所以需要 Ollama 这层标准接口"。新增 `tools/import-gguf.ps1`。
+
+**回归（修复127）**：`node --check`（ai-ollama / ai / app / test_yjs）通过；`test_yjs.js` **435/435**（新增 1 条：面板导入指引 + `tools/import-gguf.ps1` 的 `param(` / `ollama create` / 文件存在性）；`tools/import-gguf.ps1` 实跑自检通过（识别到未装 Ollama → 打印指引 → `exit 1`；脚本必须存成 **UTF-8 BOM**，否则 PowerShell 5.1 会把中文注释读坏导致解析失败 —— 这个坑当场踩到了）；资源版本 `?v=127` / `LM_ASSET_VER='127'`。其余套件：comments 9/9、collab 9/9、marks 25/25、hist 15/15、yield PASS。
+
