@@ -48,14 +48,14 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793455183852,
+      "syncTs": 1793532785101,
       "roster": {},
       "tokenVault": {
         "v": 1,
-        "iters": 60000,
-        "salt": "p4SaADqscA75V7X30ywa3w==",
-        "iv": "1yX3Ue5fHpAjSxNB",
-        "ct": "bpg1HKMX8o04obVen3ZDwIDfnOK+MbKb88JYtfxmzUgm65AhYKqNt33nxz8SA8Qrd4KTfztR8XyL8l5ea1gdiivULBlhvQcXAgdvBeVbXyuNaGDS5m5xoElwSa8zAhttj5cN2aPk/q9TSwI6/4uyaAPf2s/BWdUjIgyDR0dWW3WzEqpcwZz/j7ndAU/nA8BQwuekL0giz0FqVe10or0PMwRbKkCsBC0euFYhRo66og6WX9VVenRjm7M4olRQpJ97B2mxmpDmlj+x6D283pJeOpDbpwSX"
+        "iters": 210000,
+        "salt": "yqLWFqqzza7isqR0iJPY4w==",
+        "iv": "Bye7WMujFJ7+nBME",
+        "ct": "j6DakV99jlSmx8AAuO1x5T+hmfxQ+p+MiDdS6dF1CvZSM5PFvIx0a1z7/lg799rA4OHTbh4osY1O8/8ad2n5QJdWuk0NKuU2quA9vxiMWmgXYXA4jCYFIAee3WomtotfeSbAqYACSVpqDD0P/BwkNxJbMoqSwX6A2NwT3z7y2LRXzaeE9ttjUQrwNMNhrHfQxyWg0lQWHJRY4dfJqmKZqqahrxnV+7AyCYPMPi4QeuXy0qK69OJ2UXSKa/Tli9/G7ikG0uGd+tr4t9kkcXq1Zuns25K6saNidUZcTDhI3B4eBaLjywLaTFdGVg=="
       }
     },
     "fbCloud": {
@@ -98,8 +98,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "主要问题与典型任务？？？",
-          "_ts": 1793416049359
+          "text": "主要问题与典型任务",
+          "_ts": 1793455315676
         },
         {
           "type": "paragraph",
@@ -134,11 +134,6 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "**前置基础：**高等数学（概率与矩阵）→ **核心覆盖：**人工智能导论、机器学习 → **实践应用：**本课程大作业 → **自主拓展：**经典论文与开源项目。\n\n以上为示例，请对照你们专业的培养方案逐条核实，无法确认的先标\"待核实\"。"
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "核心概念"
         },
         {
           "type": "files",
@@ -177,6 +172,11 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "note": ""
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "核心概念"
         },
         {
           "type": "table",
@@ -316,74 +316,6 @@ window.SITE_CONTENT = {
             }
           ],
           "seq": 2
-        }
-      ],
-      "heroAlign": ""
-    },
-    {
-      "id": "cognition",
-      "kind": "map",
-      "icon": "🧠",
-      "label": "认知地图",
-      "title": "认知地图",
-      "description": "面对这个领域的问题，我们怎样思考、分析、实践，并持续成长？",
-      "blocks": [
-        {
-          "type": "paragraph",
-          "size": "lead",
-          "text": "认知地图聚焦**思考方法、分析案例与成长习惯**：我们怎样理解一个问题，依据什么判断，遇到新证据后怎样调整。"
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "我们的分析方法"
-        },
-        {
-          "type": "table",
-          "title": "方法与实例",
-          "headers": [
-            "方法",
-            "应用例子",
-            "当前判断"
-          ],
-          "rows": [
-            [
-              "系统拆解是不是",
-              "一次回答错误，是模型、提示词还是知识缺失？",
-              "先查输入与提示，再怀疑模型（推断）"
-            ],
-            [
-              "对照比较",
-              "两个模型的比较是否用了同一组题目？",
-              "只有条件一致，比较才有意义"
-            ],
-            [
-              "反例检查",
-              "什么情况下\"模型很聪明\"不成立？",
-              "长尾知识与实时信息上容易失败"
-            ]
-          ],
-          "_ts": 1793449238076
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "一次真实的认识修正（示例）"
-        },
-        {
-          "type": "callout",
-          "tone": "green",
-          "title": "认识更新",
-          "text": "**我们原来以为：**模型越大回答一定越准。\n**带来变化的资料：**课堂演示中，小模型配合好的检索反而答对了。\n**现在如何理解：**回答质量 = 模型能力 × 上下文质量，二者缺一不可。\n**仍然不知道：**检索质量怎样量化评估——已列入待学习清单。"
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "成长习惯"
-        },
-        {
-          "type": "paragraph",
-          "text": "- 先问问题再选工具；区分**事实**与**推断**；\n- 从任务困难反查知识缺口，连接到领域地图的课程路径；\n- 做小规模尝试并保留输入输出；每周检查一次地图并留下记录。"
         }
       ],
       "heroAlign": ""
@@ -578,6 +510,14 @@ window.SITE_CONTENT = {
       "text": "同感同感，太烂了。",
       "ts": 1793446543386,
       "del": 1793446579557
+    },
+    {
+      "id": "D-04-nkjv",
+      "pid": "",
+      "dev": "访客9052",
+      "nick": "访客9052",
+      "text": "垃圾网站垃圾网站，赶快把它删了。",
+      "ts": 1793446761520
     }
   ],
   "jumps": []
