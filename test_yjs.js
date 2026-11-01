@@ -2874,7 +2874,8 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
     (function () {
       const s = srcOf('js/ai.js'), c = srcOf('css/style.css');
       return s.indexOf('lm-ai-modes') > 0 && s.indexOf('data-mode="local"') > 0
-        && s.indexOf("localStorage.getItem(MODE_KEY) === 'ds' ? 'ds' : 'local'") > 0
+        && s.indexOf("if (m === 'ds') return 'ds';") > 0
+        && s.indexOf("if (m === 'ollama' && llmReady()) return 'ollama';") > 0
         && s.indexOf('expandQuery(qq, prev)') > 0 && c.indexOf('.lm-ai-mode.on') > 0;
     })());
 
@@ -3402,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=124 · LM_ASSET_VER=124',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=125 · LM_ASSET_VER=125',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=123/g) || []).length === 0 && /\?v=124/.test(html)
-      && /LM_ASSET_VER = '124'/.test(appJs));
+      && (html.match(/\?v=124/g) || []).length === 0 && /\?v=125/.test(html)
+      && /LM_ASSET_VER = '125'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3791,10 +3792,64 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       && appSrc.indexOf("inner.classList.toggle('nav-has-back', !!t)") > 0
       && appSrc.indexOf('btn.hidden = true') < 0);
 
-  T('版本已升到 124（?v=124 共 21 处 · v123 无残留 · LM_ASSET_VER=124）',
-    (html.match(/\?v=124/g) || []).length === 21 && (html.match(/\?v=123/g) || []).length === 0
-      && /LM_ASSET_VER = '124'/.test(appJs),
-    'v124=' + (html.match(/\?v=124/g) || []).length + ' v123=' + (html.match(/\?v=123/g) || []).length);
+  /* —— ★ 修复125：一问三不知的根因 = 停用词把查询吃空 —— */
+  T('修复125 · 检索：「主要问题」这类被停用词吃空的问法，靠「原句直搜」也能命中并带出上下文', (function () {
+    try {
+      const ai2 = require(path.join(DIR, 'js/ai.js'));
+      const w0 = {};
+      new Function('window', srcOf('data/content.js'))(w0);
+      const ix2 = ai2.buildIndex(w0.SITE_CONTENT.pages);
+      const r = ai2.askSmart(ix2, '主要问题', 2);
+      const txt = r.length ? String(r[0].answer || '') : '';
+      return ai2.tokens('主要问题').length === 0          /* 前提：分词确实被吃空了 */
+        && r.length >= 1
+        && txt.indexOf('主要问题与典型任务') >= 0
+        && txt.indexOf('核心问题') >= 0                   /* 邻句当上下文一起带出来 */
+        && ai2.askSmart(ix2, '紫砂壶怎么养', 2).length === 0;   /* 答不出就该答不出，别乱编 */
+    } catch (e) { return false; }
+  })());
+  T('修复125 · 检索：源码层面（normPhrase / literalHits / 只在一条都没命中时兜底）+ 空结果给本页要点',
+    (function () {
+      const s = srcOf('js/ai.js');
+      return s.indexOf('function literalHits(index, q, limit) {') > 0
+        && s.indexOf('function normPhrase(s) {') > 0
+        && s.indexOf('if (!ranked.length) ranked = literalHits(index, q, 12);') > 0
+        && s.indexOf('const tips = summarize(ix, id, 2)') > 0
+        && s.indexOf('站内没有直接对得上的原句。') > 0
+        && s.indexOf("chatPush(id, { r: 'local', t: '本站没写过相关内容") < 0
+        && s.indexOf('litHits') < 0;
+    })());
+  T('修复125 · 本机模型（可选）：独立模块只连本机 + 地址白名单 + 无 Key/无外网 + 面板接入 + CSP 放行 localhost',
+    (function () {
+      try {
+        const o = srcOf('js/ai-ollama.js');
+        const a = srcOf('js/ai.js');
+        const urls = o.match(/https?:\/\/[^\s'"<)]+/g) || [];
+        const bad = urls.filter(function (u) {
+          return u.indexOf('ollama.com/download') < 0 && u.indexOf('你的站点') < 0
+            && !/^https?:\/\/(127\.0\.0\.1|localhost)/.test(u);
+        });
+        const oll = require(path.join(DIR, 'js/ai-ollama.js'));
+        return bad.length === 0 && urls.length >= 2
+          && o.indexOf('var ALLOW = /^https?:\\/\\/(127\\.0\\.0\\.1|localhost|\\[::1\\])(:\\d+)?\\/?$/i;') > 0
+          && o.indexOf('http://127.0.0.1:11434') > 0
+          && o.indexOf('Authorization') < 0 && o.indexOf('Bearer') < 0 && o.indexOf('apiKey') < 0
+          && oll.ALLOW.test('http://127.0.0.1:11434') && oll.ALLOW.test('http://localhost:11434/')
+          && !oll.ALLOW.test('https://evil.example.com')
+          && oll.pickModel(['llama3:8b', 'qwen2.5:7b-instruct-q4_K_M'], 'qwen2.5:7b') === 'qwen2.5:7b-instruct-q4_K_M'
+          && html.indexOf('js/ai-ollama.js?v=125') > 0
+          && html.indexOf("connect-src 'self' http://127.0.0.1:11434 http://localhost:11434") > 0
+          && a.indexOf('fetch(') < 0                                  /* ai.js 仍然 0 处 fetch */
+          && a.indexOf("if (aiMode() === 'ollama') { runLLM(q); return; }") > 0
+          && a.indexOf('W.LMOllama.openSettings(function () { renderPanel(); })') > 0
+          && srcOf('css/style.css').indexOf('.lm-ai-msg.ollama') > 0;
+      } catch (e) { return false; }
+    })());
+
+  T('版本已升到 125（?v=125 共 22 处 · v124 无残留 · LM_ASSET_VER=125）',
+    (html.match(/\?v=125/g) || []).length === 22 && (html.match(/\?v=124/g) || []).length === 0
+      && /LM_ASSET_VER = '125'/.test(appJs),
+    'v125=' + (html.match(/\?v=125/g) || []).length + ' v124=' + (html.match(/\?v=124/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

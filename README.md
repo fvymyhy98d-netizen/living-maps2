@@ -1217,3 +1217,32 @@ node tools/train_lm.js 5          # 指定阶数（1-5）
 其它：`index.html` 给导航加了 `.nav-lead` 包裹层（结构变化已写进测试）；资源版本升到 `?v=124` / `LM_ASSET_VER='124'`。
 
 **回归（修复124）**：`node --check`（ai / app / test_yjs）通过；`test_yjs.js` **430/430**（新增 5 条：要点去截断 + 浮标改「提问」、`readClip`/`awaitBack`/`tryAutoBack` 链路、"三张地图不受 parent 影响"、反馈空栏 `trim` 处理、返回键 `.nav-lead` + `.is-on` + 不再 `hidden=true`；`浏览栈真跑` 的桩 DOM 补上 `classList` / `querySelector` / `requestAnimationFrame`，栈逻辑本身一字未改）；另用真实 `app.js` 片段真跑 7 项烟测（空栏不渲染 / 只填一项只出一行 / `<img>` 被转义 / 地图页即使有 parent 也在导航与首页卡片里）；`test_comments.js` 9/9、`test_collab.js` 9/9、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS。
+
+**v125（「一问三不知」的根因：不是模型不聪明，是查询被喂成了空的）**
+
+| # | 现象 | 原因 | 修法 |
+|---|---|---|---|
+| 1 | 问「主要问题」，页里明明有「主要问题与典型任务」，却回「本站没写过相关内容」 | 检索前的分词是「相邻两字 2-gram + 停用词表」：`主要` / `要问` / `问题` 全被当虚词滤掉 → 查询词表变成**空数组** → BM25 一条都算不出来（实测 `tokens('主要问题') === []`） | 新增**原句直搜**通道 `literalHits()`：把问句去掉标点/空格后当子串去原句里找（中文里「问的短语原样出现在正文」是极强的相关信号）。**只在分词通道一条都没命中时**启用，既有排序一点没动；命中若是小标题，自动把**紧跟的 1–2 句**一起带出来当上下文 |
+| 2 | 真没写过时只丢一句「本站没写过相关内容」→ 感受就是「这 AI 什么都不知道」 | 空结果没有兜底内容 | 空结果先摆**这一页的 2 条要点**（`summarize`），再说清下一步（用页里出现的词来问 / 切 🐋 DeepSeek），不再是一句冷冰冰的否定 |
+| 3 | 「用我的 5060 显卡让它更聪明」 | 站内速答是**抽取式**（只引用原文），本来就不生成 | **训练解决不了这个问题**（这是检索 bug，不是模型知识不够）。真要生成式回答走可选的本机模型：新文件 `js/ai-ollama.js` —— 只连 `127.0.0.1:11434`，把本页正文当上下文（RAG）流式输出 |
+
+**本机模型（可选，默认关闭）怎么开** —— 只在你自己的电脑上跑，访客看不到这一项：
+
+```bash
+1) 装 Ollama：https://ollama.com/download
+2) ollama pull qwen2.5:7b        # 8GB 显存够用；追速度用 qwen2.5:3b
+3) setx OLLAMA_ORIGINS "https://<你的站点域名>"   # 设完重启 Ollama，否则 CORS 会拦
+```
+
+然后在「提问」面板点「⚙ 接本机模型」→ **测试连接**（自动列出本机已装的模型并挑一个）→ **保存并启用**，模式里就多出「🧠 本机模型」。
+
+**为什么它仍然安全**（三条硬约束，全部写进测试）：
+
+- 地址白名单 `/^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?\/?$/i`：就算有人手改 `localStorage` 填外网域名也发不出去；
+- 全文不含 `Authorization` / `Bearer` / `apiKey` —— **不存 Key**；
+- `js/ai.js` 仍然 **0 处 `fetch`**（零云 API 的护栏原样保留）。本机模型单独一个文件、通过 `LMOllama` 懒调用；连不上就明确说缺哪一步，⚡ 本站速答完全不受影响。
+
+其它：`index.html` 多一个 `js/ai-ollama.js` 脚本标签（`?v=125`，共 22 处）；CSP 的 `connect-src` 只多放行 `http://127.0.0.1:11434` / `http://localhost:11434` 这两个本机地址（不放裸 `https:`）；资源版本 `?v=125` / `LM_ASSET_VER='125'`。
+
+**回归（修复125）**：`node --check`（ai / ai-ollama / app / test_yjs）通过；`test_yjs.js` **433/433**（新增 3 条：用真实 `data/content.js` 真跑「`tokens('主要问题')` 为空但仍命中『主要问题与典型任务』且带回邻句」+「`紫砂壶怎么养` 仍必须是 0 条」、源码层兜底与空结果要点、`ai-ollama.js` 只连本机 + 白名单 + 无 Key + CSP + 面板接入；另修 `问答升级7` 里针对旧单行 `aiMode` 的结构断言）；`test_comments.js` 9/9、`test_collab.js` 9/9、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS。
+

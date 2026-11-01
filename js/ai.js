@@ -464,7 +464,7 @@ W.LMAI = (function () {
     cand.forEach(function (x) { if (!used[x.t] && extra.length < 4) { used[x.t] = 1; extra.push(x.t); } });
     return extra.length ? q + ' ' + extra.join(' ') : q;
   }
-  /* ★ 修复113：跨页近似重复只留一条（同一句话写了两遍，不该刷屏占掉三个名额） */
+  /* ★ 修复125：跨页近似重复只留一条（同一句话写了两遍，不该刷屏占掉三个名额） */
   function dedupeSent(ranked) {
     const out = [], sig = {};
     (ranked || []).forEach(function (x) {
@@ -474,6 +474,58 @@ W.LMAI = (function () {
       out.push(x);
     });
     return out;
+  }
+  /* ---------- ⑧.4 ★ 修复125：原句直搜（不依赖分词的兜底通道） ----------
+     真实故障：问「主要问题」，而页里明明有「主要问题与典型任务」，却回「本站没写过相关内容」。
+     原因 —— 分词是「相邻两字」2-gram + 停用词表：「主要」「要问」「问题」全被滤掉 →
+     查询词表变成空数组 → BM25 一条都算不出来（`tokens('主要问题') === []`）。
+     这里再加一条**完全不用分词**的通道：把问句本身（去标点/空格）当子串去原句里找。
+     中文里「用户问的短语原样出现在正文」是极强的相关信号，比 2-gram 更接近人的直觉。 */
+  function normPhrase(s) {
+    return plain(s)
+      .replace(/[\s，,。.、；;：:！!？?"'“”‘’()（）\[\]【】/\\|·—\-_~]+/g, '')
+      .toLowerCase();
+  }
+  function literalHits(index, q, limit) {
+    const se = sentIndex(index);
+    const nq = normPhrase(q);
+    if (!se || nq.length < 2) return [];
+    /* 第一遍：只收「原句里真的含这个短语」的句子 */
+    const hits = [];
+    se.docs.forEach(function (d) {
+      d.sents.forEach(function (si) {
+        const ns = normPhrase(si.s);
+        const at = ns.indexOf(nq);
+        if (at < 0) return;
+        /* 命中得越完整、位置越靠前、句子越短 → 这条越可能就是要找的那句 */
+        const cov = nq.length / Math.max(ns.length, 1);
+        const score = Math.round((5 + 8 * cov + (at === 0 ? 1.5 : 0) + (si.i === 0 ? 0.5 : 0)) * 100) / 100;
+        hits.push({ d: d, si: si, score: score });
+      });
+    });
+    if (!hits.length) return [];
+    /* 第二遍：命中的常是小标题（很短）→ 把紧跟的 1–2 句一起带出来当上下文，
+       否则用户看到的回答就只有「主要问题与典型任务」这一行，等于没说 */
+    const isHit = {};
+    hits.forEach(function (h) { isHit[h.d.pageId + '|' + h.si.i] = 1; });
+    const out = hits.map(function (h) {
+      return { s: h.si.s, i: h.si.i, pageId: h.d.pageId, title: h.d.title, cover: 1, score: h.score, literal: true };
+    });
+    const seen = {};
+    out.forEach(function (x) { seen[x.pageId + '|' + x.i] = 1; });
+    hits.forEach(function (h) {
+      for (let k = 1; k <= 2; k++) {
+        const nx = h.d.sents[h.si.i + k];
+        if (!nx || isHit[h.d.pageId + '|' + nx.i] || seen[h.d.pageId + '|' + nx.i]) continue;
+        seen[h.d.pageId + '|' + nx.i] = 1;
+        out.push({
+          s: nx.s, i: nx.i, pageId: h.d.pageId, title: h.d.title, cover: 1,
+          score: Math.round(h.score * (k === 1 ? 0.6 : 0.45) * 100) / 100, literal: true
+        });
+      }
+    });
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out.slice(0, limit || 8);
   }
   /* ★ 本地问答主入口：类型判断 → 对比/表格 → 按页聚合成"有结构的回答" */
   function askSmart(index, q, k) {
@@ -505,6 +557,10 @@ W.LMAI = (function () {
       });
     });
     let ranked = rankSent(index, q, 30).filter(function (x) { return x.cover >= 0.3; });
+    /* ★ 修复125：分词通道一条都没命中 → 换成「原句直搜」再试一次。
+       解决「主要问题」这类**整个查询被停用词表吃掉**的情况（tokens 为空 → BM25 必然 0 条），
+       以及用户直接问页里某个小标题原文的情况。 */
+    if (!ranked.length) ranked = literalHits(index, q, 12);
     /* ★ 修复113：PRF 二次打分 —— 只用「已经命中的原句」里的词加重权重，候选集一个字都不变 */
     const q2 = prfExpand(index, q, ranked);
     if (q2 !== q && ranked.length) {
@@ -700,11 +756,19 @@ W.LMAI = (function () {
   }
   /* ★ 修复110：问答模式 —— 默认「本站速答」（免配置），DeepSeek 作为可切换的备选 */
   const MODE_KEY = 'lm_ai_mode_v1';
+  /* ★ 修复125：本机模型（可选，跑在自己电脑的显卡上）—— 只有用户自己配过才出现 */
+  function llmReady() { return !!(W.LMOllama && W.LMOllama.ready && W.LMOllama.ready()); }
   function aiMode() {
-    try { return localStorage.getItem(MODE_KEY) === 'ds' ? 'ds' : 'local'; } catch (e) { return 'local'; }
+    try {
+      const m = localStorage.getItem(MODE_KEY);
+      if (m === 'ds') return 'ds';
+      if (m === 'ollama' && llmReady()) return 'ollama';   /* 关掉本机模型后自动退回本站速答 */
+      return 'local';
+    } catch (e) { return 'local'; }
   }
   function setAiMode(m) {
-    try { localStorage.setItem(MODE_KEY, m === 'ds' ? 'ds' : 'local'); } catch (e) { /* 无痕模式存不了就算了 */ }
+    const v = (m === 'ds' || (m === 'ollama' && llmReady())) ? m : 'local';
+    try { localStorage.setItem(MODE_KEY, v); } catch (e) { /* 无痕模式存不了就算了 */ }
   }
   function bridgeSend(txt, id) {
     try {
@@ -851,8 +915,8 @@ W.LMAI = (function () {
     let h = '<div class="lm-ai-chat" role="log" aria-label="与 DeepSeek 的对话">';
     h += msgs.length
       ? msgs.map(function (m) {
-        const cls = m.r === 'me' ? 'me' : (m.r === 'local' ? 'local' : 'ds');
-        const who = m.r === 'me' ? '我' : (m.r === 'local' ? '本站速答' : 'DeepSeek');
+        const cls = m.r === 'me' ? 'me' : (m.r === 'local' ? 'local' : (m.r === 'ollama' ? 'ollama' : 'ds'));
+        const who = m.r === 'me' ? '我' : (m.r === 'local' ? '本站速答' : (m.r === 'ollama' ? '🧠 本机模型（你的显卡）' : 'DeepSeek'));
         const src = (m.src && m.src.pageId)
           ? '<a class="lm-ai-src" href="#/p/' + encodeURIComponent(m.src.pageId) + '">出自《' + esc(m.src.title || '') + '》· 相关度 ' + m.src.score + '</a>'
           : '';
@@ -874,18 +938,23 @@ W.LMAI = (function () {
     h += '</div>';
     const mode = aiMode();
     /* ★ 修复110：聊天框上方一个切换键 —— 默认「本站速答」 */
+    const ph = mode === 'local' ? '问点什么…（回车即可，只用本站内容）'
+      : (mode === 'ollama' ? '问点什么…（会把本页正文交给本机模型）' : '问点什么…（会自动附上本页正文）');
+    const goLabel = mode === 'local' ? '问一句' : (mode === 'ollama' ? '问本机模型' : '发给 DeepSeek');
     h += '<div class="lm-ai-modes" role="tablist" aria-label="问答模式">'
       + '<button type="button" class="lm-ai-mode' + (mode === 'local' ? ' on' : '') + '" data-mode="local" role="tab" aria-selected="' + (mode === 'local') + '">'
       + '⚡ 本站速答<em>免配置 · 只用站里写过的内容</em></button>'
       + '<button type="button" class="lm-ai-mode' + (mode === 'ds' ? ' on' : '') + '" data-mode="ds" role="tab" aria-selected="' + (mode === 'ds') + '">'
       + '🐋 DeepSeek<em>更全面 · 需装扩展或手动粘贴</em></button>'
+      /* ★ 修复125：本机模型（可选）—— 只有自己配过才出现，访客看不到这一项 */
+      + (llmReady() ? '<button type="button" class="lm-ai-mode' + (mode === 'ollama' ? ' on' : '') + '" data-mode="ollama" role="tab" aria-selected="' + (mode === 'ollama') + '">'
+        + '🧠 本机模型<em>你电脑上的 Ollama · 会组织语言</em></button>' : '')
       + '</div>';
-    h += '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="'
-      + (mode === 'local' ? '问点什么…（回车即可，只用本站内容）' : '问点什么…（会自动附上本页正文）')
-      + '" aria-label="提问">'
-      + '<button class="btn btn-primary lm-ai-go" type="button">' + (mode === 'local' ? '问一句' : '发给 DeepSeek') + '</button></div>'
+    h += '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="' + ph + '" aria-label="提问">'
+      + '<button class="btn btn-primary lm-ai-go" type="button">' + goLabel + '</button></div>'
       + '<div class="lm-ai-row">'
       + '<button class="btn lm-ai-paste" type="button" title="在 DeepSeek 网页里选中回答复制，粘回这里保存进对话">📥 粘回回答</button>'
+      + '<button class="btn lm-llm-cfg" type="button" title="可选：接你自己电脑上的 Ollama 模型（用显卡跑，只跟本机通信）">⚙ 接本机模型</button>'
       + '<button class="btn lm-ai-clear" type="button" title="清空这一页的对话">🗑 清空</button>'
       + '</div>'
       + '<div class="lm-ai-pastebox" hidden><textarea class="lm-ai-pasteta" placeholder="把 DeepSeek 的回答粘到这里（Ctrl/⌘+V），再点「保存到对话」"></textarea>'
@@ -957,7 +1026,15 @@ W.LMAI = (function () {
         chatPush(id, { r: 'local', t: '（「' + q + '」里有站内没有的词，已按词表当成「' + qq + '」来查）' });
       }
       if (!res.length) {
-        chatPush(id, { r: 'local', t: '本站没写过相关内容。换个说法再试；想让它用通用知识回答，把上面的模式切到 🐋 DeepSeek。' });
+        /* ★ 修复125：以前只丢一句「本站没写过相关内容」就完事（用户感受就是「一问三不知」）。
+           现在至少把**这一页的要点**摆出来，并说清下一步（换用页里出现的词 / 切到 DeepSeek）。 */
+        const tips = summarize(ix, id, 2).map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n');
+        chatPush(id, {
+          r: 'local',
+          t: '站内没有直接对得上的原句。\n'
+            + (tips ? '这一页的要点是：\n' + tips + '\n\n' : '')
+            + '试试用页里出现的词来问（比如小标题里的说法）；要用通用知识回答，把上面的模式切到 🐋 DeepSeek。'
+        });
       } else {
         res.forEach(function (r) {
           chatPush(id, {
@@ -979,9 +1056,40 @@ W.LMAI = (function () {
       renderPanel();
     };
     /* 发送：按模式分流（默认「本站速答」；DeepSeek 是备选） */
+    /* ★ 修复125：本机模型（可选）—— 把这一页正文交给用户自己电脑上的 Ollama。
+       模型在显卡上跑，不联网、不用 Key；连不上就明说缺哪一步，站内速答不受影响。 */
+    const runLLM = function (q) {
+      if (!W.LMOllama || typeof W.LMOllama.ask !== 'function') { runLocal(q); return; }
+      const digest = pageDigest(pageById(id));
+      const model = (W.LMOllama.cfg() || {}).model || '本机模型';
+      chatPush(id, { r: 'me', t: q });
+      if (input) input.value = '';        /* 发出去就清空（同 runLocal） */
+      renderPanel();
+      const live = panel.querySelector('.lm-ai-ans');
+      if (live) live.innerHTML = '<p class="lm-ai-tip">🧠 本机模型（' + esc(model) + '）正在读这一页并回答…首次加载模型会慢几秒。</p>';
+      W.LMOllama.ask(q, digest, function (txt) {
+        if (live) live.innerHTML = '<div class="lm-ai-live">' + esc(String(txt || '')).replace(/\n/g, '<br>') + '</div>';
+      }).then(function (txt) {
+        const t = String(txt || '').trim();
+        chatPush(id, { r: 'ollama', t: t || '（本机模型没返回内容：模型可能还在加载，稍等几秒再问一次。）' });
+        if (live) live.innerHTML = '';
+        renderPanel();
+      }, function (e) {
+        chatPush(id, {
+          r: 'local',
+          t: '🧠 本机模型没连上：' + ((e && e.message) || e) + '\n\n'
+            + (W.LMOllama.helpText ? W.LMOllama.helpText() : '')
+            + '\n\n（现在可以直接用 ⚡ 本站速答，不受影响。）'
+        });
+        if (live) live.innerHTML = '';
+        renderPanel();
+      });
+    };
+    /* 发送：按模式分流（默认「本站速答」；DeepSeek / 本机模型是备选） */
     const send = function () {
       const q = String((input && input.value) || '').trim();
       if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，比如「Transformer 和 RNN 有什么区别」。</p>'; return; }
+      if (aiMode() === 'ollama') { runLLM(q); return; }
       if (aiMode() === 'local') { runLocal(q); return; }
       const txt = promptFor(pageById(id), q);
       if (input) input.value = '';        /* ★ 修复116：发出去就清空（配合重绘时的状态保留，不会把你打了一半的字留下） */
@@ -1025,6 +1133,15 @@ W.LMAI = (function () {
           ans.innerHTML = '<p class="lm-ai-tip">DeepSeek 模式：装了扩展就全自动；没装也没关系 —— 点「发给 DeepSeek」会自动复制，你去网页按 Ctrl/⌘+V 发送，回来「📥 粘回回答」。</p>';
         }
       });
+    });
+    /* ★ 修复125：本机模型设置入口（可选，只连本机；配好后模式里会多出「🧠 本机模型」） */
+    const llmCfg = body.querySelector('.lm-llm-cfg');
+    if (llmCfg) llmCfg.addEventListener('click', function () {
+      if (W.LMOllama && typeof W.LMOllama.openSettings === 'function') {
+        W.LMOllama.openSettings(function () { renderPanel(); });
+      } else if (ans) {
+        ans.innerHTML = '<p class="lm-ai-tip">本机模型模块没加载（js/ai-ollama.js）。刷新一下页面再试；这一步是可选的，不影响站内速答。</p>';
+      }
     });
     /* 📥 把 DeepSeek 的回答粘回来，存进这个对话 */
     const pb = body.querySelector('.lm-ai-pastebox');
@@ -1190,6 +1307,7 @@ W.LMAI = (function () {
     buildIndex: buildIndex, related: related, keywords: keywords, summarize: summarize, ask: ask,
     askSmart: askSmart, qKind: qKind, qPair: qPair, rankSent: rankSent, tableHits: tableHits,
     sentIndex: sentIndex, warm: warm, listSteps: listSteps, expandQuery: expandQuery,
+    literalHits: literalHits, normPhrase: normPhrase,
     prfExpand: prfExpand, dedupeSent: dedupeSent,
     aiMode: aiMode, setAiMode: setAiMode,
     pageDigest: pageDigest, promptFor: promptFor,
