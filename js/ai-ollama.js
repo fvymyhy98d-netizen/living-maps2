@@ -26,6 +26,9 @@
   /* ★ 修复126：本机推理服务的「约定端口」—— 浏览器不能扫端口/枚举进程，只能试这些众所周知的口子。
      谁在线、谁放行了本站跨域（CORS），就用谁；都连不上就静默跳过，绝不报错骚扰用户。 */
   var ENDPOINTS = [
+    /* ★ 修复129：联想天禧（xiaotian）自带 Qwen3-4B，跑在 [::1]:11466 的 OpenAI 兼容接口上，
+       但它不返回 CORS 头，网页直接连会被拦；用 tools/tianxi-bridge.py 在 127.0.0.1:11468 补一层即可。 */
+    { id: 'tianxi', name: '联想天禧（本地千问）', base: 'http://127.0.0.1:11468', kind: 'openai' },
     { id: 'ollama', name: 'Ollama', base: 'http://127.0.0.1:11434', kind: 'ollama' },
     { id: 'lmstudio', name: 'LM Studio', base: 'http://127.0.0.1:1234', kind: 'openai' },
     { id: 'llamacpp', name: 'llama.cpp', base: 'http://127.0.0.1:8080', kind: 'openai' },
@@ -89,20 +92,29 @@
     var out = [];
     return Promise.all(ENDPOINTS.map(function (ep) {
       return listAt(ep, ms).then(function (models) {
-        out.push({ id: ep.id, name: ep.name, base: ep.base, kind: ep.kind, models: models });
+        out.push({ id: ep.id, name: ep.name, base: ep.base, kind: ep.kind, models: models, order: ENDPOINTS.indexOf(ep) });
       }, function () { /* 没启动 / 被 CORS 拦 / 端口不是默认值：跳过 */ });
-    })).then(function () { return out; });
+    })).then(function () {
+      /* ★ 修复129：Promise.all 的完成顺序是乱的，显式按 ENDPOINTS 排序，
+         这样「天禧桥 > Ollama > …」的优先级才是确定的（否则每次刷新可能换一个服务）。 */
+      out.sort(function (a, b) { return a.order - b.order; });
+      return out;
+    });
   }
   /* 从模型清单里挑一个「最可能是聊天用、8G 显存跑得动」的 */
-  var PREF = ['qwen2.5', 'qwen2', 'qwen', 'llama3.1', 'llama3', 'llama', 'mistral', 'gemma2', 'gemma', 'phi', 'deepseek'];
+  var PREF = ['qwen3', 'qwen2.5', 'qwen2', 'qwen', 'llama3.1', 'llama3', 'llama', 'mistral', 'gemma2', 'gemma', 'phi', 'deepseek'];
+  /* ★ 修复129：本机服务常捎带一堆非聊天模型（天禧就有 BaiDuSafetyChecker / IntentModel / CreatorZone），
+     自动挑选时一律排除；embedding / rerank 同理 */
+  var SKIP = /embed|bge|nomic|rerank|clip|safety|checker|intent|creator|whisper|tts/i;
   function pickBest(list) {
-    var cand = (list || []).filter(function (m) { return !/embed|bge|nomic|rerank|clip|vision-only/i.test(m); });
+    var cand = (list || []).filter(function (m) { return !SKIP.test(m); });
     if (!cand.length) cand = list || [];
     var score = function (m) {
       var s = 0, low = String(m).toLowerCase();
       for (var i = 0; i < PREF.length; i++) if (low.indexOf(PREF[i]) >= 0) { s = 100 - i; break; }
       if (/instruct|chat/.test(low)) s += 8;
       var mb = low.match(/:(\d+(?:\.\d+)?)b/);
+      if (!mb) mb = low.match(/(?:^|[-:_ ])([0-9]+(?:[.][0-9]+)?)b(?![a-z0-9])/);  /* ★ 修复129：也认 Qwen3-4B / Model-7b */
       if (mb) {
         var b = parseFloat(mb[1]);
         if (b >= 3 && b <= 9) s += 6;                 /* 8G 显存最舒服的一档 */
@@ -212,8 +224,12 @@
   }
 
 
-  var SYS = '你是“三张活地图”学习站点的助教。只依据用户提供的页面内容回答，'
-    + '页面里没有的就直接说没有，绝不要编造；回答用简体中文，简洁、分点。';
+  /* ★ 修复129：隐私范围=question 时正文一个字都不发，老提示词「页面里没有就说没有」会让模型只会回「没有」。
+     现在分两种情形说清楚：给了页面就只依页面；没给（或被关掉）就按常识答，并声明「不是本站内容」。 */
+  var SYS = '你是“三张活地图”学习站点的助教。'
+    + '如果用户消息里带有【页面内容】，就只依据它回答，里面没有的直接说没有，绝不编造；'
+    + '如果没有给【页面内容】，就用你自己的知识简短回答，并说明这不是本站页面的内容。'
+    + '回答用简体中文，简洁、分点。';
   /* 隐私开关：scope=question 时**完全不带页面正文**，只把问题交给本机模型 */
   function userMsg(c, q, digest) {
     return (c.scope === 'question' ? '' : '【页面内容】\n' + String(digest || '') + '\n\n') + '【我的问题】\n' + String(q || '');
@@ -241,6 +257,16 @@
     };
     return pump();
   }
+  /* ★ 修复129：Qwen3-Thinking 这类「会思考」的模型会把推理过程包在  thinking…<｜end▁of▁thinking｜> 里一起流出来。
+     展示时整段隐去，只留最终答案；流式期间还没闭合就先显示「思考中…」（否则用户会看到一堆推理草稿）。
+     附带的好处：发给模型的请求一字不改，只是「显示层」过滤，不影响隐私范围。 */
+  function visible(t) {
+    var s = String(t || '');
+    s = s.replace(/<think[^>]*>[\s\S]*?<\/think>/gi, '');
+    var open = s.search(/<think/i);
+    if (open >= 0) s = s.slice(0, open);
+    return s.replace(/^\s+/, '');
+  }
   function ask(q, digest, onText) {
     var c = cfg();
     if (!ALLOW.test(String(c.url || ''))) return Promise.reject(new Error('地址不在白名单（只允许 127.0.0.1 / localhost）'));
@@ -248,11 +274,11 @@
     var isOll = (c.kind || 'ollama') !== 'openai';
     var body = isOll
       ? {
-        model: c.model, stream: true, options: { temperature: 0.2 },
+        model: c.model, stream: true, options: { temperature: 0.2, num_predict: 2048 },
         messages: [{ role: 'system', content: SYS }, { role: 'user', content: userMsg(c, q, digest) }]
       }
       : {
-        model: c.model, stream: true, temperature: 0.2,
+        model: c.model, stream: true, temperature: 0.2, max_tokens: 2048,
         messages: [{ role: 'system', content: SYS }, { role: 'user', content: userMsg(c, q, digest) }]
       };
     return fetchT(u + (isOll ? '/api/chat' : '/v1/chat/completions'), {
@@ -272,12 +298,24 @@
           : (j && j.choices && j.choices[0]
             && ((j.choices[0].delta && j.choices[0].delta.content)
               || (j.choices[0].message && j.choices[0].message.content)));
-        if (typeof t === 'string' && t) { all += t; if (onText) onText(all, false); }
+        if (typeof t === 'string' && t) {
+          all += t;
+          if (onText) onText(visible(all) || '思考中…', false);
+        }
+      };
+      /* 收尾：思考块没闭合（输出上限被推理吃光）时，明确说清楚，而不是把一屏推理草稿丢给用户 */
+      var done = function () {
+        var fin = visible(all);
+        if (!fin && String(all).trim()) {
+          fin = '（模型的思考过程吃满了输出上限，没来得及给结论：把问题问短一点，或换个更小的模型试试）';
+        }
+        if (onText) onText(fin, true);
+        return fin;
       };
       if (!r.body || typeof r.body.getReader !== 'function') {
-        return r.json().then(function (j) { take(j); if (onText) onText(all, true); return all; });
+        return r.json().then(function (j) { take(j); return done(); });
       }
-      return streamLines(r, take).then(function () { if (onText) onText(all, true); return all; });
+      return streamLines(r, take).then(done);
     });
   }
 
@@ -323,6 +361,19 @@
       + '<button type="button" id="lmLlmOff" class="btn btn-ghost">关闭本机模型</button>'
       + '<button type="button" id="lmLlmX" class="btn btn-ghost" style="margin-left:auto">取消</button>'
       + '</div>'
+      /* ★ 修复129：联想电脑——天禧自带的 Qwen3 可以直接用，零下载（只是缺 CORS，补一层小桥即可） */
+      + '<details style="margin-top:10px"><summary style="cursor:pointer;color:#6e6e73">联想电脑：天禧自带的千问怎么接（零下载）</summary>'
+      + '<div style="font-size:12.5px;color:#3a3a3c;margin:8px 0 0">'
+      + '天禧（xiaotian）本来就在本机跑 Qwen3-4B，并且在 <code>[::1]:11466</code> 开了 OpenAI 兼容接口'
+      + '（<code>/v1/models</code> 能列出来）。它缺的只有 CORS，浏览器直连会被拦 —— 补一层本地小桥就行，'
+      + '<strong>不下载任何模型、不用装东西</strong>（Python 标准库）：</div>'
+      + '<pre id="lmLlmTxCmd" style="white-space:pre-wrap;background:#f5f5f7;border-radius:10px;padding:10px;margin:8px 0 0;font-size:12.5px">'
+      + '# 在仓库根目录执行一次（每次想用本机模型时开一个窗口挂着它）\n'
+      + 'py tools\\tianxi-bridge.py</pre>'
+      + '<button type="button" id="lmLlmTxCopy" class="btn btn-ghost" style="margin-top:8px">复制这条命令</button>'
+      + '<div style="margin-top:6px;color:#6e6e73">桥起来后，上面的识别结果里会多一个「联想天禧（本地千问） · 11468」，'
+      + '点它就接管了。模型识别与选择都在你自己电脑上完成，页面正文是否随问题一起发，由下面的「隐私范围」决定。</div>'
+      + '</details>'
       + '<details style="margin-top:12px"><summary style="cursor:pointer;color:#6e6e73">一个模型都没有？装一次就好（三步）</summary>'
       + '<pre style="white-space:pre-wrap;background:#f5f5f7;border-radius:10px;padding:10px;margin:8px 0 0;font-size:12.5px">'
       + '1) 装 Ollama：https://ollama.com/download（装完它会自动在 11434 端口跑起来）\n'
@@ -343,8 +394,9 @@
       + '<button type="button" id="lmLlmImpCopy" class="btn btn-ghost" style="margin-top:8px">复制这段命令</button>'
       + '<div style="margin-top:6px;color:#6e6e73">懒得手敲？仓库里有现成脚本：'
       + '<code>tools\\import-gguf.ps1 -Gguf "C:\\...\\xxx.gguf" -Name qwen3-4b</code></div>'
-      + '<div style="margin-top:6px;color:#6e6e73">为什么不能直接连天禧：这类桌面 App <strong>不开本地 HTTP 接口</strong>（它们只在进程内部推理），'
-      + '网页看不到也调不到，所以需要 Ollama 这层“标准接口”。</div>'
+      + '<div style="margin-top:6px;color:#6e6e73">注意：天禧其实<strong>有</strong> HTTP 接口（<code>[::1]:11466</code>），'
+      + '只是不返回 CORS 头、也不理 OPTIONS，网页直连会被浏览器拦。想直连它就跑一次 '
+      + '<code>tools\\tianxi-bridge.py</code>（见上面「联想电脑：天禧自带的千问」）。</div>'
       + '</details>'
       + '</div>';
     document.body.appendChild(wrap);
@@ -410,6 +462,22 @@
         + '档位：' + (tierName[g.tier] || '看不出来') + '\n'
         + '建议模型：' + suggest(g.tier) + '\n'
         + '说明：浏览器**拿不到显存大小**，只能按型号粗估；能不能吃下，跑起来看速度就知道。';
+    });
+    /* ★ 修复129：复制「启动天禧小桥」的命令 */
+    var txCopy = q('#lmLlmTxCopy');
+    if (txCopy) txCopy.addEventListener('click', function () {
+      var pre = q('#lmLlmTxCmd');
+      var txt = String((pre && pre.textContent) || '');
+      if (!txt) return;
+      var ok = function () { say('已复制。在仓库根目录粘进 PowerShell 执行，然后点「一键检测并启用」。'); };
+      var bad = function () { say('浏览器不让写剪贴板，请手动选中上面那条复制。', true); };
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt).then(ok, bad);
+          return;
+        }
+      } catch (eT) { /* 落回提示 */ }
+      bad();
     });
     /* ★ 修复127：一键复制「导入已有 gguf」的命令（不复制、不下载） */
     var impCopy = q('#lmLlmImpCopy');
@@ -483,7 +551,8 @@
     /* ★ 修复126：自动识别 / 一键启用 / 显卡估算 / 网页内下载 */
     ENDPOINTS: ENDPOINTS, listAt: listAt, detect: detect, pickBest: pickBest,
     autoDetect: autoDetect, autoConnect: autoConnect, gpu: gpu, suggest: suggest, pull: pull,
-    version: '2'
+    visible: visible,
+    version: '3'
   };
 })(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {}));
 if (typeof module !== 'undefined' && module.exports) {

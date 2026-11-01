@@ -1308,3 +1308,80 @@ powershell -ExecutionPolicy Bypass -File .\tools\import-gguf.ps1 `
 
 **资源版本 128（v127 的即时修正）**：面板里那段命令最初把反斜杠写多了一层，`<pre>` 会显示 `C:\\路径\\你的模型.gguf`，点「复制」出去就是坏路径。已修正为单反斜杠，并把两处 Markdown `**粗体**` 换成 `<strong>`（HTML 里不渲染）。验证方式：用 node 把这行字符串**求值**后断言无连续双反斜杠（而不是靠肉眼数 `\\`，工具链里的多重转义极易看错）。测试同口径更新到 `?v=128`（22 处）。
 
+
+## 三·补8、天禧（联想本机自带的 Qwen3-4B）直连网页（2026-10-31 / 修复129）：**零下载**
+
+**结论先说**：不用装 Ollama（官方包 1.68 GB）、不用下任何模型。联想「天禧（xiaotian）」**本身就在本机开着一个 OpenAI 兼容接口**，缺的只有 CORS 头；用一个 40 行的纯 Python 标准库小桥补上，网页就能直接用它的 Qwen3-4B。
+
+### ① 之前那句「桌面 App 不开本地 HTTP 接口」是错的（已订正）
+
+v127 的说法被实测推翻。真实情况（本机实测，可复现）：
+
+| 探测 | 结果 |
+| --- | --- |
+| `Get-NetTCPConnection -State Listen` 里属于 `C:\Program Files\Lenovo\AIAgent` 的套接字 | **`::1:11466`**（IPv6 回环，`XLSmartService`） |
+| `GET http://[::1]:11466/v1/models` | **200 OK**，`Server: xiaotian` |
+| 返回的模型清单 | `Qwen3-4B-Thinking`、`Model-7b`、`Model-1.5b`、`IntentModel`、`CreatorZone`、`BaiDuSafetyChecker` |
+| `POST /v1/chat/completions` | **200 OK**，`"model"` 直接是 `C:\ProgramData\Lenovo\AIAgent\data\Qwen3-4B-Thinking\...gguf` |
+| 速度 | `predicted_per_second: 93.03`（走显卡）、`system_fingerprint: b9246-e2e3ec1bb`（底下就是 llama.cpp） |
+| `stream: true` | **支持 SSE**，逐字 `data: {"choices":[{"delta":{"content":"…"}}]}`，先吐 `<think>` 再吐答案 |
+| `OPTIONS` 预检 / 响应头里的 `Access-Control-Allow-Origin` | **没有**（预检 404，响应无 ACAO） |
+
+所以天禧是「**有接口、没跨域**」：浏览器直接 `fetch` 会被 CORS 挡在门外（JSON POST 必触发预检，预检 404 就直接失败）。
+
+### ② 解法：一层不下载东西的本地小桥
+
+`tools/tianxi-bridge.py`（Python 3 标准库，**不需要 pip install、不需要管理员**）：
+
+```powershell
+py tools\tianxi-bridge.py          # 默认 127.0.0.1:11468  ->  http://[::1]:11466
+```
+
+它做三件事：
+1. 在 `127.0.0.1:11468` 起服务（只监听本机回环，不对外网开放）；
+2. 原样转发请求到天禧（`--target` 可改端口，`--port` 可改监听端口）；
+3. 补 `Access-Control-Allow-Origin/Methods/Headers`、`Access-Control-Allow-Private-Network`（Chrome 私有网络访问要求），`OPTIONS` 直接回 204；**边读边写**（`resp.read(512)` + `wfile.flush()`），所以 SSE 是逐字到达，不是攒完再吐。
+
+实测（模拟浏览器的跨域请求）：
+
+```
+GET  http://127.0.0.1:11468/v1/models        -> 200 + 6 个 CORS 头 + 6 个模型
+OPTIONS http://127.0.0.1:11468/v1/chat/completions -> 204 + 6 个 CORS 头
+POST /v1/chat/completions (stream)           -> 200，逐块 SSE，13.8 KB / 123 行
+```
+
+### ③ 站点这边改了什么（`js/ai-ollama.js`）
+
+- `ENDPOINTS` 第 1 位加 `{ id: 'tianxi', name: '联想天禧（本地千问）', base: 'http://127.0.0.1:11468', kind: 'openai' }`（共 8 个）。
+- `detect()` 结果**显式按 `ENDPOINTS` 顺序排序**：`Promise.all` 的完成顺序是不确定的，不排的话每次刷新可能接管到不同服务。
+- `pickBest()`：新增 `SKIP = /embed|bge|nomic|rerank|clip|safety|checker|intent|creator|whisper|tts/i` —— 把天禧捎带的安全审核/意图/创作等模型排除；尺寸识别从「只认 `qwen2.5:7b`」放宽到 `Qwen3-4B`、`Model-7b`（用 `(?:^|[-:_ ])([0-9]+…)b` 的零转义写法，避免层层转义看错）。本机实测：6 个模型里自动选中 `Qwen3-4B-Thinking`。
+- 新增 `visible()`：`Qwen3-Thinking` 会把推理过程包在 `…` 里一起流出来。展示层整段隐去；流式期间未闭合就显示「思考中…」；请求体一字不改，隐私范围不受影响。
+- 输出上限 `1024 → 2048`：4B 思考模型光思考就能吃满 1024 token（实测「用一句话介绍你自己」正好被掐断、结论一个字都没出来）。被掐断时明确提示「思考吃满上限、没给结论」，**不把一屏推理草稿甩给用户**。
+- `SYS` 提示词分两种情形：有【页面内容】就只依页面；没有（隐私范围=只发问题）就按常识答并**声明不是本站内容**。原来「页面里没有就说没有」会让隐私模式永远只回「没有」（实测踩到）。
+- 设置面板新增折叠块「联想电脑：天禧自带的千问怎么接（零下载）」+ 一键复制命令；v127 那句错话在同一面板里同步订正。
+- `index.html` CSP 的 `connect-src` 加 `http://[::1]:*`（天禧监听在 IPv6 回环）；资源版本 `?v=129`（22 处）/ `LM_ASSET_VER='129'`。
+
+### ④ 端到端实测（用站点自己的 `ai-ollama.js` 跑，不是 curl）
+
+```js
+// 假 localStorage + 真网络，require('js/ai-ollama.js')
+ENDPOINTS=8 first=tianxi base=http://127.0.0.1:11468
+pickBest=Qwen3-4B-Thinking
+detect=tianxi(6)
+setCfg=true ready=true
+ask() -> chunks=1154  answer.len=42  无 think 标签
+answer.head="- 此回复非三张活地图学习站点页面内容 / - 我是该站点的助教，专精于解答学习问题"
+```
+
+### ⑤ 怎么用（每次要用本机模型时）
+
+1. 打开天禧（它自己会把服务起来），确认 `http://[::1]:11466/v1/models` 有返回；
+2. 仓库根目录 `py tools\tianxi-bridge.py`（开着窗口别关）；
+3. 网页「⚙ 接本机模型」→ 出现「联想天禧（本地千问） · 11468」→ 点它 → 模式切到「🧠 本机模型」。
+
+**诚实边界**：这是天禧**没有公开文档**的内部接口，随它更新可能改端口/加鉴权；桥只绑 `127.0.0.1`（同机程序理论上可访问，别在公共电脑上长期挂着）；CORS 用 `*` 是为了省事，若要收紧可改成只回显 `https://fvymyhy98d-netizen.github.io`。另外，把 Lenovo 随机器附带的模型权重用于本项目的个人学习没问题，但**再分发**要受联想条款约束。
+
+**回归（修复129）**：`node --check`（ai-ollama / ai / app / test_yjs）通过；`test_yjs.js` **436/436**（新增 1 条：tianxi 端点、`pickBest` 真跑选中 `Qwen3-4B-Thinking`、`visible()` 真跑、`version='3'`、2048 上限、`tools/tianxi-bridge.py` 的 CORS/预检/线程服/SSE flush、CSP `[::1]`；并把「7 个端口」改成 8 个、把已被证伪的「不开本地 HTTP 接口」断言换掉）；`tools/tianxi-bridge.py` 实跑自检（无 Ollama 场景无关，直接起服务 + curl 三连）；其余套件：marks 25/25、hist 15/15、yield PASS、collab 9/9、comments 9/9。
+
+**顺带**：按用户要求，已中止并删除 Ollama 安装包下载（`OllamaSetup.exe` 到 345 MB / 1.68 GB 时取消），本机**没有**安装 Ollama。
+
