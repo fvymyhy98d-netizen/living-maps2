@@ -3233,9 +3233,11 @@ console.log('【9.58】修复92：反馈跨设备同步 —— 合并/打包真�
         && appJs.indexOf('it.reply = (t.value || \'\').slice(0, 200); it.updatedAt = Date.now();') > 0;
     })());
 
-  T('节流与开关：无 Token 的设备不写云端（访客零额度）· 有 Token 才同步 · 60 秒内不重复拉',
-    appJs.indexOf('function fbPushSoon()') > 0 && appJs.indexOf('!LMFB.hasCloud() || _fbBusy') > 0
-      && appJs.indexOf('if (now - _fbPullAt < 60000) return;') > 0);
+  T('节流与开关：无 Token 的设备不写云端（访客零额度）· 有 Token 才同步 · 反馈页开着 15 秒对一次（切回前台 3 秒）',
+    appJs.indexOf('function fbPushSoon()') > 0
+      && appJs.indexOf('if (!window.LMFB || !LMFB.hasCloud()) return;') > 0
+      && appJs.indexOf('var FB_PULL_GAP = 15000;') > 0
+      && appJs.indexOf('if (now - _fbPullAt < (force ? 3000 : FB_PULL_GAP)) return;') > 0);
 
   T('接入完整性：index.html 引入 js/fbsync.js（带版本号）· README 记录修复92 与「只写数据分支」',
     /js\/fbsync\.js\?v=\d+/.test(html) && readme.indexOf('修复92') > 0
@@ -3443,9 +3445,9 @@ console.log('【9.60】修复95：反馈公开可见 / 采纳-已修改-保留�
     fbSrc.indexOf('opts.visitor') > 0 && fbSrc.indexOf('if (MQ.admin === asAdmin)') > 0
       && appJs.indexOf('}, { visitor: !state.admin });') > 0);
 
-  T('访客拉历史只走 raw 公开文件（60 秒节流）；管理员有 Token 时改走 API 合并，访客永不写云端',
+  T('访客拉历史只走 raw 公开文件（15 秒节流）；管理员有 Token 时改走 API 合并，访客永不写云端',
     appJs.indexOf('LMFB.pullPublic().then(function (r)') > 0
-      && appJs.indexOf('if (now - _fbPullAt < 60000) return;') > 0
+      && appJs.indexOf('if (now - _fbPullAt < (force ? 3000 : FB_PULL_GAP)) return;') > 0
       && appJs.indexOf('if (LMFB.hasCloud()) {\r\n      fbSyncNow(false);\r\n    } else {') > 0);
 
   T('样式补齐：状态徽章四色 / 一键处理按钮 / 处理记录块 / 讨论区独立挂载点',
@@ -3580,10 +3582,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=140 · LM_ASSET_VER=140',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=141 · LM_ASSET_VER=141',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=139/g) || []).length === 0 && /\?v=140/.test(html)
-      && /LM_ASSET_VER = '140'/.test(appJs));
+      && (html.match(/\?v=140/g) || []).length === 0 && /\?v=141/.test(html)
+      && /LM_ASSET_VER = '141'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4484,10 +4486,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 140（?v=140 共 22 处 · v139 无残留 · LM_ASSET_VER=140）',
-    (html.match(/\?v=140/g) || []).length === 22 && (html.match(/\?v=139/g) || []).length === 0
-      && /LM_ASSET_VER = '140'/.test(appJs),
-    'v140=' + (html.match(/\?v=140/g) || []).length + ' v139=' + (html.match(/\?v=139/g) || []).length);
+  T('版本已升到 141（?v=141 共 22 处 · v140 无残留 · LM_ASSET_VER=141）',
+    (html.match(/\?v=141/g) || []).length === 22 && (html.match(/\?v=140/g) || []).length === 0
+      && /LM_ASSET_VER = '141'/.test(appJs),
+    'v141=' + (html.match(/\?v=141/g) || []).length + ' v140=' + (html.match(/\?v=140/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -4614,6 +4616,96 @@ console.log('【修复140】协同推送状态机：退出键入立刻发 · 两
   }
   T('修复140（真跑）· 锁占用/限流/防抖都只是「记账」不丢；锁释放后补推；同版本戳的退出键入不再白序列化', ok, detail);
 })();
+
+/* ---------- 修复141：反馈与处理跨设备即时同步 · 已采纳的条目也能删（推不上去的根因在 sync） ---------- */
+console.log('【修复141】反馈同步：sync 改成「跟云端比」才推 · 管理动作立刻推 · 15 秒自动对账 · 公开列表可直接处理');
+
+(function () {
+  const fbSrc = srcOf('js/fbsync.js'), appS = srcOf('js/app.js');
+  const fb = require(path.join(DIR, 'js/fbsync.js'));
+
+  /* 1) 源码守护：要不要上传，改成跟「云端那份」比 */
+  T('修复141 · sync 的「要不要推」改成跟云端那份比（旧版拿 local 自己比 → 改状态 / 删除 / 写回复永远判「没变化」→ 从不上云）',
+    fbSrc.indexOf('const cloud = JSON.stringify(merge(p.list || [], []));') > 0
+      && fbSrc.indexOf('const needPush = JSON.stringify(merged) !== cloud;') > 0
+      && fbSrc.indexOf('if (!needPush) return { ok: true, list: merged, changed: changed };') > 0
+      && fbSrc.indexOf('changed: changed, pushed: ok !== false') > 0
+      && fbSrc.indexOf('JSON.stringify(merge(local || [], [])) !== JSON.stringify(merged)') < 0);
+
+  /* 2) 源码守护：管理动作立刻推 + 同步进行中的改动不丢 */
+  T('修复141 · 采纳 / 已修改 / 删除 立刻同步（fbFlushNow）· 同步进行中的改动记账补推（_fbAgain，不再裸 return 丢掉）',
+    appS.indexOf('function fbFlushNow() {') > 0
+      && appS.indexOf('if (_fbBusy) { _fbAgain = true; return Promise.resolve(false); }') > 0
+      && appS.indexOf('if (_fbBusy) { _fbAgain = true; return; }') > 0
+      && appS.indexOf('setTimeout(function () { fbSyncNow(false); }, 600);') > 0
+      && (appS.match(/fbFlushNow\(\);/g) || []).length >= 2);
+
+  /* 3) 源码守护：对账节奏 60s → 15s；切回前台 / 心跳定时器都会主动对；页面没开就不联网 */
+  T('修复141 · 反馈页开着每 15 秒对一次（force 3 秒）· 5 秒心跳 · 切回前台立刻对 · 页面没开就不联网',
+    appS.indexOf('var FB_PULL_GAP = 15000;') > 0
+      && appS.indexOf('if (now - _fbPullAt < (force ? 3000 : FB_PULL_GAP)) return;') > 0
+      && appS.indexOf("if (!document.getElementById('fbMount')) return;") > 0
+      && appS.indexOf('try { fbWatch(); } catch (eW) { /* noop */ } }, 5000);') > 0
+      && appS.indexOf('if (!document.hidden) { try { fbWatch(true); } catch (eV) { /* noop */ } }') > 0);
+
+  /* 4) 源码守护：公开列表里管理员就能处理（含已采纳的条目）· 删除文案带状态 */
+  T('修复141 · 公开列表里管理员可直接 采纳 / 已修改 / 保留 / 待处理 / 删除（含已采纳）· 删除确认文案带当前状态',
+    appS.indexOf('const quick = (!isAdmin && state.admin)') > 0
+      && appS.indexOf('data-fbdel title="已采纳 / 已修改 的条目同样可以删除"') > 0
+      && appS.indexOf("'（当前状态：' + fixSt(curIt.status) + '）'") > 0
+      && appS.indexOf('并会立刻同步到所有设备') > 0
+      && srcOf('README.md').indexOf('修复141') > 0);
+
+  /* 5) 真跑：把 sync 从源码里切出来，用假 pull / push 跑四种局面 */
+  const a2 = fbSrc.indexOf('  function sync(local) {');
+  const b2 = fbSrc.indexOf('\n  }', a2);
+  let mk = null;
+  try {
+    mk = new Function('ctx', 'pull', 'push', 'merge', 'lastSync',
+      fbSrc.slice(a2, b2 + 4) + '\n  return sync;');
+  } catch (e) { mk = null; }
+  T('修复141 · 能从 fbsync.js 里切出 sync() 跑真流程', a2 > 0 && b2 > a2 && !!mk,
+    'a=' + a2 + ' b=' + b2);
+
+  if (mk) {
+    const mkSync = function (cloudList, pushLog, pushOk) {
+      return mk(function () { return {}; },
+        function () { return Promise.resolve({ ok: true, list: cloudList, sha: 'sha1' }); },
+        function (list) { pushLog.push(list); return Promise.resolve(pushOk !== false); },
+        fb.merge, 0);
+    };
+    const cloudOld = [{ id: 'F-01', ts: 1000, text: '建议加个目录', status: '待处理', updatedAt: 1000 }];
+    const localNew = [{ id: 'F-01', ts: 1000, text: '建议加个目录', status: '已采纳', check: '查了目录页', updatedAt: 2000 }];
+    const tomb = [{ id: 'F-01', ts: 1000, text: '建议加个目录', del: 1, updatedAt: 3000 }];
+    const logs = { a: [], b: [], c: [], d: [] };
+    let rA = null, rB = null, rC = null, rD = null;
+    mkSync(cloudOld, logs.a)(localNew).then(function (r) {      /* 本机更新（采纳 + 写核实） */
+      rA = r;
+      return mkSync(cloudOld, logs.b)([]);                      /* 本机空、云端有 → 只收不推 */
+    }).then(function (r) {
+      rB = r;
+      return mkSync(cloudOld, logs.c)(JSON.parse(JSON.stringify(cloudOld)));   /* 两边一样 → 不推 */
+    }).then(function (r) {
+      rC = r;
+      return mkSync(cloudOld, logs.d)(tomb);                    /* 删除墓碑 → 必须推 */
+    }).then(function (r) {
+      rD = r;
+      const okA = logs.a.length === 1 && logs.a[0].length === 1 && logs.a[0][0].status === '已采纳'
+        && logs.a[0][0].check === '查了目录页' && rA.pushed === true && rA.changed === false;
+      const okB = logs.b.length === 0 && rB.ok === true && rB.changed === true
+        && rB.list.length === 1 && rB.list[0].id === 'F-01';
+      const okC = logs.c.length === 0 && rC.changed === false && rC.pushed === undefined;
+      const okD = logs.d.length === 1 && logs.d[0].length === 1 && logs.d[0][0].del === 1 && rD.pushed === true;
+      T('修复141（真跑）· 改状态/写回复必须上云 · 云端更新只收不推 · 两边一样不推 · 删除墓碑必须上云',
+        okA && okB && okC && okD,
+        JSON.stringify({ okA: okA, okB: okB, okC: okC, okD: okD,
+          a: logs.a.length, b: logs.b.length, c: logs.c.length, d: logs.d.length }));
+    }, function (e) {
+      T('修复141（真跑）· 改状态 / 写回复必须上云（Promise 链抛出）', false, e && e.message);
+    });
+  }
+})();
+
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
 function finishAll() {

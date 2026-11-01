@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '140';
+var LM_ASSET_VER = '141';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -2157,24 +2157,41 @@ window.LMApp = (function () {
     fbPushSoon();   /* ★ 修复92：有 Token 的设备顺手同步到数据分支；没有 Token 什么也不做 */
   }
   /* ★ 修复92：反馈云端同步（只写数据分支 lm-data → 不触发 Pages 构建；无 Token 直接跳过） */
-  var _fbPushT = null, _fbBusy = false;
+  var _fbPushT = null, _fbBusy = false, _fbAgain = false;
   function fbPushSoon() {
-    if (!window.LMFB || !LMFB.hasCloud() || _fbBusy) return;
+    if (!window.LMFB || !LMFB.hasCloud()) return;
+    /* ★ 修复141：同步进行中不再「直接丢掉这一笔」—— 记账，等这一轮落地后补一次。
+       原来 `if (_fbBusy) return;`：先点「✔采纳」再点「🗑删除」，第二笔就永远没机会上云。 */
+    if (_fbBusy) { _fbAgain = true; return; }
     if (_fbPushT) clearTimeout(_fbPushT);
     _fbPushT = setTimeout(function () { _fbPushT = null; fbSyncNow(false); }, 1500);
   }
+  /* ★ 修复141：管理动作（采纳 / 已修改 / 回复 / 删除）不等 1.5 秒防抖，立刻对着云端核对一次 */
+  function fbFlushNow() {
+    if (_fbPushT) { clearTimeout(_fbPushT); _fbPushT = null; }
+    return fbSyncNow(false);
+  }
   function fbSyncNow(showToast) {
-    if (!window.LMFB || !LMFB.hasCloud() || _fbBusy) return Promise.resolve(false);
+    if (!window.LMFB || !LMFB.hasCloud()) return Promise.resolve(false);
+    if (_fbBusy) { _fbAgain = true; return Promise.resolve(false); }
     _fbBusy = true;
-    return LMFB.sync(fbRaw()).then(function (r) {
+    /* ★ 修复141：统一收尾 —— 释放锁，并把「同步期间又改了」的那一笔补上（不再默默丢掉） */
+    const settle = function (ok) {
       _fbBusy = false;
+      if (_fbAgain) {
+        _fbAgain = false;
+        setTimeout(function () { fbSyncNow(false); }, 600);
+      }
+      return ok;
+    };
+    return LMFB.sync(fbRaw()).then(function (r) {
       if (r && r.ok && r.changed) {
         try { localStorage.setItem(FB_KEY, JSON.stringify(r.list)); } catch (e) { /* noop */ }
         fbRepaint();   /* ★ 修复118：走草稿保护，别把访客正在写的留言冲掉 */
       }
       if (showToast) toast(r && r.ok ? '☁ 反馈已同步到云端' : '⚠ 反馈云端同步失败（内容已存在本机）');
-      return !!(r && r.ok);
-    }, function () { _fbBusy = false; return false; });
+      return settle(!!(r && r.ok));
+    }, function () { return settle(false); });
   }
   /* ★ 修复93：把收到的留言并进本机 —— MQTT 实时送达 / 链接接力 / 云端拉取 三条路都走这一个漏斗 */
   function fbMergeIncoming(list) {
@@ -2261,7 +2278,17 @@ window.LMApp = (function () {
       + '<input class="fb-input" data-fbchange maxlength="300" placeholder="② 修改了什么（改了哪页 / 哪条关系 / 补了什么来源）" value="' + esc(it.change || '') + '">'
       + '<input class="fb-input" data-fbwhy maxlength="300" placeholder="③ 为什么调整或保留原判断（不采纳也要写理由）" value="' + esc(it.why || '') + '">'
       + '<input class="fb-input fb-reply" data-fbreply maxlength="200" placeholder="给同学的回复（选填，公开可见）" value="' + esc(it.reply || '') + '">'
-      + '<button type="button" class="fb-mini fb-del" data-fbdel>删除</button>' + maskBtn + '</div>' : '';
+      + '<button type="button" class="fb-mini fb-del" data-fbdel>🗑 删除</button>' + maskBtn + '</div>' : '';
+    /* ★ 修复141：管理员在「公开列表」里也能直接改状态 / 删除 ——
+       原来只有页面最下面的「🔐 反馈处理」通道里才有按钮，于是「已采纳的反馈」很像是「不给删」，
+       其实按钮在下面、只是找不到。这里只放四个状态键 + 删除，①②③说明仍在下面的通道里填。 */
+    const quick = (!isAdmin && state.admin) ? '<div class="fb-acts fb-acts-quick">'
+      + '<button type="button" class="fb-mini fb-ac" data-fbact="已采纳">✔ 采纳</button>'
+      + '<button type="button" class="fb-mini fb-ac" data-fbact="已修改">✅ 已修改</button>'
+      + '<button type="button" class="fb-mini fb-ac" data-fbact="保留原判断">✖ 保留原判断</button>'
+      + '<button type="button" class="fb-mini" data-fbact="待处理">↺ 待处理</button>'
+      + '<button type="button" class="fb-mini fb-del" data-fbdel title="已采纳 / 已修改 的条目同样可以删除">🗑 删除</button>'
+      + '</div>' : '';
     return '<div class="fb-item' + (o.mine ? ' fb-mine' : '') + '" data-fbid="' + esc(it.id) + '">'
       + '<div class="fb-meta"><b>' + esc(it.id) + '</b><span>' + fbTs(it.ts) + '</span><span>' + esc(it.type || '')
       + '</span><span>' + esc(it.name || '匿名') + '</span>' + mineChip + devChip + fbStatusChip(it.status) + '</div>'
@@ -2269,6 +2296,7 @@ window.LMApp = (function () {
       + (safeUrl ? '<p class="fb-url">相关链接：<a href="' + esc(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + esc(safeUrl) + '</a></p>' : '')
       + (isAdmin ? '' : fbRecordHtml(it))
       + acts
+      + quick
       + '</div>';
   }
   /* ★ 修复95：公开列表 —— 所有人都能看到「大家提了什么 + 我们怎么处理的」 */
@@ -2570,10 +2598,17 @@ window.LMApp = (function () {
   /* ★ 修复95：反馈对外公开 + 实时
      - 有 Token 的管理员：走 API 读写数据分支（多设备合并）
      - 所有人（含访客）：pullPublic 从 raw 读公开列表（不需要 Token）+ 订阅 MQTT 实时流
-     - 拉取 60 秒节流；管理员 clean=false（可补收），访客 clean=true（只收在线） */
+     - 拉取节流：★ 修复141 起 15 秒（force 时 3 秒，原来是 60 秒且只有重绘才触发）；
+       管理员 clean=false（可补收），访客 clean=true（只收在线） */
   var _fbPullAt = 0;
-  function fbWatch() {
+  /* ★ 修复141：反馈页开着时每 15 秒跟云端对一次（原来 60 秒，而且只有「重绘」时才顺带触发 →
+     别的设备改了状态 / 删了条目，这边常常要好几分钟才看见，体感就是「不同步 / 有缓存」）。
+     force=true（切回前台 / 手动刷新）时放宽到最低 3 秒一次，避免连续触发。 */
+  var FB_PULL_GAP = 15000;
+  function fbWatch(force) {
     if (!window.LMFB) return;
+    /* ★ 修复141：页面没打开就不联网（原来只有 mountFeedback 调用，天然不会跑；现在多了定时器要自己挡） */
+    if (!document.getElementById('fbMount')) return;
     try {
       LMFB.listen(function (it) {
         const n = fbMergeIncoming([it]);
@@ -2582,7 +2617,7 @@ window.LMApp = (function () {
       }, { visitor: !state.admin });
     } catch (eL) { /* noop */ }
     const now = Date.now();
-    if (now - _fbPullAt < 60000) return;
+    if (now - _fbPullAt < (force ? 3000 : FB_PULL_GAP)) return;
     _fbPullAt = now;
     if (LMFB.hasCloud()) {
       fbSyncNow(false);
@@ -2777,6 +2812,7 @@ window.LMApp = (function () {
     fbStore(raw);
     mountFeedback();
     toast(id + ' → ' + it.status + (it.check || it.change || it.why ? '' : '（建议再填 ①核实 ②改了什么 ③为什么）'));
+    fbFlushNow();   /* ★ 修复141：改状态立刻推到云端 —— 不然别的设备要等下一轮（原来还要等「恰好有变化」才推） */
   });
   /* ★ 修复92：手动「立即同步」反馈（只有带 Token 的设备才会渲染这个按钮） */
   document.addEventListener('click', function (e) {
@@ -2884,13 +2920,17 @@ window.LMApp = (function () {
     if (del) {
       const item = del.closest('.fb-item');
       const id = item ? item.getAttribute('data-fbid') : '';
-      LMEditor.confirmModal('删除反馈', '确定删除 ' + id + ' 这条反馈？删除后不可恢复。', '删除', function () {
+      /* ★ 修复141：确认文案里带上当前状态 —— 已采纳 / 已修改 的条目一样可删（以前很像「被锁住删不了」） */
+      const curIt = fbList().find(function (x) { return x.id === id; });
+      const stTxt = curIt ? '（当前状态：' + fixSt(curIt.status) + '）' : '';
+      LMEditor.confirmModal('删除反馈', '确定删除 ' + id + stTxt + ' 这条反馈？删除后不可恢复，并会立刻同步到所有设备（删除记的是「墓碑」，不会被别的设备同步回来）。', '删除', function () {
         /* ★ 修复92：写「墓碑」而不是直接抹掉 —— 否则别的设备一同步又把它带回来 */
         const raw = fbRaw();
         raw.forEach(function (x) { if (x && x.id === id) { x.del = 1; x.updatedAt = Date.now(); } });
         fbStore(raw);
         mountFeedback();
-        toast('已删除 ' + id);
+        toast('已删除 ' + id + '（正在同步到云端）');
+        fbFlushNow();   /* ★ 修复141：立刻同步，不等 1.5 秒防抖 */
       });
       return;
     }
@@ -3118,6 +3158,14 @@ window.LMApp = (function () {
     /* ★ 修复92：启动时先把 URL 里带来的同学留言收进来（#fb=…），再进入正常渲染 */
     fbIngestUrl();
     window.addEventListener('hashchange', function () { fbIngestUrl(); });
+    /* ★ 修复141：反馈页开着时「自己会动」——
+       · 每 5 秒看一眼（真正联网由 fbWatch 里的 FB_PULL_GAP=15s 节流，页面没打开就直接 return）；
+       · 切回前台立刻对一次（后台标签页的定时器会被浏览器冻结，回来时不该再等一个周期）。
+       原来只有「重绘」才顺带拉一次，且 60 秒才一次 → 别的设备的处理结果经常很久才出现。 */
+    setInterval(function () { try { fbWatch(); } catch (eW) { /* noop */ } }, 5000);
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { try { fbWatch(true); } catch (eV) { /* noop */ } }
+    });
   }
 
   if (document.readyState === 'loading') {

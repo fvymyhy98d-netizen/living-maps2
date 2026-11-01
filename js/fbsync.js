@@ -192,18 +192,30 @@ W.LMFB = (function () {
       })
       .catch(function () { return false; });
   }
-  /* 一站式：拉 → 合并 → 有变化再推。返回合并后的完整列表（含墓碑，由调用方过滤） */
+  /* 一站式：拉 → 合并 → 与**云端那份**不一致就推。返回合并后的完整列表（含墓碑，由调用方过滤）
+     ★ 修复141：这里原来是「拿 merged 和 local 自己比」，于是只要云端没有更新的东西就判「没变化」→ 不 push。
+       而「✔采纳 / ✅已修改 / 写回复 / 🗑删除」全都只改同一批 id 的 updatedAt 或 del 标记，
+       **id 集合一个字没变** → 这些处理结果永远上不了云 → 其他设备看不到、删掉的又回来
+       （用户反馈的「反馈与处理其他设备不能及时同步」「已采纳的不能删除」都是这一个根因）。
+       现在改成跟「云端那份」比：合并结果 ≠ 云端内容就上传；这样三种情况都对：
+         · 本机有更新的状态/回复/墓碑  → merged 用本机的 → 与云端不同 → 推 ✓
+         · 云端更新（别人改的）        → merged 用云端的 → 与云端相同 → 不推（没什么可推）✓
+         · 云端是空文件 / 本机多了条目 → 与云端不同 → 推 ✓（旧版连「第一次上传」都会跳过） */
   function sync(local) {
     const c = ctx();
     if (!c) return Promise.resolve({ ok: false, list: local || [], changed: false });
     lastSync = Date.now();
     return pull().then(function (p) {
       if (!p.ok) return { ok: false, list: local || [], changed: false };
-      const before = JSON.stringify(merge(local || [], []));
-      const merged = merge(local || [], p.list);
-      const changed = JSON.stringify(merged) !== before;
-      if (!changed) return { ok: true, list: merged, changed: false };
-      return push(merged).then(function () { return { ok: true, list: merged, changed: true }; });
+      const before = JSON.stringify(merge(local || [], []));      /* 本机（规范化 + 排序） */
+      const merged = merge(local || [], p.list);                  /* 本机 + 云端 */
+      const changed = JSON.stringify(merged) !== before;          /* 本机列表被云端补齐/更新 → 调用方要落盘 + 重绘 */
+      const cloud = JSON.stringify(merge(p.list || [], []));      /* 云端（规范化 + 排序） */
+      const needPush = JSON.stringify(merged) !== cloud;          /* ★ 修复141：跟云端比，不是跟 local 比 */
+      if (!needPush) return { ok: true, list: merged, changed: changed };
+      return push(merged).then(function (ok) {
+        return { ok: ok !== false, list: merged, changed: changed, pushed: ok !== false };
+      });
     });
   }
   /* ---------- ②b 公开读取（★ 修复95：访客没有 Token 也能看到大家的反馈）----------
