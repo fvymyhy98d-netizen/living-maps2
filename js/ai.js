@@ -758,6 +758,18 @@ W.LMAI = (function () {
   const MODE_KEY = 'lm_ai_mode_v1';
   /* ★ 修复125：本机模型（可选，跑在自己电脑的显卡上）—— 只有用户自己配过才出现 */
   function llmReady() { return !!(W.LMOllama && W.LMOllama.ready && W.LMOllama.ready()); }
+  /* ★ 修复126：打开面板时**自动探一次**本机模型服务（每种最多 1.2 秒、失败静默；一次会话只探一次）。
+     探到就把「检测到 Ollama · qwen2.5:7b · 点此启用」摆出来 —— 一按就接管，不用手填地址。 */
+  let llmProbed = false, llmFound = null;
+  function probeLLM() {
+    if (llmProbed || llmReady() || !W.LMOllama || typeof W.LMOllama.autoDetect !== 'function') return;
+    llmProbed = true;
+    try {
+      W.LMOllama.autoDetect().then(function (r) {
+        if (r && r.ok && r.ep && r.model) { llmFound = r; renderPanel(); }
+      }, function () { /* 没有就没有，静默（不给用户任何打扰） */ });
+    } catch (e) { /* noop */ }
+  }
   function aiMode() {
     try {
       const m = localStorage.getItem(MODE_KEY);
@@ -955,6 +967,10 @@ W.LMAI = (function () {
       + '<div class="lm-ai-row">'
       + '<button class="btn lm-ai-paste" type="button" title="在 DeepSeek 网页里选中回答复制，粘回这里保存进对话">📥 粘回回答</button>'
       + '<button class="btn lm-llm-cfg" type="button" title="可选：接你自己电脑上的 Ollama 模型（用显卡跑，只跟本机通信）">⚙ 接本机模型</button>'
+      /* ★ 修复126：自动探测到的本机模型 —— 一键接管（只在本页出现，不会打扰别的访客） */
+      + (llmFound && !llmReady()
+        ? '<button class="btn lm-llm-use" type="button" title="点一下就用它：只在本机通信，不经过任何服务器">🧠 检测到 ' + esc(llmFound.ep.name) + ' · ' + esc(llmFound.model) + ' · 点此启用</button>'
+        : '')
       + '<button class="btn lm-ai-clear" type="button" title="清空这一页的对话">🗑 清空</button>'
       + '</div>'
       + '<div class="lm-ai-pastebox" hidden><textarea class="lm-ai-pasteta" placeholder="把 DeepSeek 的回答粘到这里（Ctrl/⌘+V），再点「保存到对话」"></textarea>'
@@ -1173,6 +1189,26 @@ W.LMAI = (function () {
       if (window.LMApp && LMApp.toast) LMApp.toast('已清空这一页的对话');
       renderPanel();
     });
+    /* ★ 修复126：把「检测到 XXX」那个按钮点掉 → 自动接上并切成这个模式，不用填任何东西 */
+    const llmUse = body.querySelector('.lm-llm-use');
+    if (llmUse) llmUse.addEventListener('click', function () {
+      if (!W.LMOllama || typeof W.LMOllama.autoConnect !== 'function') return;
+      if (ans) ans.innerHTML = '<p class="lm-ai-tip">正在接上本机模型（只跟 127.0.0.1 通信）…</p>';
+      W.LMOllama.autoConnect().then(function (r) {
+        llmProbed = true;
+        if (r && r.ok) {
+          llmFound = null;
+          setAiMode('ollama');
+          if (window.LMApp && LMApp.toast) LMApp.toast('✅ 已接上本机模型 ' + r.model + '（在你电脑上跑）');
+          renderPanel();
+          return;
+        }
+        if (ans) ans.innerHTML = '<p class="lm-ai-tip">没能自动接上（服务可能在启动 / 没放行跨域）。点「⚙ 接本机模型」手动确认一下。</p>';
+      }, function () {
+        if (ans) ans.innerHTML = '<p class="lm-ai-tip">没能自动接上。点「⚙ 接本机模型」手动确认一下。</p>';
+      });
+    });
+    probeLLM();          /* 第一次打开面板时顺手探一下（没有本机服务就什么都不发生） */
   }
   /* ★ 修复119：手机上面板打开时锁住背景滚动。
      直接给 body 加 overflow:hidden 在 iOS 上会把页面位置顶掉（关掉后跳回顶部），

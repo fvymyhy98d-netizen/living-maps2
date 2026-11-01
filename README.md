@@ -1246,3 +1246,24 @@ node tools/train_lm.js 5          # 指定阶数（1-5）
 
 **回归（修复125）**：`node --check`（ai / ai-ollama / app / test_yjs）通过；`test_yjs.js` **433/433**（新增 3 条：用真实 `data/content.js` 真跑「`tokens('主要问题')` 为空但仍命中『主要问题与典型任务』且带回邻句」+「`紫砂壶怎么养` 仍必须是 0 条」、源码层兜底与空结果要点、`ai-ollama.js` 只连本机 + 白名单 + 无 Key + CSP + 面板接入；另修 `问答升级7` 里针对旧单行 `aiMode` 的结构断言）；`test_comments.js` 9/9、`test_collab.js` 9/9、`test_marks.js` 25/25、`test_hist.js` 15/15、`test_yield.js` PASS。
 
+
+**v126（本机模型：自动识别 · 一键启用 · 网页内下载 · 隐私开关）**
+
+先正面回答四个问题（这一版就是把它们做出来）：
+
+| 你问的 | 能不能 | 怎么做的 / 边界在哪 |
+|---|---|---|
+| 别人的电脑有独显、也有本地模型，网站能自动识别并接上吗 | **能**——前提是对方已经装好服务，并让服务放行本站跨域 | 打开「提问」面板时自动探 7 个约定端口：Ollama `11434`、LM Studio `1234`、llama.cpp `8080`、KoboldCpp `5001`、vLLM `8000`、text-generation-webui `5000`、Jan `1337`。读到模型清单就自动挑最合适的一个，面板上出现「🧠 检测到 Ollama · qwen2.5:7b · 点此启用」，一按接管。**浏览器不允许网页扫端口/枚举进程**，所以只认这些众所周知的口子；对方服务没启动、或没设 `OLLAMA_ORIGINS`，就探不到 |
+| 有显卡但没模型，下载一定要手动吗 | **不用**——前提是本机已有 Ollama | 设置面板加了「⬇ 下载推荐模型」：直接调 Ollama 的 `POST /api/pull`，流式显示进度（manifest → 分片 → 百分比）。**装 Ollama 本身网页做不到**（浏览器不能装软件），那一步还得手动装一次 |
+| 本机敏感信息会不会泄露 | **请求不出本机** | 地址白名单只认 `127.0.0.1 / localhost / [::1]`；CSP 只放行 `http://127.0.0.1:*`、`http://localhost:*`；不存 Key。新增**隐私开关**：选「只发我的问题」时**完全不附页面正文**（已实测请求体里没有正文标记）。网页也读不到你的文件、进程、显存 |
+| 本机不是本来就有模型吗 | **没有** | 实测这台机器：`%LOCALAPPDATA%\Programs\Ollama`、`~\.ollama`、LM Studio / Jan / GPT4All / KoboldCpp 全都不存在，`11434/1234/8080/5001/8000/5000/1337` 七个端口全空。**有 5060 只代表"跑得动"，模型文件（几个 GB）还得先有** |
+
+改动清单：
+
+- `js/ai-ollama.js`：`ENDPOINTS`（7 个本机服务）＋ `detect()`（并行探测、1.2 秒超时、连不上静默）＋ `pickBest()`（优先 qwen2.5 / llama3.x / instruct，避开 embedding 和 30B+）＋ `autoDetect()` / `autoConnect()`（一键接管）＋ `pull()`（网页内下载＋进度）＋ `gpu()` / `suggest()`（按显卡型号粗估该下多大）＋ `ask()` 同时支持 **Ollama 原生** 与 **OpenAI 兼容**（`/v1/chat/completions` 的 SSE 流）。
+- `js/ai.js`：面板打开时 `probeLLM()` 自动探一次（一次会话只探一次、失败静默），探到才显示「点此启用」；`aiMode()` 增加第三种模式 `ollama`（关掉本机模型会自动退回「本站速答」）。
+- 设置面板：打开即自动识别（列成「Ollama · 11434（3 个模型）」这样的按钮，点一下填入）、一键检测并启用、测试连接、下载推荐模型、隐私范围单选、「我该用多大的模型？」。
+- `index.html`：CSP 的 `connect-src` 从两个固定端口放宽到 `http://127.0.0.1:* http://localhost:*`（依然只限本机回环）；资源版本 `?v=126`（22 处）。
+
+**回归（修复126）**：`node --check`（ai / ai-ollama / app / test_yjs）通过；`test_yjs.js` **434/434**（新增 1 条：7 个端口、`detect/autoConnect/pull/gpu/suggest` 存在性、`pickBest` 真跑、`/api/pull` 与 `/v1/chat/completions`、隐私字段、`probeLLM`/`lm-llm-use`/`setAiMode('ollama')`、`ai.js` 仍 0 处 fetch、CSP 新写法与 `?v=126`；`修复125` 里写死版本号的两处断言改成版本无关）；另用桩 fetch + 假 localStorage 真跑 9 项：探测出 2 个服务、一键接管选中 `qwen2.5:7b-instruct-q4_K_M`、下载进度 0→25→100→完成、OpenAI SSE 与 Ollama NDJSON 都能解析、`scope=question` 时请求体里确实没有正文标记、Node 里 `gpu()` 安静返回 `none`、外网地址 `setCfg` 被拒。其它套件：comments 9/9、collab 9/9、marks 25/25、hist 15/15、yield PASS。
+

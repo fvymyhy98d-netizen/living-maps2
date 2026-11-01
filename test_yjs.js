@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=125 · LM_ASSET_VER=125',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=126 · LM_ASSET_VER=126',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=124/g) || []).length === 0 && /\?v=125/.test(html)
-      && /LM_ASSET_VER = '125'/.test(appJs));
+      && (html.match(/\?v=125/g) || []).length === 0 && /\?v=126/.test(html)
+      && /LM_ASSET_VER = '126'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3837,8 +3837,8 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
           && oll.ALLOW.test('http://127.0.0.1:11434') && oll.ALLOW.test('http://localhost:11434/')
           && !oll.ALLOW.test('https://evil.example.com')
           && oll.pickModel(['llama3:8b', 'qwen2.5:7b-instruct-q4_K_M'], 'qwen2.5:7b') === 'qwen2.5:7b-instruct-q4_K_M'
-          && html.indexOf('js/ai-ollama.js?v=125') > 0
-          && html.indexOf("connect-src 'self' http://127.0.0.1:11434 http://localhost:11434") > 0
+          && /js\/ai-ollama\.js\?v=\d+/.test(html)
+          && html.indexOf("connect-src 'self' http://127.0.0.1:* http://localhost:*") > 0
           && a.indexOf('fetch(') < 0                                  /* ai.js 仍然 0 处 fetch */
           && a.indexOf("if (aiMode() === 'ollama') { runLLM(q); return; }") > 0
           && a.indexOf('W.LMOllama.openSettings(function () { renderPanel(); })') > 0
@@ -3846,10 +3846,37 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       } catch (e) { return false; }
     })());
 
-  T('版本已升到 125（?v=125 共 22 处 · v124 无残留 · LM_ASSET_VER=125）',
-    (html.match(/\?v=125/g) || []).length === 22 && (html.match(/\?v=124/g) || []).length === 0
-      && /LM_ASSET_VER = '125'/.test(appJs),
-    'v125=' + (html.match(/\?v=125/g) || []).length + ' v124=' + (html.match(/\?v=124/g) || []).length);
+  /* —— ★ 修复126：本机模型「自动识别 / 一键启用 / 网页内下载」 —— */
+  T('修复126 · 本机模型：自动识别 7 个约定端口 + 一键启用 + 网页内下载(/api/pull) + 兼容 OpenAI 协议 + 显卡估算 + 隐私范围',
+    (function () {
+      try {
+        const o = srcOf('js/ai-ollama.js');
+        const a = srcOf('js/ai.js');
+        const oll = require(path.join(DIR, 'js/ai-ollama.js'));
+        const ports = oll.ENDPOINTS.map(function (e) { return String(e.base).replace(/.*:/, ''); });
+        const want = ['11434', '1234', '8080', '5001', '8000', '5000', '1337'];
+        return ports.length === 7
+          && want.every(function (p) { return ports.indexOf(p) >= 0; })
+          && typeof oll.detect === 'function' && typeof oll.autoDetect === 'function'
+          && typeof oll.autoConnect === 'function' && typeof oll.pull === 'function'
+          && typeof oll.gpu === 'function' && oll.suggest('high') === 'qwen2.5:7b'
+          && oll.suggest('mid') === 'qwen2.5:3b' && oll.suggest('low') === 'qwen2.5:1.5b'
+          && oll.pickBest(['bge-m3:latest', 'qwen2.5:7b-instruct', 'llama3:70b']) === 'qwen2.5:7b-instruct'
+          && oll.gpu().tier === 'none'                       /* Node 里没有 document → 必须安静地报 none */
+          && o.indexOf("'/api/pull'") > 0
+          && o.indexOf("'/v1/chat/completions'") > 0
+          && o.indexOf('lmLlmScope') > 0 && o.indexOf("scope: 'page'") > 0
+          && o.indexOf('OLLAMA_ORIGINS') > 0
+          && a.indexOf('function probeLLM()') > 0 && a.indexOf('lm-llm-use') > 0
+          && a.indexOf("setAiMode('ollama')") > 0
+          && a.indexOf('fetch(') < 0;                        /* ai.js 仍然 0 处 fetch */
+      } catch (e) { return false; }
+    })());
+
+  T('版本已升到 126（?v=126 共 22 处 · v125 无残留 · LM_ASSET_VER=126）',
+    (html.match(/\?v=126/g) || []).length === 22 && (html.match(/\?v=125/g) || []).length === 0
+      && /LM_ASSET_VER = '126'/.test(appJs),
+    'v126=' + (html.match(/\?v=126/g) || []).length + ' v125=' + (html.match(/\?v=125/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
