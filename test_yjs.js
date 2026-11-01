@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=133 · LM_ASSET_VER=133',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=134 · LM_ASSET_VER=134',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=132/g) || []).length === 0 && /\?v=133/.test(html)
-      && /LM_ASSET_VER = '133'/.test(appJs));
+      && (html.match(/\?v=133/g) || []).length === 0 && /\?v=134/.test(html)
+      && /LM_ASSET_VER = '134'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4149,10 +4149,54 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('lm-llm-cfg') > 0 && a.indexOf('lm-llm-use') > 0;
     })());
 
-  T('版本已升到 133（?v=133 共 22 处 · v132 无残留 · LM_ASSET_VER=133）',
-    (html.match(/\?v=133/g) || []).length === 22 && (html.match(/\?v=132/g) || []).length === 0
-      && /LM_ASSET_VER = '133'/.test(appJs),
-    'v133=' + (html.match(/\?v=133/g) || []).length + ' v132=' + (html.match(/\?v=132/g) || []).length);
+  /* —— ★ 修复134：思考框粘底跟随（DeepSeek 式）/ 「根据本页内容回答」勾选 / 提示词双模式 —— */
+  T('修复134 · 提示词双模式真跑：勾页面时页外问题也照答（并要求标注通用知识）· 不勾时正文一个字都不带',
+    (function () {
+      const oll = require(path.join(DIR, 'js/ai-ollama.js'));
+      const o = srcOf('js/ai-ollama.js');
+      const dg = '领域地图：提示工程86票，RAG 72票。';
+      const pg = oll.userMsg({ scope: 'page' }, '高等数学是什么', dg);
+      const qs = oll.userMsg({ scope: 'question' }, '高等数学是什么', dg);
+      return pg.indexOf('【页面内容（已提供，共 ' + dg.length + ' 字）】') === 0
+        && pg.indexOf(dg) > 0 && pg.indexOf('【我的问题】') > 0
+        && qs.indexOf('【本次没有提供页面内容】') === 0
+        && qs.indexOf('领域地图') < 0                     /* ★ 不勾 → 正文完全不出现在请求里 */
+        && qs.indexOf('高等数学是什么') > 0
+        && o.indexOf('以下是通用知识，本页没提到') > 0     /* SYS 教它标注，而不是拒答 */
+        && o.indexOf('不要因为页面没写就拒答') > 0
+        && o.indexOf('绝对不要回答') > 0                   /* v131 的护栏还在 */
+        && o.indexOf('几乎没有可提取的文字') > 0;
+    })());
+
+  T('修复134 · 勾选框「根据本页内容回答」：只在本机模式显示 · 点一下写进 cfg.scope · 提示语跟着变',
+    (function () {
+      const a = srcOf('js/ai.js');
+      const c = srcOf('css/style.css');
+      return a.indexOf('lm-ai-scopeck') > 0
+        && a.indexOf("setCfg({ scope: on ? 'page' : 'question' })") > 0
+        && a.indexOf('function llmScope()') > 0
+        && a.indexOf("(mode === 'ollama' && llmReady()") > 0
+        && a.indexOf('只问问题，不发送本页内容') > 0
+        && a.indexOf('没勾「根据本页内容回答」') > 0        /* 答案下面那行小字同步改口径 */
+        && c.indexOf('.lm-ai-scope{') > 0 && c.indexOf('.lm-ai-scope input{') > 0;
+    })());
+
+  T('修复134 · 思考框粘底跟随：更新后滚到底 · 用户上滚就停手 · 回底恢复（对话区同理）',
+    (function () {
+      const a = srcOf('js/ai.js');
+      const c = srcOf('css/style.css');
+      return a.indexOf('chatStick') > 0 && a.indexOf('thkStick') > 0
+        && a.indexOf('tbd.scrollTop = tbd.scrollHeight') > 0
+        && a.indexOf('if (chatStick) { try { chatBox.scrollTop = chatBox.scrollHeight;') > 0
+        && a.indexOf('thkTouch') > 0
+        && a.indexOf("classList.contains('lm-ai-thk-bd')") > 0
+        && c.indexOf('.lm-ai-thk.live .lm-ai-thk-bd{max-height:220px') > 0;
+    })());
+
+  T('版本已升到 134（?v=134 共 22 处 · v133 无残留 · LM_ASSET_VER=134）',
+    (html.match(/\?v=134/g) || []).length === 22 && (html.match(/\?v=133/g) || []).length === 0
+      && /LM_ASSET_VER = '134'/.test(appJs),
+    'v134=' + (html.match(/\?v=134/g) || []).length + ' v133=' + (html.match(/\?v=133/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

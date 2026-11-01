@@ -1246,7 +1246,16 @@ body.mobile-view .kid-pick{max-height:34vh}
 .lm-ai-thk[open]>summary::before{transform:rotate(90deg)}
 .lm-ai-thk-bd{max-height:150px;overflow:auto;overscroll-behavior:contain;padding:0 9px 7px;font-size:12px;line-height:1.55;color:var(--text2);word-break:break-word}
 .lm-ai-thk.live>summary{color:#7a5cff}
+/* ★ 修复134：思考时框子给高一点（220px），并让它自己粘底跟随（JS 里做），
+   你会看到字一直在长、视口一直在最底下 —— 和 DeepSeek 一样，不会永远停在开头。 */
+.lm-ai-thk.live .lm-ai-thk-bd{max-height:220px;scroll-behavior:auto}
 .lm-ai-stream p{white-space:pre-wrap}
+/* ★ 修复134：输入框下面那个「根据本页内容回答」勾选 —— 不勾就只发问题，可以随便查别的 */
+.lm-ai-scope{display:flex;align-items:flex-start;gap:7px;margin:8px 0 0;padding:7px 9px;border-radius:10px;background:rgba(0,113,227,.05);border:1px solid rgba(0,113,227,.14);cursor:pointer;font-size:12.5px;color:var(--text);line-height:1.35;transition:background .15s}
+.lm-ai-scope:hover{background:rgba(0,113,227,.09)}
+.lm-ai-scope input{width:15px;height:15px;margin:1px 0 0;flex:none;accent-color:var(--blue);cursor:pointer}
+.lm-ai-scope span{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.lm-ai-scope em{font-style:normal;font-size:11px;color:var(--text2)}
 /* 没接本机模型时那一格：淡一点，但**仍然在**（点了会告诉你怎么配） */
 .lm-ai-mode.off{opacity:.75}
 .lm-ai-mode.off em{color:#b26a00}
@@ -1373,6 +1382,8 @@ body.lm-lock{position:fixed;left:0;right:0;width:100%;overflow:hidden}
   .lm-ai-sizemenu{top:46px;right:8px;width:172px}
   .lm-ai-threads{top:46px;left:8px;right:8px;max-height:calc(100% - 56px)}
   .lm-ai-thk-bd{max-height:120px}
+  .lm-ai-thk.live .lm-ai-thk-bd{max-height:160px}
+  .lm-ai-scope{margin-top:6px;padding:6px 8px;font-size:12px}
 }
 @media (max-width:560px){
   .lm-ai-head .lm-ai-badge{display:none}     /* 窄屏先让位给三个按钮 */

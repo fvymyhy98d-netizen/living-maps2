@@ -879,6 +879,14 @@ W.LMAI = (function () {
   const MODE_KEY = 'lm_ai_mode_v1';
   /* ★ 修复125：本机模型（可选，跑在自己电脑的显卡上）—— 只有用户自己配过才出现 */
   function llmReady() { return !!(W.LMOllama && W.LMOllama.ready && W.LMOllama.ready()); }
+  /* ★ 修复134：这一问要不要带本页正文 —— 就是设置里的 scope；输入框下面那个勾选框直接改它。
+     默认带（page）；用户取消勾选＝只发问题，想查别的就查别的。 */
+  function llmScope() {
+    try {
+      const c = (W.LMOllama && W.LMOllama.cfg && W.LMOllama.cfg()) || {};
+      return c.scope !== 'question';
+    } catch (e) { return true; }
+  }
   /* ★ 修复126：打开面板时**自动探一次**本机模型服务（每种最多 1.2 秒、失败静默；一次会话只探一次）。
      探到就把「检测到 Ollama · qwen2.5:7b · 点此启用」摆出来 —— 一按就接管，不用手填地址。 */
   let llmProbed = false, llmFound = null;
@@ -1212,7 +1220,9 @@ W.LMAI = (function () {
     const mode = aiMode();
     /* ★ 修复110：聊天框上方一个切换键 —— 默认「本站速答」 */
     const ph = mode === 'local' ? '问点什么…（回车即可，只用本站内容）'
-      : (mode === 'ollama' ? '问点什么…（会把本页正文交给本机模型）' : '问点什么…（会自动附上本页正文）');
+      : (mode === 'ollama'
+        ? (llmScope() ? '问点什么…（会把本页正文交给本机模型）' : '问点什么…（只问问题，不发送本页内容）')
+        : '问点什么…（会自动附上本页正文）');
     const goLabel = mode === 'local' ? '问一句' : (mode === 'ollama' ? '问本机模型' : '发给 DeepSeek');
     h += '<div class="lm-ai-modes" role="tablist" aria-label="问答模式">'
       + '<button type="button" class="lm-ai-mode' + (mode === 'local' ? ' on' : '') + '" data-mode="local" role="tab" aria-selected="' + (mode === 'local') + '">'
@@ -1227,6 +1237,14 @@ W.LMAI = (function () {
       + '</div>';
     h += '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="' + ph + '" aria-label="提问">'
       + '<button class="btn btn-primary lm-ai-go" type="button">' + goLabel + '</button></div>'
+      /* ★ 修复134：一个直观的勾选 —— 勾上＝把这页正文一起发给本机模型；不勾＝只发问题（可以随便查别的）。
+         只在本机模型模式下出现：本站速答只用站内内容，DeepSeek 走的是复制粘贴那一套。 */
+      + (mode === 'ollama' && llmReady()
+        ? '<label class="lm-ai-scope" title="勾上：回答时以这一页为准；不勾：只发你的问题，可以问任何东西">'
+          + '<input type="checkbox" class="lm-ai-scopeck"' + (llmScope() ? ' checked' : '') + '>'
+          + '<span>根据本页内容回答<em>' + (llmScope() ? '会把这页正文一起发给本机模型' : '只发你的问题，不碰这一页') + '</em></span>'
+          + '</label>'
+        : '')
       + '<div class="lm-ai-row">'
       + '<button class="btn lm-ai-paste" type="button" title="在 DeepSeek 网页里选中回答复制，粘回这里保存进对话">📥 粘回回答</button>'
       + '<button class="btn lm-llm-cfg" type="button" title="可选：接你自己电脑上的 Ollama 模型（用显卡跑，只跟本机通信）">⚙ 接本机模型</button>'
@@ -1352,13 +1370,25 @@ W.LMAI = (function () {
       const chatBox = panel.querySelector('.lm-ai-chat');
       let streamEl = null;
       let thinkTxt = '';
-      /* ★ 修复133：流式内容画在**对话区**里（以前画在输入框下面那块 .lm-ai-ans，面板一滚就看不见了）。
-         思考过程在气泡上方浅色实时打，正文在下面跟着长；思考完自动收起，点标题还能展开。 */
+      /* ★ 修复134：DeepSeek 式「跟随」—— 只在你本来就停在底部时才自动往下滚。
+         你手动往上翻（想看前面写了什么），就立刻停止跟随、不再抢你的滚动位置；
+         重新滚到底部，跟随自动恢复。思考框内部也是同一套规则。 */
+      let chatStick = true, thkStick = true, thkTouch = 0;
+      if (chatBox) chatBox.addEventListener('scroll', function () {
+        chatStick = (chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight) < 32;
+      }, { passive: true });
       const drawLive = function (txt, think) {
         if (!chatBox) return;
         if (!streamEl || streamEl.parentNode !== chatBox) {
           streamEl = document.createElement('div');
           streamEl.className = 'lm-ai-msg ollama lm-ai-stream';
+          /* 思考框的滚动事件不冒泡，用 capture 接住；程序自己滚动的那一下不算「用户上滚」 */
+          streamEl.addEventListener('scroll', function (e) {
+            const b = e.target;
+            if (!b || !b.classList || !b.classList.contains('lm-ai-thk-bd')) return;
+            if (Date.now() - thkTouch < 220) return;
+            thkStick = (b.scrollHeight - b.scrollTop - b.clientHeight) < 24;
+          }, true);
           chatBox.appendChild(streamEl);
         }
         let s = '';
@@ -1370,7 +1400,13 @@ W.LMAI = (function () {
         if (txt) s += '<p>' + esc(String(txt)).replace(/\n/g, '<br>') + '</p>';
         if (!think && !txt) s += '<p class="lm-ai-tip">正在读这一页…（' + esc(model) + '，首次加载会慢几秒）</p>';
         streamEl.innerHTML = '<span class="lm-ai-who">🧠 本机模型（你的显卡）</span>' + s;
-        try { chatBox.scrollTop = chatBox.scrollHeight; } catch (eS) { /* noop */ }
+        /* 思考框：粘底（重建 DOM 会把滚动位置归零，所以每次更新都拉回底部） */
+        const tbd = streamEl.querySelector('.lm-ai-thk-bd');
+        if (tbd && thkStick && tbd.scrollHeight > tbd.clientHeight) {
+          thkTouch = Date.now();
+          try { tbd.scrollTop = tbd.scrollHeight; } catch (eT) { /* noop */ }
+        }
+        if (chatStick) { try { chatBox.scrollTop = chatBox.scrollHeight; } catch (eS) { /* noop */ } }
       };
       drawLive('', '');
       W.LMOllama.ask(q, digest, function (txt, final, think) {
@@ -1409,7 +1445,7 @@ W.LMAI = (function () {
       try {
         const i = (W.LMOllama.lastAsk && W.LMOllama.lastAsk()) || null;
         if (!i) return '';
-        if (i.scope === 'question') return '本次只发了你的问题（设置里选了「只发我的问题」）';
+        if (i.scope === 'question') return '本次只发了你的问题（没勾「根据本页内容回答」）';
         return '本次已附本页正文 ' + i.pageChars + ' 字'
           + (i.history ? ' + 上文 ' + Math.ceil(i.history / 2) + ' 轮' : ' + 无上文（第一问）')
           + ' · 上限 ' + i.maxTok + ' tokens';
@@ -1531,6 +1567,17 @@ W.LMAI = (function () {
       }, function () {
         if (ans) ans.innerHTML = '<p class="lm-ai-tip">没能自动接上。点「⚙ 接本机模型」手动确认一下。</p>';
       });
+    });
+    /* ★ 修复134：勾选框「根据本页内容回答」—— 点一下就把 scope 存下来，下一次提问立刻生效。
+       勾上＝page（带本页正文）；不勾＝question（只发问题，可以随便查别的）。 */
+    const scopeCk = body.querySelector('.lm-ai-scopeck');
+    if (scopeCk) scopeCk.addEventListener('change', function () {
+      const on = !!scopeCk.checked;
+      if (W.LMOllama && typeof W.LMOllama.setCfg === 'function') W.LMOllama.setCfg({ scope: on ? 'page' : 'question' });
+      if (window.LMApp && LMApp.toast) {
+        LMApp.toast(on ? '好，之后回答会以这一页为准（正文一起发）' : '好，之后只发你的问题（不碰这一页，可以随便查别的）');
+      }
+      renderPanel();
     });
     probeLLM();          /* 第一次打开面板时顺手探一下（没有本机服务就什么都不发生） */
   }
