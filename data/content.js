@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793532785101,
+      "syncTs": 1793547842003,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -194,7 +194,7 @@ window.SITE_CONTENT = {
             ],
             [
               "Transformer",
-              "目前==主流的模型结构，核心是注意力机制==",
+              "目前主流的模型结构，核心是注意力机制",
               "GPT 系列、LLaMA 系列"
             ],
             [
