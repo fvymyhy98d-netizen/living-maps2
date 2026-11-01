@@ -991,12 +991,31 @@ window.LMEditor = (function () {
      ★ 修复㊸（彻查回归）：触屏指针有隐式捕获 —— 按下后滑出再松手，pointerup 仍派发到按下元素，
      旧写法会把「滑开取消」误判成点击；现在 pointerdown 也必须落在把手上才算一次有效开合 */
   var ebToggleDown = false;
+  /* ★ 修复142（手机点工具栏「展开」会顺手点到工具条里的按钮）：
+     把手是在 pointerup 里展开的 —— 工具条立刻铺开在手指下面，而浏览器紧接着还会按
+     **同一个坐标**补发一个合成 click。命中测试发生在 click 派发那一刻，于是这一下就落到
+     刚出现的按钮上（现场表现：点 ⌨️ 展开，顺手把 ↶ 撤销 / B 加粗 / 字号下拉点掉了）。
+     处方：开合之后 350ms 内**只吞一次** click，且在捕获阶段就掐掉 —— 工具条按钮、块选中、
+     字号下拉、⚙ 面板一个都收不到。手动再点是新的 pointerdown，不受影响。 */
+  var ebSwallowClick = 0;
+  document.addEventListener('click', function (e) {
+    if (!ebSwallowClick) return;
+    if (Date.now() > ebSwallowClick) { ebSwallowClick = 0; return; }
+    ebSwallowClick = 0;                       /* 只吞一次：多吞会吃掉用户真正的那一下 */
+    try {
+      e.preventDefault(); e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    } catch (eS) { /* noop */ }
+  }, true);
   document.addEventListener('pointerdown', function (e) {
     ebToggleDown = !!(e.target && e.target.closest && e.target.closest('#editBar .eb-toggle'));
   }, true);
   document.addEventListener('pointerup', function (e) {
     const tg = e.target.closest ? e.target.closest('#editBar .eb-toggle') : null;
-    if (tg && ebToggleDown) { tbSetOpen(!tg.closest('#editBar').classList.contains('open')); } /* ★ 修复79 */
+    if (tg && ebToggleDown) {
+      ebSwallowClick = Date.now() + 350;   /* ★ 修复142：吞掉紧跟着的这一次合成 click */
+      tbSetOpen(!tg.closest('#editBar').classList.contains('open')); /* ★ 修复79 */
+    }
     ebToggleDown = false;
   });
   /* ★ 修复㊶：手机键入时的「✕ 退出键入」红钮 —— 键盘弹出后想收键盘，点空白处极易误触其他块；

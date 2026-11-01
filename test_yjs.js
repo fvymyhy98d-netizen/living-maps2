@@ -198,8 +198,8 @@ T('上线/断线提示统一走设备状态机：上线 / 断线 / 已退出页�
     && col.indexOf('const gonePeers = [];') < 0);
 T('Toast 手机端不遮屏：宽度上限 min(86vw, 420px)，多行圆角 14px',
   fs.readFileSync(path.join(DIR, 'css/style.css'), 'utf8').indexOf('max-width:min(86vw,420px)') > 0);
-T('409 冲突尾随重推：拉最新后 6 秒重试一次（防最后一笔只留本机），防覆盖守卫仍然生效',
-  col.indexOf('GH._409T') > 0 && col.indexOf('}, 6000);') > 0);
+T('409 冲突尾随重推：拉最新后 0.9 秒重试一次（★ 修复142 从 6 秒收紧），且这一笔不算「上次推送时刻」',
+  col.indexOf('GH._409T') > 0 && col.indexOf('}, 900);') > 0 && col.indexOf('GH.lastPush = 0;') > 0);
 
 /* ---------- 9) 并排组：行内拖动不跳 / 取消并排 ---------- */
 const edt2 = srcOf('js/editor.js');
@@ -1982,15 +1982,16 @@ T('editor.js：字号/字体的「取消/同款再点」也换成同一套可见
 /* ---------- 9.53) 修复88：在线协同提速（有人在线自动更快）+ 结构冲突可见化 ---------- */
 console.log('【9.53】修复88：有人在线时轮询/推送自动提速 · 回前台立刻补拉 · 结构冲突不再静默覆盖');
 const cs88 = srcOf('js/collab.js'), ys88 = srcOf('js/ycollab.js');
-T('节奏参数：有人在线 1.2s / 3.5s、独自 2s / 8s、隐藏 60s；推送 2.6s vs 6s；访客前台 25s',
-  cs88.indexOf('var HOT_PUSH_MIN = 2600, HOT_ACTIVE = 1200, HOT_IDLE = 3500, VISITOR_SHOWN = 25000;') > 0
+T('节奏参数：有人在线 1.2s / 2s、独自 1.5s / 4s、隐藏 60s；推送 1.5s vs 4s；访客前台 8s（★ 修复142 收紧）',
+  cs88.indexOf('var HOT_PUSH_MIN = 1500, HOT_ACTIVE = 1200, HOT_IDLE = 2000, VISITOR_SHOWN = 8000;') > 0
+    && cs88.indexOf('var GH_PUSH_MIN = 4000, POLL_ACTIVE = 1500, POLL_IDLE = 4000, POLL_HIDDEN = 60000, POLL_VISITOR = 90000;') > 0
     && cs88.indexOf('function pollGapNow(hidden, act, hot) {') > 0
     && cs88.indexOf('function visitorGapNow(hidden) { return hidden ? POLL_VISITOR : VISITOR_SHOWN; }') > 0
     && cs88.indexOf('function pushWaitMin(hot) { return hot ? HOT_PUSH_MIN : GH_PUSH_MIN; }') > 0);
 T('轮询节拍 2s→600ms（旧版定时器抖动下实际常 4 秒才拉一次），间隔走 pollGapNow',
   cs88.indexOf('const gap = pollGapNow(hidden, act, peersHot());') > 0
     && cs88.indexOf('        }, 600);') > 0);
-T('访客只读轮询不再写死 90 秒：前台 25s / 后台 90s，且同样走 gap 判定',
+T('访客只读轮询不再写死 90 秒：前台 8s（★ 142）/ 后台 90s，且同样走 gap 判定',
   cs88.indexOf("const gap = visitorGapNow(document.visibilityState === 'hidden');") > 0
     && cs88.indexOf('setInterval(ghPull, POLL_VISITOR)') < 0);
 T('切回前台 / 网络恢复立刻补拉 + 立刻重播 presence（手机「回来半天不动」的根因）',
@@ -2015,17 +2016,17 @@ T('diag 里能直接看到当前节奏（现场核对「有人在线是否真的
   let ok = false, detail = '切片不可用';
   if (code) {
     try {
-      const consts = 'var GH_PUSH_MIN=6000,POLL_ACTIVE=2000,POLL_IDLE=8000,POLL_HIDDEN=60000,POLL_VISITOR=90000,'
-        + 'HOT_PUSH_MIN=2600,HOT_ACTIVE=1200,HOT_IDLE=3500,VISITOR_SHOWN=25000;\n';
+      const consts = 'var GH_PUSH_MIN=4000,POLL_ACTIVE=1500,POLL_IDLE=4000,POLL_HIDDEN=60000,POLL_VISITOR=90000,'
+        + 'HOT_PUSH_MIN=1500,HOT_ACTIVE=1200,HOT_IDLE=2000,VISITOR_SHOWN=8000;\n';
       const api = new Function(consts + code + '\nreturn { pollGapNow: pollGapNow, visitorGapNow: visitorGapNow, pushWaitMin: pushWaitMin };')();
       ok = api.pollGapNow(true, false, false) === 60000
         && api.pollGapNow(true, true, true) === 60000
         && api.pollGapNow(false, true, true) === 1200
-        && api.pollGapNow(false, true, false) === 2000
-        && api.pollGapNow(false, false, true) === 3500
-        && api.pollGapNow(false, false, false) === 8000
-        && api.visitorGapNow(false) === 25000 && api.visitorGapNow(true) === 90000
-        && api.pushWaitMin(true) === 2600 && api.pushWaitMin(false) === 6000;
+        && api.pollGapNow(false, true, false) === 1500
+        && api.pollGapNow(false, false, true) === 2000
+        && api.pollGapNow(false, false, false) === 4000
+        && api.visitorGapNow(false) === 8000 && api.visitorGapNow(true) === 90000
+        && api.pushWaitMin(true) === 1500 && api.pushWaitMin(false) === 4000;
       if (!ok) detail = JSON.stringify({
         hide: api.pollGapNow(true, true, true), hotAct: api.pollGapNow(false, true, true),
         soloAct: api.pollGapNow(false, true, false), hotIdle: api.pollGapNow(false, false, true),
@@ -2035,7 +2036,7 @@ T('diag 里能直接看到当前节奏（现场核对「有人在线是否真的
       });
     } catch (e) { ok = false; detail = '抛出 ' + e.message; }
   }
-  T('真跑节奏：隐藏恒 60s · 有人在线 1.2s/3.5s · 独自 2s/8s · 访客 25s/90s · 推送 2.6s/6s', ok, detail);
+  T('真跑节奏：隐藏恒 60s · 有人在线 1.2s/2s · 独自 1.5s/4s · 访客 8s/90s · 推送 1.5s/4s', ok, detail);
 })();
 
 /* 真跑 B：structConflictWarn —— 只有「块数不同 + 本机 _ts 更新」才提醒，且 15 秒去抖 */
@@ -3582,10 +3583,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=141 · LM_ASSET_VER=141',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=142 · LM_ASSET_VER=142',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=140/g) || []).length === 0 && /\?v=141/.test(html)
-      && /LM_ASSET_VER = '141'/.test(appJs));
+      && (html.match(/\?v=141/g) || []).length === 0 && /\?v=142/.test(html)
+      && /LM_ASSET_VER = '142'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4486,10 +4487,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 141（?v=141 共 22 处 · v140 无残留 · LM_ASSET_VER=141）',
-    (html.match(/\?v=141/g) || []).length === 22 && (html.match(/\?v=140/g) || []).length === 0
-      && /LM_ASSET_VER = '141'/.test(appJs),
-    'v141=' + (html.match(/\?v=141/g) || []).length + ' v140=' + (html.match(/\?v=140/g) || []).length);
+  T('版本已升到 142（?v=142 共 22 处 · v141 无残留 · LM_ASSET_VER=142）',
+    (html.match(/\?v=142/g) || []).length === 22 && (html.match(/\?v=141/g) || []).length === 0
+      && /LM_ASSET_VER = '142'/.test(appJs),
+    'v142=' + (html.match(/\?v=142/g) || []).length + ' v141=' + (html.match(/\?v=141/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -4706,6 +4707,154 @@ console.log('【修复141】反馈同步：sync 改成「跟云端比」才推 �
   }
 })();
 
+
+/* ---------- 修复142：手机工具条展开不再穿透点击 · 协同「慢」的两个真环节（节拍 / 推送被吞） ---------- */
+console.log('【修复142】工具条展开穿透 · 热节拍跨设备失效 · 时钟偏差把本机推送全吃掉 · 409 尾随 6s→0.9s');
+
+(function () {
+  /* 注意：仓库里是 CRLF —— 切片 / 多行断言前必须先归一成 \n（与其它小节一致） */
+  const colSrc = srcOf('js/collab.js').replace(/\r\n/g, '\n');
+  const edSrc = srcOf('js/editor.js').replace(/\r\n/g, '\n');
+
+  /* 1) 源码守护：穿透点击 */
+  T('修复142 · 点 ⌨️ 展开时吞掉紧随其后的合成 click（捕获阶段 + 只吞一次 + 350ms 窗口）',
+    edSrc.indexOf('var ebSwallowClick = 0;') > 0
+      && edSrc.indexOf('ebSwallowClick = Date.now() + 350;') > 0
+      && edSrc.indexOf('e.stopImmediatePropagation()') > 0
+      && edSrc.indexOf('/* 只吞一次') > 0);
+
+  /* 2) 源码守护：热节拍的跨设备证据 + 时钟封顶 + 推送记账 */
+  T('修复142 · peersHot 补「跨设备也成立」的证据（云端刚变过 / 花名册里有人），热节拍才真的会生效',
+    colSrc.indexOf('if (GH.lastPullAt && Date.now() - GH.lastPullAt < 120000) return true;') > 0
+      && colSrc.indexOf('const r = roster(), now = Date.now();') > 0);
+  T('修复142 · notePulled：云端版本戳封顶到现在 + 抬高本机发号器（对端时钟快也不饿死本机推送）',
+    colSrc.indexOf('function notePulled(ts) {') > 0
+      && colSrc.indexOf('const t = Math.min(+ts || 0, Date.now() + 1000);') > 0
+      && colSrc.indexOf('if (t > _pubTs) _pubTs = t;') > 0);
+  T('修复142 · bump 同时抬高 _pubTs（nextSyncTs 必大于云端 → 不会再被「先拉不推」吃掉）',
+    colSrc.indexOf('if (ts > (_pubTs || 0)) _pubTs = ts;') > 0);
+  T('修复142 · ghPush 的「云端比我新」分支不再裸 return：记账 + 1.5 秒补推',
+    colSrc.indexOf('wantPush(); kickPush(1500);') > 0
+      && colSrc.indexOf('wantPush(); kickPush(1500);\n      ghPull();') > 0);
+  T('修复142 · diag 能直接看到「云端哪一步」（上次云端变更 / 两端版本戳 / 已应用云端戳）+ 手动 syncNow',
+    colSrc.indexOf('上次云端变更秒前:') > 0 && colSrc.indexOf('syncNow: function () {') > 0);
+
+
+  /* 3) 真跑：工具条开合 —— pointerup 展开 → 紧随其后的合成 click 必须被掐掉，且只掐一次 */
+  (function () {
+    const a = edSrc.indexOf('  var ebSwallowClick = 0;');
+    const b = edSrc.indexOf('  /* ★ 修复㊶', a);
+    let ok = false, detail = '切片不可用 a=' + a + ' b=' + b;
+    if (a >= 0 && b > a) {
+      const handlers = {};
+      const fakeDoc = { addEventListener: function (type, fn, cap) { handlers[type] = { fn: fn, cap: cap }; } };
+      const openCalls = [];
+      try {
+        const api = new Function('document', 'Date', 'tbSetOpen',
+          edSrc.slice(a, b) + '\n  return { get: function () { return ebSwallowClick; } };')(fakeDoc, Date,
+          function (v) { openCalls.push(v); });
+        const bar = { classList: { contains: function () { return false; } } };
+        bar.closest = function () { return bar; };
+        const tg = { closest: function () { return bar; } };
+        handlers.pointerdown.fn({ target: tg });   /* 按在把手上 */
+        handlers.pointerup.fn({ target: tg });     /* 松手 → 展开 */
+        const armed = api.get() > 0;
+        let prevented = 0, stopped = 0, imm = 0;
+        handlers.click.fn({                          /* 第一下：浏览器补发的合成 click → 必须全掐 */
+          preventDefault: function () { prevented++; },
+          stopPropagation: function () { stopped++; },
+          stopImmediatePropagation: function () { imm++; }
+        });
+        const firstEaten = prevented === 1 && stopped === 1 && imm === 1 && api.get() === 0;
+        handlers.click.fn({ preventDefault: function () { prevented++; }, stopPropagation: function () { stopped++; } });
+        const secondPass = prevented === 1 && stopped === 1;   /* 第二下：用户真正的那一点必须放行 */
+        ok = handlers.click.cap === true && armed && openCalls.length === 1 && openCalls[0] === true
+          && firstEaten && secondPass;
+        if (!ok) detail = JSON.stringify({ cap: handlers.click.cap, armed: armed, openCalls: openCalls, firstEaten: firstEaten, secondPass: secondPass });
+      } catch (e) { ok = false; detail = '抛出 ' + e.message; }
+    }
+    T('修复142（真跑）· 展开那一击不会落到工具条按钮上，紧接着的真点击照常生效', ok, detail);
+  })();
+
+  /* 4) 真跑：时钟偏差 —— 旧版把本机每一笔都判「云端更新 → 只拉不发」，新版必须能发出去 */
+  (function () {
+    const bumpA = colSrc.indexOf('  function bump(ts) {');
+    const bumpB = bumpA >= 0 ? colSrc.indexOf('\n  }\n', bumpA) + 4 : -1;
+    const nextA = colSrc.indexOf('  function nextSyncTs() {');
+    const nextB = nextA >= 0 ? colSrc.indexOf('\n  }\n', nextA) + 4 : -1;
+    const noteA = colSrc.indexOf('  function notePulled(ts) {');
+    const noteB = noteA >= 0 ? colSrc.indexOf('\n  }\n', noteA) + 4 : -1;
+    let ok = false, detail = '切片不可用';
+    if (bumpA >= 0 && bumpB > bumpA && nextA >= 0 && nextB > nextA && noteA >= 0 && noteB > noteA) {
+      try {
+        const mk = function (gh) {
+          return new Function('GH', 'localStorage', 'TS_KEY',
+            'var _pubTs = 0, lastTs = 0;\n'
+            + colSrc.slice(bumpA, bumpB) + '\n'
+            + colSrc.slice(nextA, nextB) + '\n'
+            + colSrc.slice(noteA, noteB) + '\n'
+            + 'return { bump: bump, nextSyncTs: nextSyncTs, notePulled: notePulled,'
+            + ' pub: function () { return _pubTs; }, last: function () { return lastTs; } };'
+          )(gh, { setItem: function () {}, getItem: function () { return ''; } }, 'k');
+        };
+        const now = Date.now(), future = now + 40000;   /* 对端时钟快 40 秒 */
+
+        /* —— 旧逻辑（反证）：GH.lastPullTs 原样存 future，发号器不被远端抬高 —— */
+        const oldPub = 0, oldLastPullTs = future;
+        const oldMyTs = (function (pub) { const t = now; return t > pub ? t : pub + 1; })(oldPub);
+        const oldBlocked = oldLastPullTs > oldMyTs;     /* 旧代码在这里裸 return → 本机内容永远上不了云 */
+
+        /* —— 新逻辑：notePulled 把水位封顶 + 抬高发号器 —— */
+        const gh = { lastPullAt: 0, lastPullTs: 0 };
+        const api = mk(gh);
+        api.notePulled(future);
+        const capped = gh.lastPullTs <= Date.now() + 1000 && gh.lastPullAt > 0;   /* 封顶到「此刻+1s」 */
+        const myTs = api.nextSyncTs();
+        const newBlocked = gh.lastPullTs > myTs;        /* 新版必须为 false（这一笔能发） */
+
+        /* —— 常规时钟：云端戳在过去 → 水位 / 发号器只抬不降 —— */
+        const gh2 = { lastPullAt: 0, lastPullTs: 0 };
+        const api2 = mk(gh2);
+        api2.notePulled(now - 5000);
+        api2.bump(now - 4000);
+        const normalOk = api2.nextSyncTs() > now - 5000 && api2.pub() >= now - 4000;
+
+        ok = oldBlocked === true && capped === true && newBlocked === false && normalOk === true;
+        detail = JSON.stringify({ oldBlocked: oldBlocked, capped: capped, newBlocked: newBlocked, normalOk: normalOk, myTsAfter: myTs - now });
+      } catch (e) { ok = false; detail = '抛出 ' + e.message; }
+    }
+    T('修复142（真跑）· 对端时钟快 40 秒：旧逻辑每笔都「只拉不发」，新逻辑戳必大于云端 → 照发', ok, detail);
+  })();
+
+  /* 5) 真跑：peersHot 的四条证据（跨网络 presence 出不了本机时的替补判据） */
+  (function () {
+    const a = colSrc.indexOf('  function peersHot() {');
+    const b = a >= 0 ? colSrc.indexOf('\n  }\n', a) + 4 : -1;
+    let ok = false, detail = '切片不可用';
+    if (a >= 0 && b > a) {
+      try {
+        const mk = function (live, ypeers, lastPullAgoMs, rosterObj) {
+          const fn = new Function('liveCount', 'yPeerCount', 'GH', 'roster', 'me',
+            colSrc.slice(a, b) + '\nreturn peersHot;')(
+            function () { return live; }, function () { return ypeers; },
+            { lastPullAt: lastPullAgoMs < 0 ? 0 : Date.now() - lastPullAgoMs },
+            function () { return rosterObj; }, { id: 'me' });
+          return fn();     /* ★ 注意：new Function 返回的是 peersHot 本身，要再调一次 */
+        };
+        const hotByCloud = mk(1, 0, 5000, {}) === true;                                   /* 云端 5 秒前变过 */
+        const hotByRoster = mk(1, 0, -1, { p1: { lastSeen: Date.now() - 9000 } }) === true; /* 花名册里有人 */
+        const coldAll = mk(1, 0, -1, { p1: { lastSeen: Date.now() - 600000 } }) === false;  /* 全过期 → 冷 */
+        const hotByYjs = mk(1, 2, -1, {}) === true;                                       /* Yjs 真连上 */
+        ok = hotByCloud && hotByRoster && coldAll && hotByYjs;
+        if (!ok) detail = JSON.stringify({ hotByCloud: hotByCloud, hotByRoster: hotByRoster, coldAll: coldAll, hotByYjs: hotByYjs });
+      } catch (e) { ok = false; detail = '抛出 ' + e.message; }
+    }
+    T('修复142（真跑）· peersHot：云端刚变过 / 花名册有活设备 / Yjs 有同伴 任一即热；全都过期 → 冷', ok, detail);
+  })();
+
+  T('修复142 · README 记录「工具条穿透 + 同步慢的三个环节」',
+    srcOf('README.md').indexOf('修复142') > 0);
+})();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
 function finishAll() {

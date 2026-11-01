@@ -23,12 +23,18 @@ window.LMCollab = (function () {
       ROSTER_KEY = 'lm_collab_roster_v1', CHIP_ID = 'collabChip', PANEL_ID = 'collabPanel', MASK_ID = 'banMask';
   var LOCK_TTL = 12000, LOCK_BEAT = 4000, PEER_TTL = 25000;
   var GONE_TTL = 120000; /* ★ 修复73：断线后宽限 2 分钟，还没回来就当它不会再回来，从在线名单移除 */
-  var GH_PUSH_MIN = 6000, POLL_ACTIVE = 2000, POLL_IDLE = 8000, POLL_HIDDEN = 60000, POLL_VISITOR = 90000;
-  /* ★ 修复88：**有人在线就提速** —— 除本机外还有设备在线时：推送防抖 6s→2.6s、活动轮询 2s→1.2s、
-     闲置轮询 8s→3.5s；只有自己一台时保持原节奏（省流量 / 省电 / 省 GitHub 写入）。
-     访客（只读）从前台 90s 提到 25s（raw 请求带 ?t= 破缓存，拿到的就是最新版）。
-     这些数值都能在控制台 LMCollab.diag() 里直接看到，方便现场核对。 */
-  var HOT_PUSH_MIN = 2600, HOT_ACTIVE = 1200, HOT_IDLE = 3500, VISITOR_SHOWN = 25000;
+  var GH_PUSH_MIN = 4000, POLL_ACTIVE = 1500, POLL_IDLE = 4000, POLL_HIDDEN = 60000, POLL_VISITOR = 90000;
+  /* ★ 修复88：**有人在线就提速** —— 除本机外还有设备在线时：推送防抖 4s→1.5s、活动轮询 1.5s→1.2s、
+     闲置轮询 4s→2s；只有自己一台时保持原节奏（省流量 / 省电 / 省 GitHub 写入）。
+     访客（只读）前台 8s（raw 请求带 ?t= 破缓存，拿到的就是最新版）。
+     这些数值都能在控制台 LMCollab.diag() 里直接看到，方便现场核对。
+
+     ★ 修复142（「协同时内容还是不能及时同步」的**节拍**环节）：
+     旧值（独自 6s 推 / 8s 拉、访客 25s）配合下面 peersHot() 的那个洞，等于**永远跑慢挡**：
+     一次保存要 1.2s(编辑器停手) + ≤6s(推送防抖) + ≤8s(对端轮询) ≈ 15 秒才到对面。
+     现在：条件请求命中 304 **不耗** GitHub 额度（只有真变更才计费），所以拉取可以放开到
+     1.2–4 秒；推送只在本机内容真变时发生，最密也就 1.5s 一笔（≈2400 笔/小时，仍在 5000/小时之内）。 */
+  var HOT_PUSH_MIN = 1500, HOT_ACTIVE = 1200, HOT_IDLE = 2000, VISITOR_SHOWN = 8000;
   /* ★ 修复140：退出键入（focusout）/ 切后台 / 关页面 → 无视上面的防抖立刻发一次；
      但留 700ms 硬底，连续点十个框也只发一笔，不会把 GitHub 写入额度打光 */
   var FLUSH_HARD_MIN = 700;
@@ -137,6 +143,12 @@ window.LMCollab = (function () {
     ts = +ts || 0;
     if (ts > Date.now() + 60000) ts = Date.now();
     if (ts > lastTs) { lastTs = ts; try { localStorage.setItem(TS_KEY, String(ts)); } catch (e) { /* noop */ } }
+    /* ★ 修复142：把「本机发号器」顶到见过的最大版本戳之上 ——
+       nextSyncTs() = max(现在, _pubTs + 1)，所以下一次 publish 出来的戳**一定**比云端那份新。
+       旧版只抬 lastTs 不抬 _pubTs：对端时钟快几十秒时，本机每次保存出来的戳都比云端小，
+       ghPush 里的 `GH.lastPullTs > myTs` 守卫就会把**每一笔**都改道成"先拉"，本机内容永远上不了云
+       （现场表现：对方改的能进来，我改的对方几分钟都看不见）。 */
+    if (ts > (_pubTs || 0)) _pubTs = ts;
   }
   function send(msg) {
     msg = msg || {}; msg.t = 'lm1'; msg.from = me.id; msg.name = me.name; msg.fp = me.fp; msg.ts = Date.now();
@@ -703,9 +715,25 @@ window.LMCollab = (function () {
     try { return (window.LMYCollab && window.LMYCollab.peerCount) ? (+window.LMYCollab.peerCount() || 0) : 0; } catch (e) { return 0; }
   }
   /* ---------- ★ 修复88：协同节奏（纯函数，test_yjs 直接提取验数字） ---------- */
-  /* 场上是否「不止我这一台」：Yjs awareness 或旧通道设备状态机任一判断出来就算 */
+  /* 场上是否「不止我这一台」：Yjs awareness / 旧通道设备状态机 / 云端刚变过 / 花名册 任一判断出来就算 */
   function peersHot() {
-    try { return liveCount() > 1 || yPeerCount() > 0; } catch (e) { return false; }
+    try {
+      if (liveCount() > 1 || yPeerCount() > 0) return true;
+      /* ★ 修复142（这是「内容还是不能及时同步」最主要的环节）：跨网络的 presence **根本出不了本机** ——
+          ① GH 通道只转发 type==='commit'（hello/iam 被直接丢掉，见 ghInit 的 transport）；
+          ② BroadcastChannel 只覆盖「同一个浏览器」；
+          ③ Yjs 的 awareness 只有 WebRTC 真连上才有（只剩 MQTT 信令时 peerCount 恒为 0）。
+        于是 liveCount() 永远是 1 → peersHot() 永远 false → 两台设备一直在跑慢节拍（旧值 6s 推 / 8s 拉）。
+        这里补两条「跨设备也成立」的间接证据，让快节拍真正生效：
+          ① GH.lastPullAt：云端 2 分钟内变过 = 刚刚有人在别的设备保存并推送；
+          ② content.config.collab.roster：花名册里 2 分钟内在线的其他设备（随内容同步，跨网络可见）。 */
+      if (GH.lastPullAt && Date.now() - GH.lastPullAt < 120000) return true;
+      const r = roster(), now = Date.now();
+      return Object.keys(r).some(function (k) {
+        const o = r[k];
+        return !!o && k !== me.id && now - (+o.lastSeen || 0) < 120000;
+      });
+    } catch (e) { return false; }
   }
   /* GitHub 轮询间隔：隐藏 60s；前台且在活动（30 秒内动过）→ 2s / 有人在线 1.2s；
      前台但闲置 → 8s / 有人在线 3.5s */
@@ -1003,6 +1031,7 @@ window.LMCollab = (function () {
      兜底：数据分支建不出来 / 写不进去（Token 权限不足等）→ 自动回退 main（= 旧行为）并提示一次。 */
   const SNAP_MIN = 30 * 60 * 1000;   /* main 快照最小间隔 → 最多 2 次构建/小时 */
   const GH = { cfg: null, token: '', etag: '', lastPush: 0, timer: 0, inFlight: false, inFlightAt: 0, lastPullTs: 0,
+               lastPullAt: 0,       /* ★ 修复142：上一次「云端真的变过」的本机时刻（peersHot 的跨设备证据） */
                useMain: false,      /* 已回退到 main（本页会话内有效） */
                snapAt: 0,           /* 上次写 main 快照的时刻 */
                blockUntil: 0,       /* ★ 修复90：限流/退避到期时刻，到期前一律不写（越撞越死） */
@@ -1117,6 +1146,17 @@ window.LMCollab = (function () {
     try { console.warn('[协同·云端] 上一次请求 60 秒没返回，已强制复位同步锁（接下来会自动重试）'); } catch (e) { /* noop */ }
     return true;
   }
+  /* ★ 修复142：记下「云端版本戳 / 云端刚变过」两件事 ——
+     ① GH.lastPullAt 给 peersHot() 当「场上还有别人」的跨设备证据（见 peersHot 注释）；
+     ② 版本戳**封顶到现在**：对端时钟快 30 秒时它推来的 ts 会比本机时间还大，
+        旧代码原样存进 GH.lastPullTs，于是 `GH.lastPullTs > myTs` 把本机之后的每一笔推送都吃掉；
+     ③ 顺手把本机发号器顶上去，保证下一次 publish 的戳一定比云端那份新。 */
+  function notePulled(ts) {
+    GH.lastPullAt = Date.now();
+    const t = Math.min(+ts || 0, Date.now() + 1000);
+    if (t > GH.lastPullTs) GH.lastPullTs = t;
+    if (t > _pubTs) _pubTs = t;
+  }
   function ghPull() {
     if (!GH.cfg) return;
     inFlightStale();                       /* ★ 修复122 */
@@ -1150,7 +1190,7 @@ window.LMCollab = (function () {
       const ts = +(((c.config || {}).collab || {}).syncTs || 0) || 1;
       const stale = (ts <= lastTs || ts <= GH.lastPullTs);
       if (!stale) {
-        GH.lastPullTs = ts;
+        notePulled(ts);   /* ★ 修复142：版本戳封顶 + 记账「云端刚变过」+ 抬高本机发号器 */
         applyRemote({ content: c, ts: ts, name: '云端（GitHub）' });
         return;
       }
@@ -1178,6 +1218,9 @@ window.LMCollab = (function () {
           LMApp.applyRemoteContent(merged);
           if (window.LMStore) LMStore.saveLocal(LMApp.state.content);
           GH.mergedTs = ts;
+          /* ★ 修复142：合并应用成功 = 云端这一版已吃进来 → lastTs / 发号器一起顶到它之上，
+             下一笔本机保存的戳必比云端新，不会再被 `GH.lastPullTs > myTs` 改道成「只拉不发」 */
+          notePulled(ts); bump(ts);
         } catch (eD0) { return; }
         setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
         LMApp.toast('🔄 已吸收「云端（GitHub）」另一台设备的修改');
@@ -1189,6 +1232,7 @@ window.LMCollab = (function () {
         LMApp.applyRemoteContent(mergeBlocks(c));
         noteBase(LMApp.state.content);   /* ★ 修复121：应用后本机内容即新的共同祖先（与 doApply 保持一致） */
         if (window.LMStore) LMStore.saveLocal(LMApp.state.content);
+        notePulled(ts); bump(ts);        /* ★ 修复142：同上 —— 吃进来的版本要顶到发号器之上 */
       } catch (eD) { return; }
       setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
       LMApp.toast('🔄 已同步「云端（GitHub）」的修改');
@@ -1334,7 +1378,16 @@ window.LMCollab = (function () {
     /* 防旧覆盖新守卫：最近一次轮询看到的云端版本比本机内容新（其他设备刚推过）→
        本机不推送（避免旧内容盖掉别人的新内容），改为立即拉取应用 */
     const myTs = +(((content.config || {}).collab || {}).syncTs || 0);
-    if (GH.lastPullTs > myTs) { ghPull(); return; }
+    if (GH.lastPullTs > myTs) {
+      /* ★ 修复142（「内容还是不能及时同步」的第二个环节）：云端比我新 → 先拉，这一步本身没错；
+         错在旧版这里**裸 return**，等于把这一笔静静扔掉：既不记账也不重试。
+         只要对端时钟快一点点（手机/电脑时钟差几十秒很常见），本机每次保存出来的戳都比云端小，
+         于是**每一笔**都走这条路 → 本机改的内容永远上不了云，对方几分钟都看不见，
+         而自己屏幕上一切正常（内容就在本机）。现在按修复140 的同一套处理：记账 + 补推。 */
+      wantPush(); kickPush(1500);
+      ghPull();
+      return;
+    }
     const now = Date.now();
     pushBusyStale();                   /* ★ 修复140：推送自己的看门狗（拉取那把锁另有一套，互不干扰） */
     /* ★ 修复88 / 90 / 140：最小间隔 = max(有人在线 2.6s / 独自 6s, 额度降挡)；
@@ -1392,14 +1445,17 @@ window.LMCollab = (function () {
     };
     tryPut(ref).then(function (r) {
       noteRate(r);                       /* ★ 修复90：记下剩余额度，决定下一轮要不要降挡 */
-      if (r.status === 409 || r.status === 422) { /* 别人先提交 → 拉最新；6 秒后尾随重推一次（防 409 后最后一笔只留本机） */
+      if (r.status === 409 || r.status === 422) { /* 别人先提交 → 拉最新；立刻（0.9 秒）尾随重推一次 */
         pushUnlock();
-        wantPush();                          /* ★ 修复140：脏标记留着（6 秒后 _409T 会重推；关页面也还有下次补推） */
+        wantPush();                          /* ★ 修复140：脏标记留着（0.9 秒后 _409T 会重推；关页面也还有下次补推） */
         delete shaOf[ref]; ghPull();
+        /* ★ 修复142：这一笔 PUT 根本没写进去 → 不能算「上次推送时刻」，否则重推先在防抖里再等 1.5–4 秒，
+           两台设备交替编辑时就这样一次次叠加成「半分钟才动」。清掉它，重推立刻能过闸。 */
+        GH.lastPush = 0;
         if (!GH._409T) GH._409T = setTimeout(function () {
           GH._409T = null;
           if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);
-        }, 6000);
+        }, 900);
         return;
       }
       if (!r.ok) {
@@ -1483,7 +1539,7 @@ window.LMCollab = (function () {
         modeLabel = '本机+云端';
         /* ★ 修复88：节拍 2s → 600ms。旧版「每 2 秒才检查一次、且要够 2 秒才拉」在定时器抖动下
            实际常变成 4 秒一次（用户感受就是「在线协同更新很慢」）；现在按 gap 判定，误差 ≤600ms。
-           有人在线时 gap 自动切到 1.2s / 3.5s，没别人时仍是 2s / 8s 省流量 */
+           有人在线时 gap 自动切到 1.2s / 2s，没别人时 1.5s / 4s（★ 修复142：见文件顶部常量注释） */
         setInterval(function () {
           const hidden = document.visibilityState === 'hidden';
           const act = Date.now() - (window._lmLastAct || 0) < 30000;
@@ -1507,7 +1563,7 @@ window.LMCollab = (function () {
         GH._wired = 'visitor';
         GH.cfg = { owner: h.split('.')[0], repo: p.split('/')[1], branch: 'main', path: 'data/content.js' };
         modeLabel = '云端只读';
-        /* ★ 修复88：访客从前台 90 秒才刷一次 → 25 秒（后台仍 90 秒）。raw 请求已带 ?t= 破缓存，
+        /* ★ 修复88 / 142：访客从前台 90 秒 → 25 秒 → 现在 8 秒（后台仍 90 秒）。raw 请求已带 ?t= 破缓存，
            所以手机访客看别人改的内容不再「要等一分半」 */
         setInterval(function () {
           const gap = visitorGapNow(document.visibilityState === 'hidden');
@@ -1708,6 +1764,12 @@ window.LMCollab = (function () {
       try { delete shaOf[ghBranch()]; } catch (e) { /* noop */ }
     },
     renderPanel: renderPanel,
+    /* ★ 修复142：控制台手动催一次（排查「到底卡在哪一环」用）—— 立刻推一笔 + 立刻拉一次 */
+    syncNow: function () {
+      try { flushPush('手动'); } catch (e1) { /* noop */ }
+      try { ghPull(); } catch (e2) { /* noop */ }
+      return true;
+    },
     presenceTick: presenceTick, /* ★ 修复73：awareness 增减时由 ycollab 立刻催一拍，不必等 2 秒定时 */
     devices: function () { return deviceList(); },
     applyExternal: function (c, by) { /* Yjs 网状协同与旧通道共用同一个「远端应用」漏斗 */
@@ -1730,6 +1792,14 @@ window.LMCollab = (function () {
         通道: modeLabel,
         内容分支: (function () { try { return ghBranch() + (GH.useMain ? '（已回退 main）' : '') + (ghBranch() !== ghMainRef() ? '（不触发 Pages 构建）' : ''); } catch (e) { return '?'; } })(),
         额度剩余: (GH.rateLeft == null ? '未知（还没收到 GitHub 响应头）' : (GH.rateLeft + ' 次/小时 · 当前推送间隔 ' + (Math.max(pushWaitMin(peersHot()), rateGap()) / 1000) + ' 秒')),
+        /* ★ 修复142：云端侧的「到底走到哪一步」—— 现场排查「内容没过去 / 没回来」先看这四项 */
+        云端: {
+          上次云端变更秒前: GH.lastPullAt ? Math.round((Date.now() - GH.lastPullAt) / 1000) : -1,
+          云端版本戳: GH.lastPullTs || 0,
+          本机版本戳: (function () { try { return +((((LMApp || {}).state || {}).content || {}).config.collab.syncTs || 0); } catch (e) { return 0; } })(),
+          已应用云端戳: GH.mergedTs || 0,
+          数据分支可用: GH.useMain ? '否（已回退 main）' : '是'
+        },
         /* ★ 修复140：推送状态机 —— 「改了却没同步过去」时先看这几项（待推送=true 表示还有一笔没上云） */
         推送: {
           待推送: GH.dirty ? ('是（' + Math.round((Date.now() - (GH.dirtyAt || Date.now())) / 1000) + ' 秒前记账）') : '否',
