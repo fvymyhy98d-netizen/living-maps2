@@ -2336,7 +2336,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
   T('检索升级6：诚实护栏 —— 只找到一条就明说「可能没完全对上」并指路 DeepSeek；页面打开即预热',
     (function () {
       const s = srcOf('js/ai.js');
-      return s.indexOf('res.length === 1') > 0 && s.indexOf('可能没完全对上你的问法') > 0
+      return s.indexOf('res.length === 1') > 0 && s.indexOf('站内只对得上这一条，可能不准') > 0
         && s.indexOf('warm(ix0)') > 0 && s.indexOf('expandQuery(q, prev)') > 0;
     })());
 
@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=135 · LM_ASSET_VER=135',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=136 · LM_ASSET_VER=136',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=134/g) || []).length === 0 && /\?v=135/.test(html)
-      && /LM_ASSET_VER = '135'/.test(appJs));
+      && (html.match(/\?v=135/g) || []).length === 0 && /\?v=136/.test(html)
+      && /LM_ASSET_VER = '136'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -3815,7 +3815,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && s.indexOf('function normPhrase(s) {') > 0
         && s.indexOf('if (!ranked.length) ranked = literalHits(index, q, 12);') > 0
         && s.indexOf('const tips = summarize(ix, id, 2)') > 0
-        && s.indexOf('站内没有直接对得上的原句。') > 0
+        && s.indexOf('站内没找到对应的句子。') > 0
         && s.indexOf("chatPush(id, { r: 'local', t: '本站没写过相关内容") < 0
         && s.indexOf('litHits') < 0;
     })());
@@ -3962,7 +3962,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
           && a.indexOf('const history = chatOf(id).filter(') > 0
           && a.indexOf('note: llmNote()') > 0 && a.indexOf('if (msg.note) rec.note') > 0
           && a.indexOf('lm-ai-note') > 0 && c131.indexOf('.lm-ai-note{') > 0
-          && a.indexOf('上面那句是模型自己判断失误') > 0        /* 模型错判「没有页面内容」时的自动纠正说明 */
+          && a.indexOf('是模型自己判断失误') > 0        /* 模型错判「没有页面内容」时的自动纠正说明 */
           && typeof oll.lastAsk === 'function' && oll.version === '5';
       } catch (e) { return false; }
     })());
@@ -4143,7 +4143,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       return c.indexOf('.lm-ai-threads{position:absolute') > 0
         && c.indexOf('.lm-ai-body{flex:1 1 auto;min-height:0;overflow:auto') > 0
         && c.indexOf('overflow:hidden;display:flex;flex-direction:column') > 0
-        && a.indexOf('未检测到 · 点此配置') > 0
+        && a.indexOf('未接 · 点此配置') > 0
         && a.indexOf("(llmReady() ? '' : ' off')") > 0
         && a.indexOf("m === 'ollama' && !llmReady()") > 0          /* 点了就直接打开配置 */
         && a.indexOf('lm-llm-cfg') > 0 && a.indexOf('lm-llm-use') > 0;
@@ -4176,8 +4176,8 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf("setCfg({ scope: on ? 'page' : 'question' })") > 0
         && a.indexOf('function llmScope()') > 0
         && a.indexOf("(mode === 'ollama' && llmReady()") > 0
-        && a.indexOf('只问问题，不发送本页内容') > 0
-        && a.indexOf('没勾「根据本页内容回答」') > 0        /* 答案下面那行小字同步改口径 */
+        && a.indexOf("'带本页正文' : '只发问题'") > 0    /* ★ 修复136：勾选框说明压到 4~5 字 */
+        && a.indexOf('只发了问题（没勾本页）') > 0        /* 答案下面那行小字同步改口径 */
         && c.indexOf('.lm-ai-scope{') > 0 && c.indexOf('.lm-ai-scope input{') > 0;
     })());
 
@@ -4269,18 +4269,48 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && (a.match(/placeFly\(/g) || []).length >= 5;
     })());
 
-  T('修复135 · 思考过程被截断时如实交代（上限 1200 字，界面写「只存了前 1200 字」，不假装是全的）',
+  T('修复135 · 思考过程被截断时如实交代（上限 1200 字，界面写「只存前 1200」，不假装是全的）',
     (function () {
       const a = srcOf('js/ai.js');
       return a.indexOf('if (th.length > 1200) rec.thinkFull = th.length;') > 0
         && a.indexOf('m.thinkFull || String(m.think).length') > 0
-        && a.indexOf('只存了前 1200 字') > 0;
+        && a.indexOf('只存前 1200') > 0;
     })());
 
-  T('版本已升到 135（?v=135 共 22 处 · v134 无残留 · LM_ASSET_VER=135）',
-    (html.match(/\?v=135/g) || []).length === 22 && (html.match(/\?v=134/g) || []).length === 0
-      && /LM_ASSET_VER = '135'/.test(appJs),
-    'v135=' + (html.match(/\?v=135/g) || []).length + ' v134=' + (html.match(/\?v=134/g) || []).length);
+  /* —— ★ 修复136：面板文案瘦身（"别在面板上打那么多字"） —— */
+
+  T('修复136 · 文案瘦身：模式格说明一行 ≤6 字 · placeholder 只剩「问点什么…」· 空态一句话 · 长解释全删',
+    (function () {
+      const a = srcOf('js/ai.js');
+      const ems = (a.match(/<em>[^<]{1,40}<\/em>/g) || [])
+        .map(function (x) { return x.replace(/<\/?em>/g, ''); })
+        .filter(function (s) { return s.indexOf("' +") < 0; });   /* 拼接出来的那几处不算字面文案 */
+      return ems.length >= 2 && ems.every(function (s) { return s.length <= 6; })
+        && a.indexOf("const ph = '问点什么…'") > 0
+        && a.indexOf('写个问题，按回车就行。') > 0
+        && a.indexOf('免配置 · 只用站里写过的内容') < 0
+        && a.indexOf('更全面 · 需装扩展或手动粘贴') < 0
+        && a.indexOf('你电脑上的 Ollama · 会组织语言') < 0
+        && a.indexOf('会把这页正文一起发给本机模型') < 0
+        && a.indexOf('还没接本机模型：下面按提示配一下') < 0
+        && a.indexOf('点标题可收起') < 0;
+    })());
+
+  T('修复136 · 其余小字也压成一行：思考框「思考中… · N 字」· 不再写「（你的显卡）」· 按钮提示变短',
+    (function () {
+      const a = srcOf('js/ai.js');
+      return a.indexOf('💭 思考中… · ') > 0
+        && a.indexOf('💭 思考过程 · ') > 0
+        && a.indexOf('🧠 本机模型（你的显卡）') < 0
+        && a.indexOf('title="把 DeepSeek 的回答粘回来"') > 0
+        && a.indexOf("fab.title = '提问（本站速答 / 本机模型 / DeepSeek）'") > 0
+        && a.indexOf('粘回这里保存进对话') < 0;
+    })());
+
+  T('版本已升到 136（?v=136 共 22 处 · v135 无残留 · LM_ASSET_VER=136）',
+    (html.match(/\?v=136/g) || []).length === 22 && (html.match(/\?v=135/g) || []).length === 0
+      && /LM_ASSET_VER = '136'/.test(appJs),
+    'v136=' + (html.match(/\?v=136/g) || []).length + ' v135=' + (html.match(/\?v=135/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

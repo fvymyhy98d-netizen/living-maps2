@@ -972,11 +972,11 @@ W.LMAI = (function () {
         clearAskTimer();
         chatPush(toId, {
           r: 'ds',
-          t: d.text ? d.text : '（扩展回了一个空回答 —— DeepSeek 那边可能没渲染完，再问一次试试。）'
+          t: d.text ? d.text : '（扩展回了个空回答，再问一次试试）'
         });
         if (panel && !panel.hidden) renderPanel();
         else if (window.LMApp && LMApp.toast) {
-          LMApp.toast(toId === curId() ? '✅ DeepSeek 的回答已回到对话框' : '✅ DeepSeek 的回答已回到你提问的那一页');
+          LMApp.toast(toId === curId() ? '✅ 回答已回到对话' : '✅ 回答已回到提问那页');
         }
       }
     });
@@ -1094,8 +1094,7 @@ W.LMAI = (function () {
     const b = panel.querySelector('.lm-ai-size');
     if (b) {
       b.textContent = (sizeMode === 'max') ? '⤡' : '⤢';
-      b.title = '面板大小：' + (SIZE_NAME[sizeMode] || '标准') + '（点一下弹出四档'
-        + (isNarrow() ? '' : '；也可以拖左上角自由缩放') + '）';
+      b.title = '面板大小：' + (SIZE_NAME[sizeMode] || '标准');
     }
     const mb = panel.querySelector('.lm-ai-sizemenu');
     if (mb && !mb.hidden) renderSizeMenu();   /* 菜单开着就顺手把打勾挪过去 */
@@ -1124,7 +1123,7 @@ W.LMAI = (function () {
         + '<span>' + SIZE_NAME[s] + '<em>' + (SIZE_HINT[s] || '') + '</em></span>'
         + (s === sizeMode ? '<i class="lm-ai-sz-ck">✓</i>' : '') + '</button>';
     });
-    if (sizeMode === 'custom') h += '<div class="lm-ai-sz-tip">当前是你拖出来的大小 · 选上面任一档即可覆盖</div>';
+    if (sizeMode === 'custom') h += '<div class="lm-ai-sz-tip">你拖出来的大小 · 选一档覆盖</div>';
     box.innerHTML = h;
   }
   /* ★ 修复135：浮层（对话列表 / 四档菜单）的 top 不能写死。
@@ -1159,7 +1158,7 @@ W.LMAI = (function () {
       + '<button type="button" class="btn lm-ai-th-del" disabled>删除选中</button>'
       + '</div>';
     if (!ths.length) {
-      h += '<p class="lm-ai-tip">这一页还没有对话。点下面的「新对话」开一个。</p>';
+      h += '<p class="lm-ai-tip">还没有对话。</p>';
     } else {
       h += '<div class="lm-ai-th-list">' + ths.map(function (t) {
         const d = t.ts ? new Date(t.ts) : null;
@@ -1232,7 +1231,7 @@ W.LMAI = (function () {
     h += msgs.length
       ? msgs.map(function (m) {
         const cls = m.r === 'me' ? 'me' : (m.r === 'local' ? 'local' : (m.r === 'ollama' ? 'ollama' : 'ds'));
-        const who = m.r === 'me' ? '我' : (m.r === 'local' ? '本站速答' : (m.r === 'ollama' ? '🧠 本机模型（你的显卡）' : 'DeepSeek'));
+        const who = m.r === 'me' ? '我' : (m.r === 'local' ? '本站速答' : (m.r === 'ollama' ? '🧠 本机模型' : 'DeepSeek'));
         const src = (m.src && m.src.pageId)
           ? '<a class="lm-ai-src" href="#/p/' + encodeURIComponent(m.src.pageId) + '">出自《' + esc(m.src.title || '') + '》· 相关度 ' + m.src.score + '</a>'
           : '';
@@ -1250,54 +1249,55 @@ W.LMAI = (function () {
         return '<div class="lm-ai-msg ' + cls + '"><span class="lm-ai-who">' + who + '</span>'
           /* ★ 修复133：思考过程放在正文**上方**，默认收起（点开才看）—— 和 DeepSeek 一样 */
           + (m.think
-            ? '<details class="lm-ai-thk"><summary>💭 思考过程 · ' + (m.thinkFull || String(m.think).length) + ' 字（点开看'
-              + (m.thinkFull ? '；太长，只存了前 1200 字' : '') + '）</summary>'
+            ? '<details class="lm-ai-thk"><summary>💭 思考过程 · ' + (m.thinkFull || String(m.think).length) + ' 字'
+              + (m.thinkFull ? '（只存前 1200）' : '') + '</summary>'
               + '<div class="lm-ai-thk-bd">' + esc(String(m.think)).replace(/\n/g, '<br>') + '</div></details>'
             : '')
           + '<p>' + esc(m.t).replace(/\n/g, '<br>') + '</p>'
           + (m.note ? '<span class="lm-ai-note">' + esc(String(m.note)) + '</span>' : '')
           + src + cite + '</div>';
       }).join('')
-      : '<p class="lm-ai-tip">还没有对话。先在下面选一种模式，写个问题按回车：\n<b>⚡ 本站速答</b>＝只在站里找、自己组织成一段话（免配置）；<b>🐋 DeepSeek</b>＝把这页正文附上交给网页版（更全面，但要装扩展或手动粘贴）。</p>';
+      : '<p class="lm-ai-tip">写个问题，按回车就行。</p>';
     h += '</div>';
     const mode = aiMode();
-    /* ★ 修复110：聊天框上方一个切换键 —— 默认「本站速答」 */
-    const ph = mode === 'local' ? '问点什么…（回车即可，只用本站内容）'
-      : (mode === 'ollama'
-        ? (llmScope() ? '问点什么…（会把本页正文交给本机模型）' : '问点什么…（只问问题，不发送本页内容）')
-        : '问点什么…（会自动附上本页正文）');
+    /* ★ 修复110：聊天框上方一个切换键 —— 默认「本站速答」
+       ★ 修复136：文案瘦身 —— 输入框只留「问点什么…」，说明全挪到 title（悬停才看） */
+    const ph = '问点什么…';
     const goLabel = mode === 'local' ? '问一句' : (mode === 'ollama' ? '问本机模型' : '发给 DeepSeek');
     h += '<div class="lm-ai-modes" role="tablist" aria-label="问答模式">'
-      + '<button type="button" class="lm-ai-mode' + (mode === 'local' ? ' on' : '') + '" data-mode="local" role="tab" aria-selected="' + (mode === 'local') + '">'
-      + '⚡ 本站速答<em>免配置 · 只用站里写过的内容</em></button>'
-      + '<button type="button" class="lm-ai-mode' + (mode === 'ds' ? ' on' : '') + '" data-mode="ds" role="tab" aria-selected="' + (mode === 'ds') + '">'
-      + '🐋 DeepSeek<em>更全面 · 需装扩展或手动粘贴</em></button>'
-      /* ★ 修复133：三格**固定都在**。没接本机模型时这一格写「未检测到 · 点此配置」，
+      + '<button type="button" class="lm-ai-mode' + (mode === 'local' ? ' on' : '') + '" data-mode="local" role="tab" aria-selected="' + (mode === 'local') + '"'
+      + ' title="只用站内写过的内容，不用配置">'
+      + '⚡ 本站速答<em>免配置</em></button>'
+      + '<button type="button" class="lm-ai-mode' + (mode === 'ds' ? ' on' : '') + '" data-mode="ds" role="tab" aria-selected="' + (mode === 'ds') + '"'
+      + ' title="把这页正文交给网页版 DeepSeek（更全面；需装扩展或手动粘贴）">'
+      + '🐋 DeepSeek<em>网页版</em></button>'
+      /* ★ 修复133：三格**固定都在**。没接本机模型时这一格写「未接 · 点此配置」，
          点它直接打开配置面板（以前整格会隐藏，用户以为功能没了）。 */
       + '<button type="button" class="lm-ai-mode' + ((mode === 'ollama' && llmReady()) ? ' on' : '') + (llmReady() ? '' : ' off')
-      + '" data-mode="ollama" role="tab" aria-selected="' + (mode === 'ollama' && llmReady()) + '">'
-      + '🧠 本机模型<em>' + (llmReady() ? '你电脑上的 Ollama · 会组织语言' : '未检测到 · 点此配置') + '</em></button>'
+      + '" data-mode="ollama" role="tab" aria-selected="' + (mode === 'ollama' && llmReady()) + '"'
+      + ' title="' + (llmReady() ? '用你电脑上的显卡跑，会组织语言' : '还没接本机模型 · 点此配置（只用你的显卡，不填 Key）') + '">'
+      + '🧠 本机模型<em>' + (llmReady() ? '已接上' : '未接 · 点此配置') + '</em></button>'
       + '</div>';
     h += '<div class="lm-ai-ask"><input class="lm-ai-input" type="search" placeholder="' + ph + '" aria-label="提问">'
       + '<button class="btn btn-primary lm-ai-go" type="button">' + goLabel + '</button></div>'
       /* ★ 修复134：一个直观的勾选 —— 勾上＝把这页正文一起发给本机模型；不勾＝只发问题（可以随便查别的）。
          只在本机模型模式下出现：本站速答只用站内内容，DeepSeek 走的是复制粘贴那一套。 */
       + (mode === 'ollama' && llmReady()
-        ? '<label class="lm-ai-scope" title="勾上：回答时以这一页为准；不勾：只发你的问题，可以问任何东西">'
+        ? '<label class="lm-ai-scope" title="勾上＝以这一页为准；不勾＝只发问题，可以问任何东西">'
           + '<input type="checkbox" class="lm-ai-scopeck"' + (llmScope() ? ' checked' : '') + '>'
-          + '<span>根据本页内容回答<em>' + (llmScope() ? '会把这页正文一起发给本机模型' : '只发你的问题，不碰这一页') + '</em></span>'
+          + '<span>根据本页内容回答<em>' + (llmScope() ? '带本页正文' : '只发问题') + '</em></span>'
           + '</label>'
         : '')
       + '<div class="lm-ai-row">'
-      + '<button class="btn lm-ai-paste" type="button" title="在 DeepSeek 网页里选中回答复制，粘回这里保存进对话">📥 粘回回答</button>'
-      + '<button class="btn lm-llm-cfg" type="button" title="可选：接你自己电脑上的 Ollama 模型（用显卡跑，只跟本机通信）">⚙ 接本机模型</button>'
+      + '<button class="btn lm-ai-paste" type="button" title="把 DeepSeek 的回答粘回来">📥 粘回回答</button>'
+      + '<button class="btn lm-llm-cfg" type="button" title="接本机模型（可选）">⚙ 接本机模型</button>'
       /* ★ 修复126：自动探测到的本机模型 —— 一键接管（只在本页出现，不会打扰别的访客） */
       + (llmFound && !llmReady()
-        ? '<button class="btn lm-llm-use" type="button" title="点一下就用它：只在本机通信，不经过任何服务器">🧠 检测到 ' + esc(llmFound.ep.name) + ' · ' + esc(llmFound.model) + ' · 点此启用</button>'
+        ? '<button class="btn lm-llm-use" type="button" title="点一下就用它">🧠 检测到 ' + esc(llmFound.ep.name) + ' · ' + esc(llmFound.model) + ' · 点此启用</button>'
         : '')
-      + '<button class="btn lm-ai-clear" type="button" title="只清空当前这个对话（其它对话一条不动）">🗑 清空</button>'
+      + '<button class="btn lm-ai-clear" type="button" title="清空这个对话">🗑 清空</button>'
       + '</div>'
-      + '<div class="lm-ai-pastebox" hidden><textarea class="lm-ai-pasteta" placeholder="把 DeepSeek 的回答粘到这里（Ctrl/⌘+V），再点「保存到对话」"></textarea>'
+      + '<div class="lm-ai-pastebox" hidden><textarea class="lm-ai-pasteta" placeholder="把回答粘到这里（Ctrl/⌘+V）"></textarea>'
       + '<button class="btn lm-ai-pastesave" type="button">保存到对话</button></div>'
       + '<div class="lm-ai-ans"></div>';
     /* ② 其余的辅助卡片放在对话框**下面** */
@@ -1309,7 +1309,7 @@ W.LMAI = (function () {
            以为「要点没写完」；面板本身可以上下滚，没必要替用户做这个删减。 */
         return '<li>' + esc(String(s || '').trim()) + '</li>';
       }).join('') + '</ol>'
-      : '<p class="lm-ai-tip">这一页文字还少，写点内容再来看要点。</p>';
+      : '<p class="lm-ai-tip">这一页内容还少。</p>';
     h += '<h4 class="lm-ai-h">🔑 关键词</h4>';
     h += kws.length
       ? '<div class="lm-ai-kw">' + kws.map(function (k) { return '<span class="lm-ai-chip">' + esc(k) + '</span>'; }).join('') + '</div>'
@@ -1395,9 +1395,9 @@ W.LMAI = (function () {
         const tips = summarize(ix, id, 2).map(function (s, i) { return (i + 1) + '. ' + s; }).join('\n');
         chatPush(id, {
           r: 'local',
-          t: '站内没有直接对得上的原句。\n'
-            + (tips ? '这一页的要点是：\n' + tips + '\n\n' : '')
-            + '试试用页里出现的词来问（比如小标题里的说法）；要用通用知识回答，把上面的模式切到 🐋 DeepSeek。'
+          t: '站内没找到对应的句子。\n'
+            + (tips ? '这一页的要点：\n' + tips + '\n\n' : '')
+            + '换个页里出现过的词再问，或切到 🐋 DeepSeek。'
         });
       } else {
         res.forEach(function (r) {
@@ -1414,7 +1414,7 @@ W.LMAI = (function () {
         });
         /* ★ 诚实护栏：只找到一条就明说"可能没完全对上"，不假装很懂 */
         if (res.length === 1) {
-          chatPush(id, { r: 'local', t: '⚠️ 站里跟这个问题直接相关的只有上面这一条（可能没完全对上你的问法）。要更完整的解释，把模式切到 🐋 DeepSeek。' });
+          chatPush(id, { r: 'local', t: '⚠️ 站内只对得上这一条，可能不准。要更完整，切 🐋 DeepSeek。' });
         }
       }
       renderPanel();
@@ -1481,12 +1481,13 @@ W.LMAI = (function () {
         let s = '';
         if (think) {
           s += '<details class="lm-ai-thk live" open><summary>💭 思考中… · ' + String(think).length
-            + ' 字（点标题可收起）</summary><div class="lm-ai-thk-bd">'
+            + ' 字</summary><div class="lm-ai-thk-bd">'
             + esc(String(think)).replace(/\n/g, '<br>') + '</div></details>';
         }
         if (txt) s += '<p>' + esc(String(txt)).replace(/\n/g, '<br>') + '</p>';
-        if (!think && !txt) s += '<p class="lm-ai-tip">正在读这一页…（' + esc(model) + '，首次加载会慢几秒）</p>';
-        streamEl.innerHTML = '<span class="lm-ai-who">🧠 本机模型（你的显卡）</span>' + s;
+        if (!think && !txt) s += '<p class="lm-ai-tip">正在生成…</p>';
+        /* ★ 修复136：模型名不再占一行字，挂到悬停里 */
+        streamEl.innerHTML = '<span class="lm-ai-who" title="' + esc(model) + '">🧠 本机模型</span>' + s;
         /* 思考框：粘底（重建 DOM 会把滚动位置归零，所以每次更新都拉回底部） */
         const tbd = streamEl.querySelector('.lm-ai-thk-bd');
         if (tbd && thkStick && tbd.scrollHeight > tbd.clientHeight) {
@@ -1512,8 +1513,7 @@ W.LMAI = (function () {
         /* ★ 修复131：模型明明收到了正文却说「没有页面内容」—— 站点直接把矛盾点摆出来，别让用户以为功能坏了 */
         const info = (W.LMOllama.lastAsk && W.LMOllama.lastAsk()) || {};
         if (info.pageChars > 0 && /(没有|未包含|不含|缺少|无法看到).{0,8}页面内容|无页面内容/.test(t)) {
-          t += '\n\n（说明：这一问确实把本页正文 ' + info.pageChars + ' 字一起发出去了，'
-            + '上面那句是模型自己判断失误；换个具体点的问法、或再问一次通常就好。）';
+          t += '\n\n（说明：本页正文 ' + info.pageChars + ' 字确实一起发出去了，是模型自己判断失误，重问一次通常就好。）';
         }
         chatPush(id, { r: 'ollama', t: t || '（本机模型没返回内容：模型可能还在加载，稍等几秒再问一次。）', note: llmNote(), think: thinkTxt }, tid0);
         renderPanel();
@@ -1522,26 +1522,26 @@ W.LMAI = (function () {
           r: 'local',
           t: '🧠 本机模型没连上：' + ((e && e.message) || e) + '\n\n'
             + (W.LMOllama.helpText ? W.LMOllama.helpText() : '')
-            + '\n\n（现在可以直接用 ⚡ 本站速答，不受影响。）'
+            + '\n\n（可以先用 ⚡ 本站速答）'
         }, tid0);
         renderPanel();
       });
     };
-    /* ★ 修复131：一行小字交代「这次到底送了什么」，避免再出现「明明有正文却答没正文」的困惑 */
+    /* ★ 修复131：一行小字交代「这次到底送了什么」，避免再出现「明明有正文却答没正文」的困惑
+       ★ 修复136：压到最短 —— 一行就够，别在每条答案下面挂半句话说明 */
     const llmNote = function () {
       try {
         const i = (W.LMOllama.lastAsk && W.LMOllama.lastAsk()) || null;
         if (!i) return '';
-        if (i.scope === 'question') return '本次只发了你的问题（没勾「根据本页内容回答」）';
-        return '本次已附本页正文 ' + i.pageChars + ' 字'
-          + (i.history ? ' + 上文 ' + Math.ceil(i.history / 2) + ' 轮' : ' + 无上文（第一问）')
-          + ' · 上限 ' + i.maxTok + ' tokens';
+        if (i.scope === 'question') return '只发了问题（没勾本页）';
+        return '附本页正文 ' + i.pageChars + ' 字'
+          + (i.history ? ' · 上文 ' + Math.ceil(i.history / 2) + ' 轮' : '');
       } catch (e) { return ''; }
     };
     /* 发送：按模式分流（默认「本站速答」；DeepSeek / 本机模型是备选） */
     const send = function () {
       const q = String((input && input.value) || '').trim();
-      if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题，比如「Transformer 和 RNN 有什么区别」。</p>'; return; }
+      if (!q) { ans.innerHTML = '<p class="lm-ai-tip">先写个问题。</p>'; return; }
       if (aiMode() === 'ollama') { runLLM(q); return; }
       if (aiMode() === 'local') { runLocal(q); return; }
       const txt = promptFor(pageById(id), q);
@@ -1581,7 +1581,7 @@ W.LMAI = (function () {
         const m = b.getAttribute('data-mode');
         /* ★ 修复133：本机模型还没接上 —— 不静默失败，直接说清楚并把配置面板打开 */
         if (m === 'ollama' && !llmReady()) {
-          if (window.LMApp && LMApp.toast) LMApp.toast('还没接本机模型：下面按提示配一下（只用你电脑的显卡，不填 Key）');
+          if (window.LMApp && LMApp.toast) LMApp.toast('还没接本机模型，下面配一下');
           if (W.LMOllama && typeof W.LMOllama.openSettings === 'function') {
             W.LMOllama.openSettings(function () { renderPanel(); });
           } else if (ans) {
@@ -1620,7 +1620,7 @@ W.LMAI = (function () {
         t = String(t || '').trim();
         if (!pta || pta.value || t.length < 20) return;
         pta.value = t;
-        if (window.LMApp && LMApp.toast) LMApp.toast('已自动填入剪贴板内容（' + t.length + ' 字），核对后点「保存到对话」');
+        if (window.LMApp && LMApp.toast) LMApp.toast('读到 ' + t.length + ' 字，确认后点「保存到对话」');
       }, function () { /* 没权限：手动 Ctrl/⌘+V */ });
     });
     const pasteSave = body.querySelector('.lm-ai-pastesave');
@@ -1633,7 +1633,7 @@ W.LMAI = (function () {
     const clrBtn = body.querySelector('.lm-ai-clear');
     if (clrBtn) clrBtn.addEventListener('click', function () {
       chatClear(id);
-      if (window.LMApp && LMApp.toast) LMApp.toast('已清空当前对话（其它对话一条没动）');
+      if (window.LMApp && LMApp.toast) LMApp.toast('已清空当前对话');
       renderPanel();
     });
     /* ★ 修复126：把「检测到 XXX」那个按钮点掉 → 自动接上并切成这个模式，不用填任何东西 */
@@ -1646,7 +1646,7 @@ W.LMAI = (function () {
         if (r && r.ok) {
           llmFound = null;
           setAiMode('ollama');
-          if (window.LMApp && LMApp.toast) LMApp.toast('✅ 已接上本机模型 ' + r.model + '（在你电脑上跑）');
+          if (window.LMApp && LMApp.toast) LMApp.toast('✅ 已接上 ' + r.model);
           renderPanel();
           return;
         }
@@ -1662,7 +1662,7 @@ W.LMAI = (function () {
       const on = !!scopeCk.checked;
       if (W.LMOllama && typeof W.LMOllama.setCfg === 'function') W.LMOllama.setCfg({ scope: on ? 'page' : 'question' });
       if (window.LMApp && LMApp.toast) {
-        LMApp.toast(on ? '好，之后回答会以这一页为准（正文一起发）' : '好，之后只发你的问题（不碰这一页，可以随便查别的）');
+        LMApp.toast(on ? '带本页正文' : '只发问题');
       }
       renderPanel();
     });
@@ -1703,7 +1703,7 @@ W.LMAI = (function () {
     fab.type = 'button';
     fab.className = 'lm-ai-fab';
     fab.id = 'lmAiFab';
-    fab.title = '提问：本站速答 / DeepSeek —— 自动把这一页正文附在问题前面（不接 API、不存 Key）· 另有要点 / 关键词 / 相关条目';
+    fab.title = '提问（本站速答 / 本机模型 / DeepSeek）';
     fab.setAttribute('aria-expanded', 'false');
     fab.innerHTML = '✨<span class="lm-ai-fab-t">提问</span>';
     fab.addEventListener('click', function () { toggle(); });
@@ -1718,16 +1718,16 @@ W.LMAI = (function () {
     panel.innerHTML = '<div class="lm-ai-head"><b>💬 提问</b>'
       + '<span class="lm-ai-badge">不用 API · 不存 Key</span>'
       /* ★ 修复132：三个小键 —— 开新对话 / 这一页的所有对话（可勾选批量删）/ 面板放大缩小 */
-      + '<button type="button" class="lm-ai-hbtn lm-ai-new" title="开一个新对话（这一页可以有多个对话，各存各的，互不干扰）">＋<span class="lm-ai-hbtn-t"> 新对话</span></button>'
-      + '<button type="button" class="lm-ai-hbtn lm-ai-list" title="这一页的所有对话 · 可勾选批量删除">☰<span class="lm-ai-hbtn-t"> 对话</span><i class="lm-ai-cnt">0</i></button>'
-      + '<button type="button" class="lm-ai-hbtn lm-ai-size" title="放大 / 缩小">⤢</button>'
+      + '<button type="button" class="lm-ai-hbtn lm-ai-new" title="开一个新对话">＋<span class="lm-ai-hbtn-t"> 新对话</span></button>'
+      + '<button type="button" class="lm-ai-hbtn lm-ai-list" title="这一页的对话（可批量删）">☰<span class="lm-ai-hbtn-t"> 对话</span><i class="lm-ai-cnt">0</i></button>'
+      + '<button type="button" class="lm-ai-hbtn lm-ai-size" title="面板大小">⤢</button>'
       + '<button type="button" class="lm-ai-x" aria-label="关闭">×</button></div>'
       + '<div class="lm-ai-threads" hidden></div>'
       /* ★ 修复133：⤢ 的四个选项（弹出来选，不用一格一格点） */
       + '<div class="lm-ai-sizemenu" hidden></div>'
       + '<div class="lm-ai-body"></div>'
       /* 左上角的小把手：桌面上拖动可自由缩放；双击回到标准大小 */
-      + '<div class="lm-ai-resize" title="拖左上角可放大 / 缩小；双击回到标准大小"></div>';
+      + '<div class="lm-ai-resize" title="拖动缩放 · 双击复位"></div>';
     document.body.appendChild(panel);
     /* ★ 修复119：「展开全文」用事件委托 —— 面板每次都是整段重绘，绑在按钮上重绘一次就失效 */
     panel.addEventListener('click', function (e) {
@@ -1783,7 +1783,7 @@ W.LMAI = (function () {
       const lb = panel.querySelector('.lm-ai-list');
       if (lb) lb.classList.remove('on');
       renderPanel();
-      if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('开了一个新对话（旧对话还在，点 ☰ 对话 能找回来）');
+      if (typeof window !== 'undefined' && window.LMApp && LMApp.toast) LMApp.toast('新对话已开（☰ 能找回旧的）');
       const inp = panel.querySelector('.lm-ai-input');
       if (inp) inp.focus();
     });
@@ -1962,7 +1962,7 @@ W.LMAI = (function () {
         const pta2 = panel.querySelector('.lm-ai-pasteta');
         if (pb2) pb2.hidden = false;
         if (pta2) pta2.value = t;
-        if (window.LMApp && LMApp.toast) LMApp.toast('已从剪贴板读到回答（' + t.length + ' 字），核对后点「保存到对话」');
+        if (window.LMApp && LMApp.toast) LMApp.toast('读到 ' + t.length + ' 字，确认后点「保存到对话」');
       }, function () { /* 没权限 / 没剪贴板 → 什么都不说 */ });
     };
     window.addEventListener('focus', tryAutoBack);
