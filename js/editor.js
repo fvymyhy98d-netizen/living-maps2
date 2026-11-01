@@ -2592,8 +2592,10 @@ window.LMEditor = (function () {
   }
   /* 表格单元格里直接上颜色 / 高亮 / 渐变（选中格内文字 → 色板），返回是否命中单元格。
      ★ 修复87：算法与正文块完全共用 inlineApplyCore —— 旧版这里自己写了一套，颜色前缀/换色/清除
-     全都错（详见 inlineApplyCore 顶部注释），表格里的高亮与渐变因此长期失效 */
-  function applyInlineSwatch(prop, v, preview) {
+     全都错（详见 inlineApplyCore 顶部注释），表格里的高亮与渐变因此长期失效。
+     ★ 修复137：soft=true = 「清除高亮」专用模式 —— 没得可改就返回 false（不弹提示、不抢走这次
+     点击），让调用方继续往「整块」兜底；没选区也能清（清整格里的 ==…==）。 */
+  function applyInlineSwatch(prop, v, preview, soft) {
     const cell = selCell();
     if (!cell) return false;
     let cellBi = null;
@@ -2601,16 +2603,25 @@ window.LMEditor = (function () {
     const needle = selTextOf(cellBi); /* 选区被点色板/下拉清掉时用记住的上一次拖选 */
     const t = String(cell.get() || '').replace(/\u00A0/g, ' ');
     const sp = needle ? srcSpanOf(t, needle) : null;
-    if (!sp) { LMApp.toast('请先选中同一单元格里的文字，再选样式'); return true; }
-    const res = inlineApplyCore(t, sp.s0, sp.e0, prop, v);
-    if (!res) { LMApp.toast('选区骑跨了引用/链接/跳转或颜色标记，请调整选区'); return true; }
+    const wholeCell = soft && prop === 'hl' && v === ''; /* ⊘ 清除：这个格子整体清 */
+    if (!sp && !wholeCell) {
+      if (soft) return false; /* 静默退出，让整块路径接手 */
+      LMApp.toast('请先选中同一单元格里的文字，再选样式');
+      return true;
+    }
+    const res = sp ? inlineApplyCore(t, sp.s0, sp.e0, prop, v) : inlineApplyCore(t, 0, t.length, 'hl', '');
+    if (!res) {
+      if (soft) return false; /* 这格本来没高亮 / 骑跨标记 → 交给整块兜底，不报错 */
+      LMApp.toast('选区骑跨了引用/链接/跳转或颜色标记，请调整选区');
+      return true;
+    }
     cell.set(res.nt);
     cell.el.innerHTML = LMApp.md(res.nt);
-    restoreSelectionIn(cell.el, needle);
+    if (sp) restoreSelectionIn(cell.el, needle);
     if (!preview) { /* 预览模式：数据已改但不提交/不记撤销/不提示，等确认后统一补一步 */
       LMApp.commit({ silent: true, rerender: false });
       markSaved();
-      LMApp.toast(res.msg + '（仅选中文字）');
+      LMApp.toast(sp ? (res.msg + '（仅选中文字）') : '已清除这个格子的高亮');
     }
     return true;
   }
@@ -2704,6 +2715,24 @@ window.LMEditor = (function () {
     let out = t, cut = 0;
     rm.forEach(function (k) { out = out.slice(0, k.a) + out.slice(k.b); cut += k.b - k.a; });
     return { text: out, s: s, e: e - cut };
+  }
+  /* ★ 修复137：没有选中文字时点色板的 ⊘，旧代码只走 applyStyle —— 那只清了块级 b.style.hl，
+     行内 ==…== 一个都没动，于是「取消高亮」点了等于没点。这里一次清干净：
+     ① 旧版整段底色 b.style.hl ② 正文里所有 ==…== 标记（含 ==#色, 带色高亮）。
+     返回 true = 确实清掉了东西（调用方据此提示 + 提交） */
+  function stripHlFromBlock(b) {
+    if (!b || typeof b !== 'object') return false;
+    let hit = false;
+    if (b.style && b.style.hl) { b.style.hl = ''; hit = true; }
+    if (typeof b.text === 'string') {
+      const t = String(b.text).replace(/\u00A0/g, ' ');
+      const w = walkInline(t);
+      if (w.toks.some(function (k) { return k.t === 'hl'; })) {
+        b.text = stripToks(t, w.toks, 0, t.length, ['hl']).text;
+        hit = true;
+      }
+    }
+    return hit;
   }
   /* ★ 块内选区的行内颜色 / 高亮 / 渐变：只改选中文字，不改整段（返回 true = 已按行内处理）。
      color → @@色值,选区@@；grad → @@gradN,选区@@；hl → ==#色值,选区==（取消 / 换色 / 嵌套细节见
@@ -4089,11 +4118,25 @@ window.LMEditor = (function () {
           /* ★ 修复61：荧光笔必须有选区 —— 此前无选区时落到 applyStyle 把「整块」涂上底色
              （s.hl 块级样式把全部文字包进 span.hl），用户以为坏了（"高亮是整个文本框"）。
              现在 hl 无选区时提示先拖选文字，不再动整块；color/grad 整块模式保留。
-             例外：⊘（空值=清除）随时可用 —— 已经整块高亮过的块要能取消，不能把自己锁死 */
-          if (prop === 'hl' && v !== '') {
-            if (applyInlineSwatch(prop, v)) return;
-            if (applyInlineSwatchBlock(prop, v)) return;
-            LMApp.toast('请先拖选要高亮的文字，再点颜色（荧光笔只作用于选中部分）');
+             ★ 修复137：⊘（空值=清除）要**三条路都试**。以前 ⊘ 走的是 else 分支，直接落到
+             整块 applyStyle —— 而表格不是「文字块」，applyStyle 只会弹「请先点击要修改的文字」，
+             表格单元格里的 ==…== 一个没动 → 用户报的「无法取消高亮」（点 ⊘ 像没反应）。 */
+          if (prop === 'hl') {
+            if (v !== '') {
+              if (applyInlineSwatch(prop, v)) return;
+              if (applyInlineSwatchBlock(prop, v)) return;
+              LMApp.toast('请先拖选要高亮的文字，再点颜色（荧光笔只作用于选中部分）');
+              return;
+            }
+            if (applyInlineSwatch(prop, '', false, true)) return;   /* ① 表格：选中文字 → 只清选中；没选 → 清整格 */
+            if (applyInlineSwatchBlock(prop, '')) return;           /* ② 正文块：选中文字 → 只清选中 */
+            if (stripHlFromBlock(activeBlock() || (pageOf() && pageOf().blocks[tb.active]))) {
+              LMApp.commit({ silent: true });                       /* ③ 整块：行内 ==…== + 旧版整段底色一起清 */
+              markSaved();
+              LMApp.toast('已清除高亮');
+              return;
+            }
+            applyStyle(prop, '');
             return;
           }
           if ((prop === 'color') && applyInlineSwatch(prop, v)) return;

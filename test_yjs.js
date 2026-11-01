@@ -527,9 +527,11 @@ T('自由框 background:transparent + shadow:none + admin 淡蓝虚线 + 旧白�
 
 /* ---------- 9.26) 修复61：荧光笔必须有选区（不再整块涂色） ---------- */
 console.log('【9.26】修复61：hl 无选区 → toast 提示先拖选，绝不动整块；color/grad 整块模式保留');
-T('hl 色板无选区时提示且 return（⊘ 清除除外），不再落 applyStyle 整块上色',
+T('hl 色板无选区时提示且 return（⊘ 清除除外），不再落 applyStyle 整块上色；⊘ 三条路兜底（单元格 → 选区 → 整块）',
   edt2.indexOf("LMApp.toast('请先拖选要高亮的文字，再点颜色（荧光笔只作用于选中部分）');") > 0
-    && edt2.indexOf("if (prop === 'hl' && v !== '') {") > 0
+    && edt2.indexOf("if (prop === 'hl') {") > 0
+    && edt2.indexOf("if (v !== '') {") > 0
+    && edt2.indexOf("if (applyInlineSwatch(prop, '', false, true)) return;") > 0
     && edt2.indexOf("if ((prop === 'color') && applyInlineSwatch(prop, v)) return;") > 0
     && edt2.indexOf("return; /* ★ 修复61：无选区不整块上色（确认路径同提示逻辑） */") > 0);
 
@@ -1743,7 +1745,7 @@ T('collab.js：管理员拉云端时按「内容不同就块级合并」收敛�
 console.log('【9.52】修复87：表格单元格高亮只出黄 · 换色生成坏标记 · ∅ 清不掉 · 渐变不显示 —— 与正文块统一成一份逻辑');
 T('editor.js：行内高亮/上色/渐变只有一份实现 inlineApplyCore，单元格与正文块都调它（不再各写一套）',
   edt2.indexOf('function inlineApplyCore(t, s0, e0, prop, v) {') > 0
-    && edt2.indexOf('const res = inlineApplyCore(t, sp.s0, sp.e0, prop, v);') > 0
+    && edt2.indexOf('inlineApplyCore(t, sp.s0, sp.e0, prop, v)') > 0
     && edt2.indexOf('const res = inlineApplyCore(t, s0, e0, prop, v);') > 0);
 T('单元格路径不再自己拼标记：忽略色值的 wrapTok(\'hl\',\'==\',\'==\')、漏 grad 前缀的 \'@@\' + v + \',\' 都删净',
   edt2.indexOf("wrapTok('hl', '==', '==')") < 0
@@ -1801,6 +1803,56 @@ T('正文块：行内高亮时一并清掉旧版整段底色 b.style.hl（否则
     } catch (e) { ok52 = false; d52 = '抛出 ' + e.message; }
   }
   T('真跑：高亮带色 · 换色不留半截 == · 同色/∅ 取消 · 渐变写到 @@gradN,@@ 并渲染出 .grad-N · 高亮里的加粗不被吞', ok52, d52);
+})();
+
+/* ---------- 9.52b) 修复137：表格里点 ⊘ 取消不掉高亮 ---------- */
+console.log('【9.52b】修复137：点 ⊘ 取消高亮 —— 表格单元格以前根本不走这条分支');
+T('editor.js：色板 ⊘ 对高亮先试表格单元格 applyInlineSwatch(prop, \'\', false, true)，不再直接落到整块 applyStyle',
+  edt2.indexOf("if (applyInlineSwatch(prop, '', false, true)) return;") > 0
+    && edt2.indexOf("if (prop === 'hl' && v !== '') {") < 0);
+T('editor.js：整块兜底 stripHlFromBlock —— 旧版整段底色 b.style.hl 与行内 ==…== 一起清（无选区也能取消）',
+  edt2.indexOf('function stripHlFromBlock(b) {') > 0
+    && edt2.indexOf("if (b.style && b.style.hl) { b.style.hl = ''; hit = true; }") > 0
+    && edt2.indexOf('if (stripHlFromBlock(activeBlock() || (pageOf() && pageOf().blocks[tb.active]))) {') > 0);
+T('editor.js：单元格里没选中文字也能清（清整格 ==…==）；soft 模式没得清时返回 false 让整块接手，不弹误导提示',
+  edt2.indexOf('function applyInlineSwatch(prop, v, preview, soft) {') > 0
+    && edt2.indexOf("const wholeCell = soft && prop === 'hl' && v === '';") > 0
+    && edt2.indexOf(": inlineApplyCore(t, 0, t.length, 'hl', '');") > 0
+    && edt2.indexOf('if (soft) return false;') > 0);
+
+/* 真跑：整格清除（没选区时用的那次调用）与整块兜底 stripHlFromBlock，拿真 md.js 核对渲染 */
+(function () {
+  const src137 = edt2.replace(/\r\n/g, '\n');
+  const a137 = src137.indexOf('  function inlineApplyCore(t, s0, e0, prop, v) {');
+  const b137 = src137.indexOf('  /* ★ 块级行内字号 / 字体（修复㉔）');
+  const code137 = (a137 >= 0 && b137 > a137) ? src137.slice(a137, b137) : '';
+  let LMMD137 = null;
+  try { LMMD137 = require(path.join(DIR, 'js/md.js')); } catch (e137) { LMMD137 = null; }
+  let ok137 = false, d137 = '切片/md.js 不可用';
+  if (code137 && LMMD137) {
+    try {
+      const api = new Function(code137 + '\nreturn { core: inlineApplyCore, strip: stripHlFromBlock };')();
+      const t1 = '==#ffe08a,目前主流的模型结构，核心是注意力机制=='; /* 截图里那一格 */
+      const r1 = api.core(t1, 0, t1.length, 'hl', '');
+      const t2 = '前面 ==#ffc9de,一半高亮== 后面';
+      const r2 = api.core(t2, 0, t2.length, 'hl', '');
+      const t3 = '没有任何高亮';
+      const r3 = api.core(t3, 0, t3.length, 'hl', '');           /* 没得清 → null，让调用方走整块/提示 */
+      const blk = { text: '前 ==甲== 后 ==#ffe08a,乙==', style: { hl: '#fff3b0' } };
+      const hit = api.strip(blk);
+      const blk2 = { text: '干净的段落' };
+      const hit2 = api.strip(blk2);
+      ok137 = !!r1 && r1.nt === '目前主流的模型结构，核心是注意力机制'
+        && LMMD137.inlineFmt(r1.nt).indexOf('<mark') < 0
+        && !!r2 && r2.nt === '前面 一半高亮 后面'
+        && r3 === null
+        && hit === true && blk.text === '前 甲 后 乙' && blk.style.hl === ''
+        && hit2 === false && blk2.text === '干净的段落';
+      if (!ok137) d137 = JSON.stringify({ r1: r1, r2: r2, r3: r3, blkText: blk.text, hl: blk.style.hl, hit: hit, hit2: hit2 }).slice(0, 400);
+    } catch (e) { ok137 = false; d137 = '抛出 ' + e.message; }
+  }
+  T('真跑：整格清除剥净 ==#色,…==（截图那一格）· 只包住一段也能清 · 本来没高亮返回 null · stripHlFromBlock 连旧底色一起清',
+    ok137, d137);
 })();
 
 /* ---------- 9.53) 修复88：在线协同提速（有人在线自动更快）+ 结构冲突可见化 ---------- */
@@ -3403,10 +3455,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=136 · LM_ASSET_VER=136',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=137 · LM_ASSET_VER=137',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=135/g) || []).length === 0 && /\?v=136/.test(html)
-      && /LM_ASSET_VER = '136'/.test(appJs));
+      && (html.match(/\?v=136/g) || []).length === 0 && /\?v=137/.test(html)
+      && /LM_ASSET_VER = '137'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4307,10 +4359,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 136（?v=136 共 22 处 · v135 无残留 · LM_ASSET_VER=136）',
-    (html.match(/\?v=136/g) || []).length === 22 && (html.match(/\?v=135/g) || []).length === 0
-      && /LM_ASSET_VER = '136'/.test(appJs),
-    'v136=' + (html.match(/\?v=136/g) || []).length + ' v135=' + (html.match(/\?v=135/g) || []).length);
+  T('版本已升到 137（?v=137 共 22 处 · v136 无残留 · LM_ASSET_VER=137）',
+    (html.match(/\?v=137/g) || []).length === 22 && (html.match(/\?v=136/g) || []).length === 0
+      && /LM_ASSET_VER = '137'/.test(appJs),
+    'v137=' + (html.match(/\?v=137/g) || []).length + ' v136=' + (html.match(/\?v=136/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
