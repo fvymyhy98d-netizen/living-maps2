@@ -2547,7 +2547,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       const s = srcOf('js/ai.js');
       return s.indexOf('keep.focus') > 0 && s.indexOf('input.setSelectionRange(keep.sel, keep.sel)') > 0
         && s.indexOf("body.querySelectorAll('details.lm-ai-cite')") > 0
-        && s.indexOf('panel.scrollTop = keep.scroll') > 0
+        && s.indexOf('body.scrollTop = keep.scroll') > 0   /* ★ 修复135：滚动容器变成 .lm-ai-body */
         && (s.match(/if \(input\) input\.value = ''/g) || []).length >= 2;
     })());
 
@@ -3403,10 +3403,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=134 · LM_ASSET_VER=134',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=135 · LM_ASSET_VER=135',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=133/g) || []).length === 0 && /\?v=134/.test(html)
-      && /LM_ASSET_VER = '134'/.test(appJs));
+      && (html.match(/\?v=134/g) || []).length === 0 && /\?v=135/.test(html)
+      && /LM_ASSET_VER = '135'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4103,7 +4103,7 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('function (txt, final, think)') > 0
         && a.indexOf('lm-ai-thk') > 0 && a.indexOf('思考过程 · ') > 0
         && a.indexOf("d.removeAttribute('open')") > 0            /* 思考完 → 自己收起来 */
-        && a.indexOf('think: thinkTxt') > 0 && a.indexOf('if (msg.think) rec.think') > 0
+        && a.indexOf('think: thinkTxt') > 0 && a.indexOf('if (msg.think) {') > 0
         && a.indexOf('lm-ai-stream') > 0                          /* 流式内容画在对话区里 */
         && c.indexOf('.lm-ai-thk{') > 0 && c.indexOf('.lm-ai-thk-bd{') > 0;
     })());
@@ -4187,16 +4187,100 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
       const c = srcOf('css/style.css');
       return a.indexOf('chatStick') > 0 && a.indexOf('thkStick') > 0
         && a.indexOf('tbd.scrollTop = tbd.scrollHeight') > 0
-        && a.indexOf('if (chatStick) { try { chatBox.scrollTop = chatBox.scrollHeight;') > 0
+        && a.indexOf('if (chatStick) { try { cb.scrollTop = cb.scrollHeight;') > 0
         && a.indexOf('thkTouch') > 0
         && a.indexOf("classList.contains('lm-ai-thk-bd')") > 0
         && c.indexOf('.lm-ai-thk.live .lm-ai-thk-bd{max-height:220px') > 0;
     })());
 
-  T('版本已升到 134（?v=134 共 22 处 · v133 无残留 · LM_ASSET_VER=134）',
-    (html.match(/\?v=134/g) || []).length === 22 && (html.match(/\?v=133/g) || []).length === 0
-      && /LM_ASSET_VER = '134'/.test(appJs),
-    'v134=' + (html.match(/\?v=134/g) || []).length + ' v133=' + (html.match(/\?v=133/g) || []).length);
+  /* —— ★ 修复135：这一版专治「看着没坏、用起来别扭」的那几个 —— */
+
+  T('修复135 · 真跑：chatPush 带 tid 时写进指定对话 —— 流式回答不会再串到用户后来切过去的对话里',
+    (function () {
+      const ai = require(path.join(DIR, 'js/ai.js'));
+      const mem = {};
+      const oldLS = global.localStorage;
+      global.localStorage = {
+        getItem: function (k) { return (k in mem) ? mem[k] : null; },
+        setItem: function (k, v) { mem[k] = String(v); },
+        removeItem: function (k) { delete mem[k]; }
+      };
+      let ok = false;
+      try {
+        const A = ai.threadNew('md135');                              /* 对话 A（当前） */
+        ai.chatPush('md135', { r: 'me', t: '在 A 里问的' }, A);
+        const B = ai.threadNew('md135');                              /* 又开一个 B，当前切到 B */
+        ai.chatPush('md135', { r: 'ollama', t: '回答该回 A' }, A);    /* 答完时用户已经在 B 了 */
+        ai.chatPush('md135', { r: 'me', t: 'B 自己的问题' });         /* 不带 tid → 落当前 B */
+        ok = ai.curTid('md135') === B
+          && ai.threadSet('md135', A) && ai.chatOf('md135').length === 2
+          && ai.chatOf('md135')[1].t === '回答该回 A'
+          && ai.threadSet('md135', B) && ai.chatOf('md135').length === 1
+          && ai.chatOf('md135')[0].t === 'B 自己的问题';
+        /* 指定的对话半路被删了 → 退回当前对话，不抛错也不丢这条 */
+        ai.threadDel('md135', [A]);
+        ai.chatPush('md135', { r: 'me', t: '兜底这一条' }, A);
+        ok = ok && ai.chatOf('md135').length === 2 && ai.chatOf('md135')[1].t === '兜底这一条';
+      } finally {
+        if (oldLS === undefined) { try { delete global.localStorage; } catch (e) { global.localStorage = undefined; } }
+        else global.localStorage = oldLS;
+      }
+      return ok;
+    })());
+
+  T('修复135 · 重绘不再丢「你滚到哪 / 勾了谁 / 思考框开着」：滚动交给 .lm-ai-body · 勾选还原 · 思考框展开状态保留',
+    (function () {
+      const a = srcOf('js/ai.js');
+      return a.indexOf('scroll: body.scrollTop || 0') > 0
+        && a.indexOf('body.scrollTop = keep.scroll') > 0
+        && a.indexOf("body.querySelectorAll('details.lm-ai-thk')") > 0
+        && a.indexOf('keep.thk[i]') > 0
+        && a.indexOf('const prev = {};') > 0
+        && a.indexOf('if (any) thSyncDel();') > 0
+        && a.indexOf('keep.scopeFocus') > 0;      /* 勾选框点完焦点不丢，空格能连着点 */
+    })());
+
+  T('修复135 · 对话区：新消息拽到底，只是点个勾选就留在原处（不再每次重绘都被踢到最底）',
+    (function () {
+      const a = srcOf('js/ai.js');
+      return a.indexOf('let chatForceBottom = false;') > 0
+        && a.indexOf('chatForceBottom = true;') > 0
+        && a.indexOf('chatBottom: chatForceBottom ||') > 0
+        && a.indexOf('chatEl.scrollTop = keep.chatBottom ? chatEl.scrollHeight : keep.chatTop') > 0
+        && a.indexOf('只对这一次重绘生效') > 0;
+    })());
+
+  T('修复135 · 流式气泡不会画进已经作废的节点：自动跟到新的 .lm-ai-chat，切走对话就停笔并按 tid0 落库',
+    (function () {
+      const a = srcOf('js/ai.js');
+      return a.indexOf('const liveBox = function ()') > 0
+        && a.indexOf('const tid0 = curTid(id);') > 0
+        && a.indexOf('if (curTid(id) !== tid0) return null;') > 0
+        && a.indexOf('(tid && tList(st, id).filter') > 0
+        && (a.match(/tid0\)/g) || []).length >= 2;
+    })());
+
+  T('修复135 · 浮层定位按顶栏真实下沿算（刘海屏满屏时不会压住按钮）· 换档位 / 转屏都会重算',
+    (function () {
+      const a = srcOf('js/ai.js');
+      return a.indexOf('function placeFly(el)') > 0
+        && a.indexOf('hr.bottom - pr.top') > 0
+        && a.indexOf('placeFly(thBox)') > 0 && a.indexOf('placeFly(szMenu)') > 0
+        && (a.match(/placeFly\(/g) || []).length >= 5;
+    })());
+
+  T('修复135 · 思考过程被截断时如实交代（上限 1200 字，界面写「只存了前 1200 字」，不假装是全的）',
+    (function () {
+      const a = srcOf('js/ai.js');
+      return a.indexOf('if (th.length > 1200) rec.thinkFull = th.length;') > 0
+        && a.indexOf('m.thinkFull || String(m.think).length') > 0
+        && a.indexOf('只存了前 1200 字') > 0;
+    })());
+
+  T('版本已升到 135（?v=135 共 22 处 · v134 无残留 · LM_ASSET_VER=135）',
+    (html.match(/\?v=135/g) || []).length === 22 && (html.match(/\?v=134/g) || []).length === 0
+      && /LM_ASSET_VER = '135'/.test(appJs),
+    'v135=' + (html.match(/\?v=135/g) || []).length + ' v134=' + (html.match(/\?v=134/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();

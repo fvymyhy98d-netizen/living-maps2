@@ -662,6 +662,9 @@ W.LMAI = (function () {
   }
   /* ---------- ⑨ 界面：右下角「✨ 智能提炼」浮标 + 面板 ---------- */
   let panel = null, fab = null, idx = null, idxSrc = null;
+  /* ★ 修复135：有新消息进来时必须把对话区拽到底（不然用户在往上翻，发完看不到自己的话）；
+     用户只是点个勾选/切个档位时则保持原位置。由 chatPush 置位、renderPanel 消费。 */
+  let chatForceBottom = false;
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -817,14 +820,22 @@ W.LMAI = (function () {
     const t = arr.filter(function (x) { return x.id === st.cur[id]; })[0] || arr[0];
     return (t && Array.isArray(t.msgs)) ? t.msgs.slice() : [];
   }
-  function chatPush(id, msg) {
+  /* ★ 修复135：tid 可选 —— 传了就写进指定的那个对话。
+     为什么要这个：流式回答要几十秒，用户中途点 ☰ 切到别的对话时，
+     原逻辑会把这句回答塞进**新**对话（串台）。提问时记下 tid，回答到了再按 tid 落库。 */
+  function chatPush(id, msg, tid) {
     if (!id || !msg) return;
     const rec = { r: msg.r || 'me', t: String(msg.t || '').slice(0, 4000), ts: Date.now(), src: msg.src || null };
     if (msg.q) rec.q = String(msg.q).slice(0, 120);   /* ★ 修复117：记下这一问，供出处高亮用 */
     /* ★ 修复131：「这次送了什么」那行小字也要存，否则重绘就没了 */
     if (msg.note) rec.note = String(msg.note).slice(0, 120);
-    /* ★ 修复133：思考过程也存进对话（截断到 1200 字，别撑爆 localStorage），重绘后还能点开看 */
-    if (msg.think) rec.think = String(msg.think).slice(0, 1200);
+    /* ★ 修复133：思考过程也存进对话（截断到 1200 字，别撑爆 localStorage），重绘后还能点开看。
+       ★ 修复135：被截断时记下原始字数，界面上如实写「只存了前 1200 字」，不假装是全的。 */
+    if (msg.think) {
+      const th = String(msg.think);
+      rec.think = th.slice(0, 1200);
+      if (th.length > 1200) rec.thinkFull = th.length;
+    }
     /* ★ 修复115：以前这里只存 {r,t,ts,src}，把 cite 悄悄丢了 → 「📄 原文出处」存不进对话、重绘就消失。
        现在把出处一起存（≤4 条 / 每条 ≤200 字），并做长度裁剪防膨胀。 */
     if (Array.isArray(msg.cite) && msg.cite.length) {
@@ -838,12 +849,13 @@ W.LMAI = (function () {
       if (!rec.cite.length) delete rec.cite;
     }
     const st = tStore();
-    const t = tCur(st, id);
+    const t = (tid && tList(st, id).filter(function (x) { return x.id === tid; })[0]) || tCur(st, id);
     t.msgs.push(rec);
     t.msgs = t.msgs.slice(-PER_THREAD);             /* 每个对话最多留 12 条，防 localStorage 膨胀 */
     t.ts = rec.ts;
     if (!t.title || t.title === '新对话') t.title = titleOf(t.msgs);
     tSave(st);
+    chatForceBottom = true;       /* ★ 修复135：新消息来了就把对话区拽到底 */
   }
   /* 清空 = 只清「当前这个对话」的内容，别的对话一条不动、对话本身也还在（标题回到「新对话」） */
   function chatClear(id) {
@@ -1074,6 +1086,11 @@ W.LMAI = (function () {
       panel.style.maxHeight = '';
       try { panel.style.removeProperty('--chat'); } catch (e) { /* 老浏览器：忽略 */ }
     }
+    /* ★ 修复135：换档位会改变面板高度，开着的浮层要重新贴一下，否则会悬在半空 */
+    const flyT = panel.querySelector('.lm-ai-threads');
+    const flyS = panel.querySelector('.lm-ai-sizemenu');
+    if (flyT && !flyT.hidden) placeFly(flyT);
+    if (flyS && !flyS.hidden) placeFly(flyS);
     const b = panel.querySelector('.lm-ai-size');
     if (b) {
       b.textContent = (sizeMode === 'max') ? '⤡' : '⤢';
@@ -1110,6 +1127,19 @@ W.LMAI = (function () {
     if (sizeMode === 'custom') h += '<div class="lm-ai-sz-tip">当前是你拖出来的大小 · 选上面任一档即可覆盖</div>';
     box.innerHTML = h;
   }
+  /* ★ 修复135：浮层（对话列表 / 四档菜单）的 top 不能写死。
+     手机「满屏」档的顶栏会因为 env(safe-area-inset-top) 变高（刘海屏），
+     写死 46/50px 就会把浮层压到顶栏按钮上。打开时按顶栏的真实下沿算一次。 */
+  function placeFly(el) {
+    if (!el || !panel) return;
+    const head = panel.querySelector('.lm-ai-head');
+    if (!head) return;
+    const pr = panel.getBoundingClientRect();
+    const hr = head.getBoundingClientRect();
+    const top = Math.max(0, Math.round(hr.bottom - pr.top) + 6);
+    el.style.top = top + 'px';
+    el.style.maxHeight = Math.max(120, Math.round(pr.height - top - 10)) + 'px';
+  }
   /* ★ 修复132：对话列表（顶栏 ☰ 点开）。每行 = 勾选框 + 标题（点它切过去）+ 单个删除；
      顶部「全选 / 删除选中」，删之前要点两次（第一次变成「再点一次确认」，3 秒不管就复原）。 */
   function renderThreads(pageId) {
@@ -1117,6 +1147,12 @@ W.LMAI = (function () {
     if (!box) return;
     const id = pageId || curId();
     const ths = threadsOf(id);
+    /* ★ 修复135：重绘（发消息 / 切模式 / 新建对话都会触发）不该把已经勾选的那些清掉 */
+    const prev = {};
+    box.querySelectorAll('.lm-ai-th-ck:checked').forEach(function (c) {
+      const k = c.getAttribute('data-tid');
+      if (k) prev[k] = 1;
+    });
     let h = '<div class="lm-ai-th-top">'
       + '<label class="lm-ai-th-all"><input type="checkbox" class="lm-ai-thallck"> 全选</label>'
       + '<span class="lm-ai-th-n">共 ' + ths.length + ' 个对话</span>'
@@ -1139,6 +1175,12 @@ W.LMAI = (function () {
     h += '<div class="lm-ai-th-foot"><button type="button" class="btn lm-ai-new2">＋ 新对话</button>'
       + '<button type="button" class="btn lm-ai-th-close">收起</button></div>';
     box.innerHTML = h;
+    /* 把刚才勾着的补回来（勾满 → 全选框也跟着选中） */
+    let any = false;
+    box.querySelectorAll('.lm-ai-th-ck').forEach(function (c) {
+      if (prev[c.getAttribute('data-tid')]) { c.checked = true; any = true; }
+    });
+    if (any) thSyncDel();
   }
   /* 勾选框一变就刷新「删除选中（n）」和「全选」的半选状态 */
   function thSyncDel() {
@@ -1208,7 +1250,8 @@ W.LMAI = (function () {
         return '<div class="lm-ai-msg ' + cls + '"><span class="lm-ai-who">' + who + '</span>'
           /* ★ 修复133：思考过程放在正文**上方**，默认收起（点开才看）—— 和 DeepSeek 一样 */
           + (m.think
-            ? '<details class="lm-ai-thk"><summary>💭 思考过程 · ' + String(m.think).length + ' 字（点开看）</summary>'
+            ? '<details class="lm-ai-thk"><summary>💭 思考过程 · ' + (m.thinkFull || String(m.think).length) + ' 字（点开看'
+              + (m.thinkFull ? '；太长，只存了前 1200 字' : '') + '）</summary>'
               + '<div class="lm-ai-thk-bd">' + esc(String(m.think)).replace(/\n/g, '<br>') + '</div></details>'
             : '')
           + '<p>' + esc(m.t).replace(/\n/g, '<br>') + '</p>'
@@ -1286,11 +1329,30 @@ W.LMAI = (function () {
       focus: keepInput && document.activeElement === keepInput,
       sel: (keepInput && typeof keepInput.selectionStart === 'number') ? keepInput.selectionStart : 0,
       open: [],
+      thk: [],
       ans: (function () { const a = body.querySelector('.lm-ai-ans'); return a ? a.innerHTML : ''; })(),
       paste: !!body.querySelector('.lm-ai-pastebox:not([hidden])'),
-      scroll: panel.scrollTop || 0
+      /* ★ 修复135：勾选框点完会整块重绘，焦点会掉到 <body> 上 —— 键盘用户按空格连点第二下就没反应了。
+         记一下焦点，绘完还给新的那个勾选框。 */
+      scopeFocus: (function () {
+        const c = body.querySelector('.lm-ai-scopeck');
+        return !!c && document.activeElement === c;
+      })(),
+      /* ★ 修复135：滚动位置要从 .lm-ai-body 读 —— 面板本身已经不滚了（它 overflow:hidden），
+         以前读 panel.scrollTop 恒为 0，等于每次重绘都把用户滚到的地方拉回顶部。 */
+      scroll: body.scrollTop || 0,
+      /* ★ 修复135：对话区也别无条件拽到底 —— 你正翻着旧消息时（比如去点「根据本页内容回答」），
+         重绘一下就被踢到最底很烦。原来停在底部就继续贴底，否则原地不动。 */
+      chatTop: (function () { const c = body.querySelector('.lm-ai-chat'); return c ? c.scrollTop : 0; })(),
+      chatBottom: chatForceBottom || (function () {
+        const c = body.querySelector('.lm-ai-chat');
+        return !!c && (c.scrollHeight - c.scrollTop - c.clientHeight) < 24;
+      })()
     };
+    chatForceBottom = false;      /* 只对这一次重绘生效 */
     body.querySelectorAll('details.lm-ai-cite').forEach(function (d, i) { keep.open[i] = !!d.open; });
+    /* ★ 修复135：思考框的展开状态也要留住（点了「点开看」，重绘一次又收起来会很烦） */
+    body.querySelectorAll('details.lm-ai-thk').forEach(function (d, i) { keep.thk[i] = !!d.open; });
     body.innerHTML = h;
     const input = body.querySelector('.lm-ai-input');
     const go = body.querySelector('.lm-ai-go');
@@ -1300,11 +1362,16 @@ W.LMAI = (function () {
     if (ans && keep.ans) ans.innerHTML = keep.ans;
     if (keep.paste) { const pb0 = body.querySelector('.lm-ai-pastebox'); if (pb0) pb0.hidden = false; }
     body.querySelectorAll('details.lm-ai-cite').forEach(function (d, i) { if (keep.open[i]) d.open = true; });
-    if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+    body.querySelectorAll('details.lm-ai-thk').forEach(function (d, i) { if (keep.thk[i]) d.open = true; });
+    if (chatEl) chatEl.scrollTop = keep.chatBottom ? chatEl.scrollHeight : keep.chatTop;
     if (input && keep.focus) {
       try { input.focus({ preventScroll: true }); input.setSelectionRange(keep.sel, keep.sel); } catch (e) { /* 忽略 */ }
     }
-    panel.scrollTop = keep.scroll;
+    body.scrollTop = keep.scroll;
+    if (keep.scopeFocus) {
+      const ck0 = body.querySelector('.lm-ai-scopeck');
+      if (ck0) { try { ck0.focus({ preventScroll: true }); } catch (e) { /* 忽略 */ } }
+    }
     /* ★ 修复110：本地问答（默认模式）—— 判断问法 → 组织成一段回答；仍然只用原文，不编造 */
     const runLocal = function (q) {
       /* ★ 修复111：追问（「它 / 这个 / 上面」）→ 把上一问的词一起拿去检索，免得答非所问 */
@@ -1364,22 +1431,42 @@ W.LMAI = (function () {
         return m && m.t && (m.r === 'me' || m.r === 'ollama' || m.r === 'local');
       }).slice(-4);
       const model = (W.LMOllama.cfg() || {}).model || '本机模型';
+      /* ★ 修复135：记住这一问落在哪个对话（中途切走，回答也不会串到别的对话里） */
+      const tid0 = curTid(id);
       chatPush(id, { r: 'me', t: q });
       if (input) input.value = '';        /* 发出去就清空（同 runLocal） */
       renderPanel();
-      const chatBox = panel.querySelector('.lm-ai-chat');
+      let chatBox = panel.querySelector('.lm-ai-chat');
       let streamEl = null;
       let thinkTxt = '';
       /* ★ 修复134：DeepSeek 式「跟随」—— 只在你本来就停在底部时才自动往下滚。
          你手动往上翻（想看前面写了什么），就立刻停止跟随、不再抢你的滚动位置；
          重新滚到底部，跟随自动恢复。思考框内部也是同一套规则。 */
       let chatStick = true, thkStick = true, thkTouch = 0;
-      if (chatBox) chatBox.addEventListener('scroll', function () {
-        chatStick = (chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight) < 32;
-      }, { passive: true });
+      const bindChat = function (box) {
+        if (!box || box.__lmStickBound) return;
+        box.__lmStickBound = true;
+        box.addEventListener('scroll', function () {
+          chatStick = (box.scrollHeight - box.scrollTop - box.clientHeight) < 32;
+        }, { passive: true });
+      };
+      bindChat(chatBox);
+      /* ★ 修复135：重绘（切模式 / 切对话 / 清空）会把 .lm-ai-chat 整块换掉，
+         此时旧节点已脱离文档 —— 以前还往旧节点里画，等于流式内容「消失」。
+         现在自动跟到新节点；如果用户已经切到别的对话，就不再画了（回答最后会按 tid0 落库）。 */
+      const liveBox = function () {
+        if (chatBox && (chatBox.isConnected == null ? document.body.contains(chatBox) : chatBox.isConnected)) return chatBox;
+        if (curTid(id) !== tid0) return null;
+        const fresh = panel.querySelector('.lm-ai-chat');
+        if (!fresh) return null;
+        chatBox = fresh; streamEl = null; chatStick = true;
+        bindChat(chatBox);
+        return chatBox;
+      };
       const drawLive = function (txt, think) {
-        if (!chatBox) return;
-        if (!streamEl || streamEl.parentNode !== chatBox) {
+        const cb = liveBox();
+        if (!cb) return;
+        if (!streamEl || streamEl.parentNode !== cb) {
           streamEl = document.createElement('div');
           streamEl.className = 'lm-ai-msg ollama lm-ai-stream';
           /* 思考框的滚动事件不冒泡，用 capture 接住；程序自己滚动的那一下不算「用户上滚」 */
@@ -1389,7 +1476,7 @@ W.LMAI = (function () {
             if (Date.now() - thkTouch < 220) return;
             thkStick = (b.scrollHeight - b.scrollTop - b.clientHeight) < 24;
           }, true);
-          chatBox.appendChild(streamEl);
+          cb.appendChild(streamEl);
         }
         let s = '';
         if (think) {
@@ -1406,7 +1493,7 @@ W.LMAI = (function () {
           thkTouch = Date.now();
           try { tbd.scrollTop = tbd.scrollHeight; } catch (eT) { /* noop */ }
         }
-        if (chatStick) { try { chatBox.scrollTop = chatBox.scrollHeight; } catch (eS) { /* noop */ } }
+        if (chatStick) { try { cb.scrollTop = cb.scrollHeight; } catch (eS) { /* noop */ } }
       };
       drawLive('', '');
       W.LMOllama.ask(q, digest, function (txt, final, think) {
@@ -1428,7 +1515,7 @@ W.LMAI = (function () {
           t += '\n\n（说明：这一问确实把本页正文 ' + info.pageChars + ' 字一起发出去了，'
             + '上面那句是模型自己判断失误；换个具体点的问法、或再问一次通常就好。）';
         }
-        chatPush(id, { r: 'ollama', t: t || '（本机模型没返回内容：模型可能还在加载，稍等几秒再问一次。）', note: llmNote(), think: thinkTxt });
+        chatPush(id, { r: 'ollama', t: t || '（本机模型没返回内容：模型可能还在加载，稍等几秒再问一次。）', note: llmNote(), think: thinkTxt }, tid0);
         renderPanel();
       }, function (e) {
         chatPush(id, {
@@ -1436,7 +1523,7 @@ W.LMAI = (function () {
           t: '🧠 本机模型没连上：' + ((e && e.message) || e) + '\n\n'
             + (W.LMOllama.helpText ? W.LMOllama.helpText() : '')
             + '\n\n（现在可以直接用 ⚡ 本站速答，不受影响。）'
-        });
+        }, tid0);
         renderPanel();
       });
     };
@@ -1672,6 +1759,12 @@ W.LMAI = (function () {
        （必须放在 mount() 里，不能写在模块顶层 —— node 里 require 本文件时没有 window） */
     window.addEventListener('resize', function () {
       if (!panel || panel.hidden || !isNarrow()) unlockScroll();
+      /* ★ 修复135：转屏 / 改窗口大小时，开着的浮层要重新贴到顶栏下沿 */
+      if (!panel || panel.hidden) return;
+      const sz = panel.querySelector('.lm-ai-sizemenu');
+      const tb = panel.querySelector('.lm-ai-threads');
+      if (sz && !sz.hidden) placeFly(sz);
+      if (tb && !tb.hidden) placeFly(tb);
     });
     const x = panel.querySelector('.lm-ai-x');
     if (x) x.addEventListener('click', function () { toggle(false); });
@@ -1699,7 +1792,7 @@ W.LMAI = (function () {
     const thBox = panel.querySelector('.lm-ai-threads');
     if (listBtn && thBox) listBtn.addEventListener('click', function () {
       const open = thBox.hidden;
-      if (open) renderThreads();
+      if (open) { renderThreads(); placeFly(thBox); }
       thBox.hidden = !open;
       listBtn.classList.toggle('on', open);
     });
@@ -1773,7 +1866,7 @@ W.LMAI = (function () {
     if (sizeBtn && szMenu) sizeBtn.addEventListener('click', function (e) {
       e.stopPropagation();
       const open = szMenu.hidden;
-      if (open) renderSizeMenu();
+      if (open) { renderSizeMenu(); placeFly(szMenu); }
       szMenu.hidden = !open;
       sizeBtn.classList.toggle('on', open);
     });
