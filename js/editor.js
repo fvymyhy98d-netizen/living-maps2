@@ -2509,10 +2509,32 @@ window.LMEditor = (function () {
     for (let ki = 0; ki + 1 < hlToks.length; ki++) {
       if (hlToks[ki].b === rawS && hlToks[ki + 1].a === rawE) { hlPair = { o: hlToks[ki], c: hlToks[ki + 1] }; break; }
     }
-    const atOpen = rawS > 0 ? t.lastIndexOf('@@', rawS - 1) : -1;
-    const atWrapped = atOpen >= 0 && t.slice(rawE, rawE + 2) === '@@'
-      && /^[#a-zA-Z][#a-zA-Z0-9]*,$/.test(t.slice(atOpen + 2, rawS));
-    const atTag = atWrapped ? t.slice(atOpen + 2, rawS).replace(/,$/, '') : '';
+    /* ★ 修复139：找「选区正好等于某个 @@…@@ 的全部可见文字」的那一层（取最内层）。
+       旧版用字符串相邻判断（`@@tag,` 紧贴选区起点、`@@` 紧贴终点）—— 中间一夹 == 高亮就失效：
+       `@@grad2,==文字==@@` 里选「文字」点 ∅，@@ 配对不在选区内 → rm 为空 → 只弹「骑跨」，
+       于是「表格里的渐变取消不掉」。现在按**可见字符数**对齐：中间夹多少标记都认得出。 */
+    const visBefore = function (x) { /* 源下标 x 之前有多少个「可见字符」 */
+      let n = 0;
+      while (n < w.map.length && w.map[n] < x) n++;
+      return n;
+    };
+    const atPairs = (function () { /* 所有 @@…@@ 配对（开/闭 token） */
+      const st = [], out = [];
+      w.toks.forEach(function (k) {
+        if (k.t === '@@o') st.push(k);
+        else if (k.t === '@@c' && st.length) out.push([st.pop(), k]);
+      });
+      return out;
+    })();
+    const selV0 = visBefore(rawS), selV1 = visBefore(rawE);
+    const wrapPair = (function () {
+      let best = null;
+      atPairs.forEach(function (p) {
+        if (visBefore(p[0].b) !== selV0 || visBefore(p[1].a) !== selV1) return; /* 可见范围不重合 */
+        if (!best || p[0].a > best[0].a) best = p; /* 取最内层那一对 */
+      });
+      return best;
+    })();
     /* ③ 外层 hl / @@ 包裹骑跨选区 → 扩到整个包裹，随后 strip 掉再包新标记（绝不嵌套错配） */
     (function () {
       var openHl = null, stAt = [], pairs = [];
@@ -2550,7 +2572,9 @@ window.LMEditor = (function () {
         }
       } else if (v === '') {
         const rm = inter.filter(function (k) { return k.t === 'hl' && k.a >= s0 && k.b <= e0; });
-        if (!rm.length || touchHl || inter.some(function (k) { return k.t === 'hl' && !(k.a >= s0 && k.b <= e0); })) return null;
+        /* ★ 修复139：剥除不看 touchHl —— 去掉标记不会打散 == 配对（只有加标记才会），
+           旧条件会把「选区正好紧挨着一段高亮」的取消也一并毙掉 */
+        if (!rm.length || inter.some(function (k) { return k.t === 'hl' && !(k.a >= s0 && k.b <= e0); })) return null;
         nt = stripToks(t, w.toks, s0, e0, ['hl']).text;
         msg = '已清除高亮（仅选中文字）';
       } else {
@@ -2563,11 +2587,13 @@ window.LMEditor = (function () {
     } else {
       const tag = prop === 'grad' ? 'grad' + v : v; /* ★ 渐变必须带 grad 前缀，否则成了非法字号 */
       const kind = prop === 'grad' ? '渐变' : '颜色';
-      if (atWrapped && (v === '' || atTag === tag)) { /* 同色/清空 → 取消包裹 */
-        nt = t.slice(0, atOpen) + t.slice(rawS, rawE) + t.slice(rawE + 2);
+      if (wrapPair && (v === '' || t.slice(wrapPair[0].a + 2, wrapPair[0].b).replace(/,$/, '') === tag)) {
+        /* 选区 = 这一层 @@…@@ 的全部可见文字（中间可夹 == / ** 等）→ 只去掉这一层，
+           内容（含里面的 == 高亮）原样保留 —— 同色再点 / 点 ∅ 都走这里 = 取消 */
+        nt = t.slice(0, wrapPair[0].a) + t.slice(wrapPair[0].b, wrapPair[1].a) + t.slice(wrapPair[1].b);
         msg = '已清除' + kind + '（仅选中文字）';
-      } else if (atWrapped) { /* 异色 → 原地换色（补回闭合 @@） */
-        nt = t.slice(0, atOpen) + '@@' + tag + ',' + t.slice(rawS, rawE) + '@@' + t.slice(rawE + 2);
+      } else if (wrapPair) { /* 异色 → 只改开标记里的 tag，闭标记与内容原样（== 高亮不受影响） */
+        nt = t.slice(0, wrapPair[0].a + 2) + tag + ',' + t.slice(wrapPair[0].b);
         msg = '已换' + kind + '（仅选中文字）';
       } else if (v === '') { /* 清除：剥掉完整落在选区内的 @@ 配对 */
         const stack = [], rm = [];
@@ -2578,7 +2604,15 @@ window.LMEditor = (function () {
             if (o.a >= s0 && o.b <= e0 && k.a >= s0 && k.b <= e0) rm.push(o, k);
           }
         });
-        if (!rm.length || touchHl || inter.some(function (k) { return (k.t === '@@o' || k.t === '@@c') && rm.indexOf(k) < 0; })) return null;
+        /* ★ 修复139：这里不再看 touchHl —— 「剥除」不会打散 == 的配对（只有「包裹」才会），
+           旧条件会把「选区紧挨着一段高亮」的正常取消也一并毙掉 */
+        if (!rm.length || inter.some(function (k) { return (k.t === '@@o' || k.t === '@@c') && rm.indexOf(k) < 0; })) {
+          /* 没得剥：给一句能照做的提示（别再含糊地说「骑跨了…」，那与事实不符） */
+          const insidePair = atPairs.some(function (p) { return p[0].a <= rawS && p[1].b >= rawE; });
+          return insidePair
+            ? { nt: t, msg: '这段文字只是' + kind + '的一部分，请把整段' + kind + '文字一起选中再取消', noop: true }
+            : { nt: t, msg: '选中的文字没有' + kind + '可取消', noop: true };
+        }
         nt = stripToks(t, rm, s0, e0, ['@@o', '@@c']).text;
         msg = '已清除' + kind + '（仅选中文字）';
       } else {
@@ -2605,16 +2639,24 @@ window.LMEditor = (function () {
     const needle = selTextOf(cellBi); /* 选区被点色板/下拉清掉时用记住的上一次拖选 */
     const t = String(cell.get() || '').replace(/\u00A0/g, ' ');
     const sp = needle ? srcSpanOf(t, needle) : null;
-    const wholeCell = soft && prop === 'hl' && v === ''; /* ⊘ 清除：这个格子整体清 */
+    /* ⊘（清除）没选中文字也能清整格 —— 修复137 只给高亮开了这条路，颜色/渐变仍弹
+       「请先选中同一单元格里的文字」（用户根本不知道该先选）→ 现在三种一起走 */
+    const wholeCell = (v === '') && (soft === true || !sp);
+    const kindTxt = prop === 'hl' ? '高亮' : (prop === 'grad' ? '渐变' : '颜色');
     if (!sp && !wholeCell) {
       if (soft) return false; /* 静默退出，让整块路径接手 */
       LMApp.toast('请先选中同一单元格里的文字，再选样式');
       return true;
     }
-    const res = sp ? inlineApplyCore(t, sp.s0, sp.e0, prop, v) : inlineApplyCore(t, 0, t.length, 'hl', '');
+    const res = sp ? inlineApplyCore(t, sp.s0, sp.e0, prop, v) : inlineApplyCore(t, 0, t.length, prop, v);
     if (!res) {
       if (soft) return false; /* 这格本来没高亮 / 骑跨标记 → 交给整块兜底，不报错 */
       LMApp.toast('选区骑跨了引用/链接/跳转或颜色标记，请调整选区');
+      return true;
+    }
+    if (res.noop) { /* ★ 修复139：没有可清除的标记 → 说清原因，别弹「骑跨」（与事实不符） */
+      if (soft) return false;          /* 高亮的 soft 模式：让整块路径继续兜底 */
+      LMApp.toast(sp ? res.msg : ('这个格子里没有可清除的' + kindTxt));
       return true;
     }
     cell.set(res.nt);
@@ -2623,7 +2665,7 @@ window.LMEditor = (function () {
     if (!preview) { /* 预览模式：数据已改但不提交/不记撤销/不提示，等确认后统一补一步 */
       LMApp.commit({ silent: true, rerender: false });
       markSaved();
-      LMApp.toast(sp ? (res.msg + '（仅选中文字）') : '已清除这个格子的高亮');
+      LMApp.toast(sp ? (res.msg + '（仅选中文字）') : ('已清除这个格子的' + kindTxt));
     }
     return true;
   }
@@ -2761,7 +2803,9 @@ window.LMEditor = (function () {
     const s0 = w.map[vi];
     const e0 = w.map[vi + needle.length - 1] + 1; /* 最后一个选中字符的源结尾（紧贴其后的闭合 @@/== 才能被边界检测到） */
     const res = inlineApplyCore(t, s0, e0, prop, v);
-    if (!res) return false; /* 骑跨引用/链接等 → 回退整段（老行为） */
+    /* ★ 修复139：noop = 「选中的文字里没有这种标记」/「只是标记的一部分」——
+       这里退回整段（老行为），让 applyStyle 去处理块级样式，绝不抢走这次点击 */
+    if (!res || res.noop) return false; /* 骑跨引用/链接等 → 回退整段（老行为） */
     b.text = res.nt;
     /* 整段底色（旧版 b.style.hl）会把行内高亮整个盖住 —— 看着「怎么选都还是黄的」、也「取消不掉」。
        现在高亮只走行内标记，旧整段底色顺手清掉（仅高亮需要；上色/渐变与底色不冲突） */
@@ -2822,15 +2866,34 @@ window.LMEditor = (function () {
       const ks = w.toks.filter(function (k) { return k.t === ty && k.b >= s0 && k.a <= e0; });
       return ks.some(function (k) { return k.a < s0 || k.b > e0; }) && ks.some(function (k) { return k.a >= s0 && k.b <= e0; });
     });
-    const open = t.lastIndexOf('@@', s0 - 1);
     const tag = kind === 'fs' ? String(val) : ('f:' + val);
     const kindCn = kind === 'fs' ? '字号' : '字体';
-    const atWrapped = open >= 0 && t.slice(e0, e0 + 2) === '@@' && /^[#a-zA-Z0-9:]+,$/.test(t.slice(open + 2, s0));
-    const sameWrapped = atWrapped && t.slice(open + 2, s0).replace(/,$/, '') === tag;
+    /* ★ 修复139：与 inlineApplyCore 同一套「可见范围」判定 —— 旧版 atWrapped 要求 @@ 紧贴选区
+       （`t.slice(e0, e0 + 2) === '@@'`），中间一夹 == 高亮就判不出来 → 字号/字体也取消不掉 */
+    const visBefore = function (x) {
+      let n = 0;
+      while (n < w.map.length && w.map[n] < x) n++;
+      return n;
+    };
+    const atPairs = (function () {
+      const st = [], out = [];
+      w.toks.forEach(function (k) {
+        if (k.t === '@@o') st.push(k);
+        else if (k.t === '@@c' && st.length) out.push([st.pop(), k]);
+      });
+      return out;
+    })();
+    const selV0 = visBefore(s0), selV1 = visBefore(e0);
+    let wrapPair = null;
+    atPairs.forEach(function (p) {
+      if (visBefore(p[0].b) !== selV0 || visBefore(p[1].a) !== selV1) return;
+      if (!wrapPair || p[0].a > wrapPair[0].a) wrapPair = p; /* 最内层 */
+    });
+    const wrapTag = wrapPair ? t.slice(wrapPair[0].a + 2, wrapPair[0].b).replace(/,$/, '') : '';
     let nt, msg;
-    if (val === '') { /* 默认字号 / 清除字体：剥紧贴包裹，或完整落在选区内的 @@ 配对 */
-      if (atWrapped) {
-        nt = t.slice(0, open) + t.slice(s0, e0) + t.slice(e0 + 2);
+    if (val === '') { /* 默认字号 / 清除字体：去掉这一层包裹，或剥完整落在选区内的 @@ 配对 */
+      if (wrapPair) {
+        nt = t.slice(0, wrapPair[0].a) + t.slice(wrapPair[0].b, wrapPair[1].a) + t.slice(wrapPair[1].b);
         msg = '已清除' + kindCn + '（仅选中文字）';
       } else {
         const stack = [], rm = [];
@@ -2841,15 +2904,15 @@ window.LMEditor = (function () {
             if (o2.a >= s0 && o2.b <= e0 && k.a >= s0 && k.b <= e0) rm.push(o2, k);
           }
         });
-        if (!rm.length || touchHl || inter.some(function (k) { return (k.t === '@@o' || k.t === '@@c') && rm.indexOf(k) < 0; })) return false;
+        if (!rm.length || inter.some(function (k) { return (k.t === '@@o' || k.t === '@@c') && rm.indexOf(k) < 0; })) return false;
         nt = stripToks(t, rm, s0, e0, ['@@o', '@@c']).text;
         msg = '已清除' + kindCn + '（仅选中文字）';
       }
-    } else if (sameWrapped) { /* 同款再点 = 取消 */
-      nt = t.slice(0, open) + t.slice(s0, e0) + t.slice(e0 + 2);
+    } else if (wrapPair && wrapTag === tag) { /* 同款再点 = 取消 */
+      nt = t.slice(0, wrapPair[0].a) + t.slice(wrapPair[0].b, wrapPair[1].a) + t.slice(wrapPair[1].b);
       msg = '已清除' + kindCn + '（仅选中文字）';
-    } else if (atWrapped) { /* 异档 → 原地换（补回闭合 @@） */
-      nt = t.slice(0, open) + '@@' + tag + ',' + t.slice(s0, e0) + '@@' + t.slice(e0 + 2);
+    } else if (wrapPair) { /* 异档 → 只改开标记里的 tag（闭标记与内容原样） */
+      nt = t.slice(0, wrapPair[0].a + 2) + tag + ',' + t.slice(wrapPair[0].b);
       msg = '已改' + kindCn + '（仅选中文字）';
     } else {
       if (inter.some(function (k) { return !(k.a >= s0 && k.b <= e0); })) return false; /* 骑跨 → 回退整段 */

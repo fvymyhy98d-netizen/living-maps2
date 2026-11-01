@@ -1814,10 +1814,10 @@ T('editor.js：整块兜底 stripHlFromBlock —— 旧版整段底色 b.style.h
   edt2.indexOf('function stripHlFromBlock(b) {') > 0
     && edt2.indexOf("if (b.style && b.style.hl) { b.style.hl = ''; hit = true; }") > 0
     && edt2.indexOf('if (stripHlFromBlock(activeBlock() || (pageOf() && pageOf().blocks[tb.active]))) {') > 0);
-T('editor.js：单元格里没选中文字也能清（清整格 ==…==）；soft 模式没得清时返回 false 让整块接手，不弹误导提示',
+T('editor.js：单元格里没选中文字也能清（清整格：高亮 / 颜色 / 渐变都行）；soft 模式没得清时返回 false 让整块接手，不弹误导提示',
   edt2.indexOf('function applyInlineSwatch(prop, v, preview, soft) {') > 0
-    && edt2.indexOf("const wholeCell = soft && prop === 'hl' && v === '';") > 0
-    && edt2.indexOf(": inlineApplyCore(t, 0, t.length, 'hl', '');") > 0
+    && edt2.indexOf("const wholeCell = (v === '') && (soft === true || !sp);") > 0
+    && edt2.indexOf(': inlineApplyCore(t, 0, t.length, prop, v);') > 0
     && edt2.indexOf('if (soft) return false;') > 0);
 
 /* 真跑：整格清除（没选区时用的那次调用）与整块兜底 stripHlFromBlock，拿真 md.js 核对渲染 */
@@ -1896,6 +1896,87 @@ T('editor.js：手动给定框位置时 free.ride 归零（否则 commitFreeRide
   }
   T('真跑：dropAboveBox —— 上半部分=放到上面 · 下半部分不算 · 框顶上方 60px 内算 · 远离/出框不算 · 无 right 按 width 算 · 量不到不算',
     okP, dP);
+})();
+
+/* ---------- 9.52d) 修复139：表格里「渐变/颜色」取消不掉（点 ∅ 只弹「骑跨」） ---------- */
+console.log('【9.52d】修复139：取消渐变 —— 旧判定一夹 == 就失效，∅ 只会弹「骑跨」');
+T('editor.js：取消/换色改按「可见字符范围」找包裹层（wrapPair），不再用「@@tag, 紧贴选区」的字符串邻近判断',
+  edt2.indexOf('const wrapPair = (function () {') > 0
+    && edt2.indexOf('const visBefore = function (x) {') > 0
+    && edt2.indexOf('if (visBefore(p[0].b) !== selV0 || visBefore(p[1].a) !== selV1) return;') > 0
+    && edt2.indexOf('atWrapped && (v === \'\' || atTag === tag)') < 0);
+(function () {
+  const s = edt2.replace(/\r\n/g, '\n');
+  const a = s.indexOf('  function inlineApplyCore(t, s0, e0, prop, v) {');
+  const b = s.indexOf('  /* ★ 块级行内字号 / 字体（修复㉔）', a);
+  const code = (a >= 0 && b > a) ? s.slice(a, b) : '';
+  T('editor.js：色/渐变/高亮的「清除」分支都不再被 touchHl 拦（剥标记不会打散 == 配对，只有加标记才会）',
+    code.indexOf("if (!rm.length || inter.some(function (k) { return (k.t === '@@o' || k.t === '@@c') && rm.indexOf(k) < 0; })) {") > 0
+      && code.indexOf('if (!rm.length || inter.some(function (k) { return k.t === \'hl\' && !(k.a >= s0 && k.b <= e0); })) return null;') > 0
+      && code.indexOf('if (!rm.length || touchHl') < 0);
+})();
+T('editor.js：没得可清时给「没有渐变可取消 / 只是渐变的一部分」的实话（noop），不再谎报骑跨；noop 不抢整块样式',
+  edt2.indexOf("msg: '这段文字只是' + kind + '的一部分，请把整段' + kind + '文字一起选中再取消', noop: true") > 0
+    && edt2.indexOf("msg: '选中的文字没有' + kind + '可取消', noop: true") > 0
+    && edt2.indexOf('if (!res || res.noop) return false;') > 0
+    && edt2.indexOf('if (res.noop) { /* ★ 修复139') > 0);
+
+T('editor.js：字号/字体的「取消/同款再点」也换成同一套可见范围判定（wrapPair + wrapTag），不再要求 @@ 紧贴选区',
+  edt2.indexOf("const wrapTag = wrapPair ? t.slice(wrapPair[0].a + 2, wrapPair[0].b).replace(/,$/, '') : '';") > 0
+    && edt2.indexOf('} else if (wrapPair && wrapTag === tag) { /* 同款再点 = 取消 */') > 0
+    && edt2.indexOf('const sameWrapped = atWrapped && t.slice(open + 2, s0)') < 0);
+
+/* 真跑：把 inlineApplyCore 切出来，核对「取消渐变」各种姿势的源码结果 + md.js 渲染 */
+(function () {
+  const src139 = edt2.replace(/\r\n/g, '\n');
+  const a139 = src139.indexOf('  function inlineApplyCore(t, s0, e0, prop, v) {');
+  const b139 = src139.indexOf('  /* ★ 块级行内字号 / 字体（修复㉔）');
+  const code139 = (a139 >= 0 && b139 > a139) ? src139.slice(a139, b139) : '';
+  let LMMD139 = null;
+  try { LMMD139 = require(path.join(DIR, 'js/md.js')); } catch (e139) { LMMD139 = null; }
+  let ok139 = false, d139 = '切片/md.js 不可用';
+  if (code139 && LMMD139) {
+    try {
+      const api = new Function(code139 + '\nreturn { core: inlineApplyCore, walk: walkInline };')();
+      const go = function (t, needle, prop, v) {
+        const w = api.walk(t);
+        const vis = w.map.map(function (k) { return t.charAt(k); }).join('');
+        const vi = vis.indexOf(needle);
+        if (vi < 0) return { src: t, miss: true };
+        const r = api.core(t, w.map[vi], w.map[vi + needle.length - 1] + 1, prop, v);
+        return r ? { src: r.nt, msg: r.msg, noop: !!r.noop, html: LMMD139.inlineFmt(r.nt) } : { src: null };
+      };
+      /* 截图那种：渐变包着高亮 / 高亮包着渐变 —— 只选可见文字，点 ∅ 必须真清掉 */
+      const g1 = go('@@grad2,==文字==@@', '文字', 'grad', '');
+      const g2 = go('==@@grad2,文字@@==', '文字', 'grad', '');
+      const g3 = go('@@grad2,文字@@', '文字', 'grad', '');
+      const g4 = go('前面@@grad2,文字@@后面', '文字', 'grad', '');
+      const g5 = go('@@#ff3b30,==红字==@@', '红字', 'color', '');
+      /* 同色再点 = 取消；异色 = 只改开标记（闭标记与内容原样） */
+      const g6 = go('@@grad2,文字@@', '文字', 'grad', '2');
+      const g7 = go('@@grad2,文字@@', '文字', 'grad', '3');
+      /* 没得可清 / 只选中一部分 → noop + 照做得了的提示（不是「骑跨」）
+         · g8：这段只有高亮、没有渐变 → 「选中的文字没有渐变可取消」
+         · g9：选区在渐变之外 → 同上（不再谎报骑跨）
+         · g10：③ 会把「落在包裹里」的选区扩到整个包裹（既有设计）→ 只选一半也整段取消 */
+      const g8 = go('==文字==', '文字', 'grad', '');
+      const g9 = go('@@grad2,文字@@后面', '后面', 'grad', '');
+      const g10 = go('@@grad2,文字@@', '文', 'grad', '');
+      ok139 = g1.src === '==文字==' && /<mark/.test(g1.html) && !/grad-/.test(g1.html)
+        && g2.src === '==文字==' && !/grad-/.test(g2.html)
+        && g3.src === '文字' && g3.html.indexOf('grad-') < 0
+        && g4.src === '前面文字后面'
+        && g5.src === '==红字==' && /<mark/.test(g5.html)
+        && g6.src === '文字'
+        && g7.src === '@@grad3,文字@@' && /grad-3/.test(g7.html)
+        && g8.noop === true && /没有渐变可取消/.test(g8.msg || '')
+        && g9.noop === true && /没有渐变可取消/.test(g9.msg || '')
+        && g10.src === '文字';
+      if (!ok139) d139 = JSON.stringify({ g1: g1, g2: g2, g3: g3, g4: g4, g5: g5, g6: g6, g7: g7, g8: g8, g9: g9, g10: g10 }).slice(0, 600);
+    } catch (e) { ok139 = false; d139 = '抛出 ' + e.message; }
+  }
+  T('真跑：@@grad,==字==@@ 与 ==@@grad,字@@== 两种嵌套点 ∅ 都清成 ==字==（高亮保留）· 外层渐变也清 · 同色=取消 · 异色只改前缀 · 没得清给实话 · 只选一半＝整段取消',
+    ok139, d139);
 })();
 
 /* ---------- 9.53) 修复88：在线协同提速（有人在线自动更快）+ 结构冲突可见化 ---------- */
@@ -3498,10 +3579,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=138 · LM_ASSET_VER=138',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=139 · LM_ASSET_VER=139',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=137/g) || []).length === 0 && /\?v=138/.test(html)
-      && /LM_ASSET_VER = '138'/.test(appJs));
+      && (html.match(/\?v=138/g) || []).length === 0 && /\?v=139/.test(html)
+      && /LM_ASSET_VER = '139'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4402,10 +4483,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 138（?v=138 共 22 处 · v137 无残留 · LM_ASSET_VER=138）',
-    (html.match(/\?v=138/g) || []).length === 22 && (html.match(/\?v=137/g) || []).length === 0
-      && /LM_ASSET_VER = '138'/.test(appJs),
-    'v138=' + (html.match(/\?v=138/g) || []).length + ' v137=' + (html.match(/\?v=137/g) || []).length);
+  T('版本已升到 139（?v=139 共 22 处 · v138 无残留 · LM_ASSET_VER=139）',
+    (html.match(/\?v=139/g) || []).length === 22 && (html.match(/\?v=138/g) || []).length === 0
+      && /LM_ASSET_VER = '139'/.test(appJs),
+    'v139=' + (html.match(/\?v=139/g) || []).length + ' v138=' + (html.match(/\?v=138/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
