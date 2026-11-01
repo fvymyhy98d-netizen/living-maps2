@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793549785424,
+      "syncTs": 1793551011054,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -226,7 +226,6 @@ window.SITE_CONTENT = {
       "label": "示例 · RAG",
       "title": "示例条目：检索增强生成（RAG）",
       "description": "一条「打样」示例：知识点 = 一句话 + 流程 + 图表 + 来源 + 待核实。把文字换成你们的选题即可直接用。",
-      "parent": "domain",
       "heroAlign": "",
       "blocks": [
         {
