@@ -1851,6 +1851,9 @@ window.LMEditor = (function () {
   function flushLiveEdit() {
     if (liveEdit.el && liveEdit.el.isConnected) saveEdited(liveEdit.el);
     liveStopEdit();
+    /* ★ 修复140：切后台 / 关页面前把刚存下的这一笔**立刻**推上云 —— 等 2.6s 防抖往往等不到：
+       页面已被系统冻结（手机锁屏 / 切 App），定时器不再跑，对方就一直看不到这一笔 */
+    try { if (window.LMCollab && LMCollab.flushPush) LMCollab.flushPush('切后台'); } catch (eFP) { /* noop */ }
   }
   window.addEventListener('blur', flushLiveEdit);
   window.addEventListener('pagehide', flushLiveEdit);

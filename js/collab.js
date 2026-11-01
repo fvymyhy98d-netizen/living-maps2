@@ -29,6 +29,9 @@ window.LMCollab = (function () {
      访客（只读）从前台 90s 提到 25s（raw 请求带 ?t= 破缓存，拿到的就是最新版）。
      这些数值都能在控制台 LMCollab.diag() 里直接看到，方便现场核对。 */
   var HOT_PUSH_MIN = 2600, HOT_ACTIVE = 1200, HOT_IDLE = 3500, VISITOR_SHOWN = 25000;
+  /* ★ 修复140：退出键入（focusout）/ 切后台 / 关页面 → 无视上面的防抖立刻发一次；
+     但留 700ms 硬底，连续点十个框也只发一笔，不会把 GitHub 写入额度打光 */
+  var FLUSH_HARD_MIN = 700;
   var me = readDevice();
   var lastTs = +(localStorage.getItem(TS_KEY) || 0);
   var peers = {};    /* 设备id -> {name, fp, ts, page} */
@@ -951,9 +954,18 @@ window.LMCollab = (function () {
     return before - cb.bans.length;
   }
   /* ---------- 对外：本地保存后广播（app.js commit 调用） ---------- */
+  /* ★ 修复140：publish 的版本戳单调递增 —— 「同一毫秒里连写两笔」不会撞号。
+     flushPush 用 syncTs 与「已推上去的版本戳」比对做快速去重（省一次全量序列化），
+     撞号就会把第二笔误判成「已经推过」而不推，所以这里必须保证唯一。 */
+  var _pubTs = 0;
+  function nextSyncTs() {
+    const t = Date.now();
+    _pubTs = t > _pubTs ? t : _pubTs + 1;
+    return _pubTs;
+  }
   function publish(content) {
     if (!validContent(content)) return;
-    const ts = Date.now();
+    const ts = nextSyncTs();
     /* 版本戳随内容走：本机保存即把 syncTs 写进内容再 bump，保证 lastTs 恒等于
        「已应用内容的版本戳」。否则本机时钟恒大于云端历史版本戳，
        云端（其他设备保存的）更新会被当「过期包」永久丢弃（实测全站白屏后内容卡死的主因） */
@@ -997,6 +1009,18 @@ window.LMCollab = (function () {
                rateLeft: null,      /* ★ 修复90：X-RateLimit-Remaining 观测值 */
                lastText: '',        /* ★ 修复90：上次成功推送的文件文本，内容没变就不重复 PUT */
                mergedTs: 0,         /* ★ 修复105：已按块级合并过的云端版本戳（同一份不反复合并） */
+               /* ★ 修复140（「退出键入五分钟对方都没反应」的根因）：推送与轮询拉取原来共用 GH.inFlight
+                  一把锁 —— 拉取（每 1.2–8 秒一次，且要等网络往返）期间到来的 commit 全被
+                  `if (GH.inFlight) return;` **静默丢弃**：既不重试也不记账，于是「退出键入」那一笔
+                  就永远留在本机，直到用户再改一次才可能顺带发出去。现在拆成两把锁 + 脏标记 + 补推定时器。 */
+               pushBusy: false,     /* 推送独占锁（不再复用拉取的 inFlight，两边互不吞请求） */
+               pushBusyAt: 0,       /* 推送开始时刻（60 秒看门狗，与 inFlightStale 同款） */
+               dirty: false,        /* 有「还没成功上云」的内容：任何原因没发出去都不丢 */
+               dirtyAt: 0,          /* 记账时刻（诊断里显示「待推送多少秒」） */
+               kickT: 0,            /* 补推定时器（单条去重） */
+               kickN: 0,            /* 连续补推次数（连败就放慢，别把定时器转成电老虎） */
+               flushAsap: false,    /* 本次推送跳过最小间隔（退出键入 / 切后台 / 关页面） */
+               lastPushTs: 0,       /* 上次成功推送的内容版本戳（syncTs）：相同的直接跳过，省一次全量序列化 */
                _mk: null };         /* 建数据分支的进行中 Promise（去重） */
   const shaOf = {};                  /* 分支 → 该文件 blob sha（乐观锁缓存，按分支分开） */
   /* 内容分支：默认数据分支；dataBranch:'' → 跟随 branch；未配置 → lm-data（判定在 store.js） */
@@ -1046,6 +1070,8 @@ window.LMCollab = (function () {
     } catch (e) { /* noop */ }
   }
   const SNAP_TS_KEY = 'lm_gh_snap_ts';   /* ★ 修复90：快照时间戳落到本机，刷新页面不会重置 30 分钟窗口 */
+  /* ★ 修复140：脏标记也落一份到本机 —— 关页面 / 崩溃时若还有一笔没推上去，下次打开自动补推 */
+  const DIRTY_KEY = 'lm_gh_dirty_v1';
   function ghApi() {
     const path = (GH.cfg.path || 'data/content.js').replace(/^\/+/, '');
     return 'https://api.github.com/repos/' + encodeURIComponent(GH.cfg.owner) + '/'
@@ -1209,6 +1235,100 @@ window.LMCollab = (function () {
       }).catch(function () { /* 快照失败：下次再试 */ });
     } catch (e) { /* noop */ }
   }
+  /* ================= ★ 修复140：推送状态机（退出键入立刻发 · 永不丢最后一笔） =================
+     背景（用户现场）：退出文本框以后对方「快五分钟都没反应」，而本地看起来一切正常。
+     根因是 ghPush 里三条裸 return —— `if (GH.inFlight) return;` / `if (now < GH.blockUntil) return;` /
+     防抖定时器以外的所有失败路径，**都不重试也不记账**。其中最致命的是第一条：GH.inFlight 是与
+     轮询拉取共用的锁，拉取每 1.2–8 秒一次、每次要等一次网络往返，所以「退出键入」触发的那一笔
+     有很大概率正好撞在拉取上 → 直接消失；而这一笔之后用户往往就不动了，对方于是永远看不到。
+     处方：① 推送/拉取拆成两把锁；② 发不出去就记脏（GH.dirty）并挂补推定时器（kickPush）；
+           ③ 退出键入 / 切后台 / 关页面走 flushPush，跳过防抖立刻发（仍守 700ms 硬底与限流退避）。 */
+
+  /* 纯函数（可单测）：这次 ghPush 该不该真的发 PUT？
+     → { go, why, wait }，why = go / busy（上一笔还在飞）/ blocked（限流退避中）/ defer（防抖未到点）。
+     ★ busy / blocked / defer 都**不是丢弃**，调用方必须 wantPush() 记账 + kickPush() 补推。 */
+  function pushGate(st) {
+    st = st || {};
+    const now = +st.now || 0, bu = +st.blockUntil || 0;
+    if (st.busy) return { go: false, why: 'busy', wait: 0 };
+    if (bu && now < bu) return { go: false, why: 'blocked', wait: Math.min(Math.max(bu - now + 120, 300), 5000) };
+    const wait = Math.max(+st.waitMin || 0, +st.rateGap || 0) - (now - (+st.lastPush || 0));
+    if (wait > 0) return { go: false, why: 'defer', wait: wait };
+    return { go: true, why: 'go', wait: 0 };
+  }
+  /* 脏标记：「这一笔还没上云」（同时落一份到本机，关页面/崩溃后下次打开自动补推） */
+  function wantPush() {
+    GH.dirty = true; GH.dirtyAt = Date.now();
+    try { localStorage.setItem(DIRTY_KEY, '1'); } catch (eD) { /* noop */ }
+  }
+  function pushClean() {
+    GH.dirty = false; GH.dirtyAt = 0; GH.kickN = 0;
+    try { localStorage.removeItem(DIRTY_KEY); } catch (eD2) { /* noop */ }
+  }
+  function pushUnlock() { GH.pushBusy = false; GH.pushBusyAt = 0; }
+  function latestContent() {
+    try { return (window.LMApp && validContent(LMApp.state.content)) ? LMApp.state.content : null; }
+    catch (e) { return null; }
+  }
+  /* 补推定时器（单条去重）。连续补推超过 KICK_SLOW 次就放慢到 15 秒 —— Token 失效 / 长期离线
+     会一直失败，不能让它 5 秒一次空转到把手机电池啃掉 */
+  var KICK_SLOW = 6;
+  function kickPush(ms) {
+    ms = Math.max(0, +ms || 0);
+    if (GH.kickN >= KICK_SLOW) ms = Math.max(ms, 15000);
+    if (GH.kickT) return;
+    GH.kickT = setTimeout(function () {
+      GH.kickT = 0;
+      if (!GH.dirty) { GH.kickN = 0; return; }
+      GH.kickN++;
+      const c = latestContent();
+      if (c) ghPush(c);
+    }, ms);
+  }
+  /* 失败收尾：放锁 + 保留脏标记 + 指定时间后补推 */
+  function pushFail(ms) { pushUnlock(); wantPush(); kickPush(ms); }
+  /* 成功收尾：放锁；推的过程中内容又改了（脏还在）就立刻补推 —— 最后一笔永不丢 */
+  function pushDone(okText) {
+    pushUnlock();
+    if (okText) {
+      let same = false;
+      try { const c = latestContent(); same = !!c && LMStore.buildFileText(c) === okText; } catch (e) { same = false; }
+      if (same) pushClean();
+    }
+    if (GH.dirty) kickPush(120);
+  }
+  /* 推送看门狗（与拉取的 inFlightStale 同款，但各管各的锁） */
+  function pushBusyStale() {
+    if (!GH.pushBusy) { GH.pushBusyAt = 0; return false; }
+    const now = Date.now();
+    if (!GH.pushBusyAt) { GH.pushBusyAt = now; return false; }
+    if (now - GH.pushBusyAt < 60000) return false;
+    GH.pushBusy = false; GH.pushBusyAt = 0;
+    try { console.warn('[协同·云端] 上一次推送 60 秒没返回，已强制复位推送锁（接下来会自动补推）'); } catch (e) { /* noop */ }
+    return true;
+  }
+  /* 立刻推（退出键入 / 切后台 / 关页面）：跳过防抖，但守 700ms 硬底、限流退避与在飞锁；
+     被挡下时不会丢 —— pushGate 的记账 + 补推会接住 */
+  function flushPush(why) {
+    if (!GH.cfg || !GH.token) return false;   /* 没有云端写通道：同浏览器 / 教室服务器通道本来就是即时广播 */
+    const c = latestContent();
+    if (!c) return false;
+    const ts = +(((c.config || {}).collab || {}).syncTs || 0);
+    /* 这一版已经推上去了（内容没变就别做全量序列化，切来切去不花钱） */
+    if (ts && ts === GH.lastPushTs) { pushClean(); return false; }
+    GH.flushAsap = true;
+    try { ghPush(c); } finally { GH.flushAsap = false; }
+    try { GH.flushWhy = why || ''; } catch (eF) { /* noop */ }
+    return true;
+  }
+  /* 「退出键入」类事件：先立刻发一次，再等编辑器把这次改动写进 state 后补两次
+     （脚本顺序 editor.js 在 collab.js 之前，这里只是双保险；重复的那次被 lastText 去重，不烧额度） */
+  function flushPushSoon(why) {
+    if (!GH.cfg || !GH.token) return;
+    try { flushPush(why); } catch (e1) { /* noop */ }
+    setTimeout(function () { try { flushPush(why); } catch (e2) { /* noop */ } }, 0);
+    setTimeout(function () { try { flushPush(why); } catch (e3) { /* noop */ } }, 320);
+  }
   function ghPush(content) {
     if (!GH.cfg || !GH.token || !window.LMStore) return;
     /* 防旧覆盖新守卫：最近一次轮询看到的云端版本比本机内容新（其他设备刚推过）→
@@ -1216,25 +1336,29 @@ window.LMCollab = (function () {
     const myTs = +(((content.config || {}).collab || {}).syncTs || 0);
     if (GH.lastPullTs > myTs) { ghPull(); return; }
     const now = Date.now();
-    if (now < GH.blockUntil) return;   /* ★ 修复90：限流/退避期内不写，避免越撞越死 */
-    inFlightStale();                   /* ★ 修复122：卡死的锁先复位（abort 不生效时兜底） */
-    if (GH.inFlight) return;
-    /* ★ 修复90：额度紧张时把推送间隔自动拉长（rateGap）；额度充裕时完全不受影响 */
-    const wait = Math.max(pushWaitMin(peersHot()), rateGap()) - (now - GH.lastPush); /* ★ 修复88：有人在线 → 2.6s 就推，不再死等 6s */
-    if (wait > 0) { /* 防抖：连续保存只在安静一小会儿后补推最新版（尾随触发，不会漏推） */
-      if (!GH._defer) GH._defer = setTimeout(function () {
-        GH._defer = null;
-        if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);
-      }, wait + 80);
+    pushBusyStale();                   /* ★ 修复140：推送自己的看门狗（拉取那把锁另有一套，互不干扰） */
+    /* ★ 修复88 / 90 / 140：最小间隔 = max(有人在线 2.6s / 独自 6s, 额度降挡)；
+       退出键入时跳过防抖，只守 700ms 硬底（连点十个框也只发一笔） */
+    const gate = pushGate({
+      now: now, lastPush: GH.lastPush, busy: GH.pushBusy, blockUntil: GH.blockUntil,
+      waitMin: GH.flushAsap ? Math.max(FLUSH_HARD_MIN - (now - GH.lastPush), 0) : pushWaitMin(peersHot()),
+      rateGap: GH.flushAsap ? 0 : rateGap()
+    });
+    if (!gate.go) {
+      /* ★ 修复140：不发 ≠ 不管 —— 记账 + 定时补推（旧版这里裸 return，这一笔就此消失） */
+      wantPush();
+      if (gate.why !== 'busy') kickPush(gate.wait);   /* busy：那一笔落定时自己会补推 */
       return;
     }
-    if (GH._defer) { clearTimeout(GH._defer); GH._defer = null; }
     const ref = ghBranch();      /* ★ 修复89：默认写数据分支（不触发 Pages 构建） */
     const text = LMStore.buildFileText(content);
-    /* ★ 修复90：与上次成功推送的文本完全一致 → 不发 PUT（协同里很多 commit 只动了时间戳，纯白烧额度） */
-    if (text === GH.lastText) return;
+    /* ★ 修复90：与上次成功推送的文本完全一致 → 不发 PUT（协同里很多 commit 只动了时间戳，纯白烧额度）
+       ★ 修复140：这也说明云端已是这份内容 → 脏标记可以结清 */
+    if (text === GH.lastText) { pushClean(); return; }
     GH.lastPush = now;
-    GH.inFlight = true; GH.inFlightAt = Date.now();   /* ★ 修复122：记时刻，供看门狗判定 */
+    /* ★ 修复140：发之前先记脏 —— 断网 / 锁 / 限流 / 页面被切走，这一笔都不会失踪 */
+    wantPush();
+    GH.pushBusy = true; GH.pushBusyAt = now;   /* ★ 修复122：记时刻，供看门狗判定 */
     const b64 = LMStore.utf8ToBase64 ? LMStore.utf8ToBase64(text) : btoa(unescape(encodeURIComponent(text)));
     const H = { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json' };
     const put = function (br, sha) {
@@ -1267,9 +1391,10 @@ window.LMCollab = (function () {
       });
     };
     tryPut(ref).then(function (r) {
-      GH.inFlight = false;
       noteRate(r);                       /* ★ 修复90：记下剩余额度，决定下一轮要不要降挡 */
       if (r.status === 409 || r.status === 422) { /* 别人先提交 → 拉最新；6 秒后尾随重推一次（防 409 后最后一笔只留本机） */
+        pushUnlock();
+        wantPush();                          /* ★ 修复140：脏标记留着（6 秒后 _409T 会重推；关页面也还有下次补推） */
         delete shaOf[ref]; ghPull();
         if (!GH._409T) GH._409T = setTimeout(function () {
           GH._409T = null;
@@ -1289,6 +1414,9 @@ window.LMCollab = (function () {
             GH._rlToast = true;
             toast('⏳ GitHub 写入额度/频率受限：已自动放慢同步（退避 ' + Math.round(ms / 1000) + ' 秒），内容留在本机不会丢');
           }
+          /* ★ 修复140：退避到期自动补推 —— 旧版退避期内裸 return，退避结束后也没人再推，
+             现场看到的就是「退出键入以后一直没反应」，得再改一次才有机会发出去 */
+          pushFail(Math.min(ms, 5000));
           return;
         }
         if (r.status === 401) {
@@ -1297,19 +1425,25 @@ window.LMCollab = (function () {
             toast('🔑 GitHub Token 无效或已过期：请到「☁ 同步到 GitHub」重新粘贴（其他设备的内容同步不受影响）');
           }
           GH.blockUntil = Date.now() + 120000;
+          pushFail(5000);   /* ★ 修复140：换好 Token 后脏标记还在，会自动补推 */
           return;
         }
-        if (!branchMissing) return;   /* 5xx / 其他：下个周期再试，不动分支策略 */
+        if (!branchMissing) { pushFail(8000); return; }   /* 5xx / 其他：稍后再试，不动分支策略 */
         if (!GH.useMain && ghDataRef() !== ghMainRef()) {
           const bad = ghDataRef();
           GH.useMain = true;
           GH.etag = ''; delete shaOf[ghMainRef()];
           toast('⚠ 数据分支「' + bad + '」不可用（Token 权限或分支受限），已回退到 ' + ghMainRef() + '：内容同步照常，但会触发 Pages 构建');
+          wantPush();                                  /* ★ 修复140：回退后这一笔必须重发到 main */
+          pushUnlock();
           if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);
+        } else {
+          pushFail(8000);
         }
         return;
       }
       GH.lastText = text;               /* ★ 修复90：记下已推送文本，供下一轮去重 */
+      GH.lastPushTs = myTs;             /* ★ 修复140：记下已推上去的版本戳（退出键入时不必再序列化比对） */
       return r.json().then(function (j) {
         shaOf[ref] = j.content && j.content.sha;
         /* ★ 修复62 / 83：上传成功 → 只重拍「最近上传版」pushSnap，绝不再动 adminSnap */
@@ -1320,8 +1454,12 @@ window.LMCollab = (function () {
           }
         } catch (eSnap) { /* noop */ }
         maybeSnapshot(text);   /* ★ 修复89：顺带刷新 main 快照（≤2 次/小时，只喂首屏） */
+        pushDone(text);        /* ★ 修复140：成功收尾 —— 推的过程中又改了会自动补推 */
       });
-    }).catch(function () { GH.inFlight = false; });
+    }).catch(function () {
+      /* ★ 修复140：网络异常 / 超时 / 响应不是 JSON → 放锁 + 4 秒后补推（旧版只是放锁，这一笔就此蒸发） */
+      pushFail(4000);
+    });
   }
   function ghInit() {
     if (window.LM_COLLAB_SERVER) return; /* 课堂服务器在场时以它为准（局域网最快） */
@@ -1334,6 +1472,8 @@ window.LMCollab = (function () {
     if (_sig !== GH._sig) {
       GH._sig = _sig;
       GH.useMain = false; GH.etag = ''; GH.lastText = ''; GH.blockUntil = 0; GH.rateLeft = null;
+      /* ★ 修复140：换仓库/换 Token → 上一套的推送状态一并清掉（否则会拿旧的脏标记/版本戳乱补推） */
+      GH.lastPushTs = 0; GH.dirty = false; GH.dirtyAt = 0; GH.kickN = 0;
       Object.keys(shaOf).forEach(function (k) { delete shaOf[k]; });
     }
     if (GH.cfg && GH.cfg.owner && GH.cfg.repo && GH.token) {
@@ -1352,6 +1492,11 @@ window.LMCollab = (function () {
         }, 600);
       }
       ghPull();
+      /* ★ 修复140：上次关页面 / 崩溃时还有一笔没推上去（脏标记落在本机）→ 这次一打开就补推，
+         不必等用户再编辑一次才「顺带」发出去 */
+      try {
+        if (localStorage.getItem(DIRTY_KEY) === '1') { wantPush(); kickPush(1500); }
+      } catch (eDirty) { /* noop */ }
       return;
     }
     /* 访客：GitHub Pages 上自动推导 owner/repo（无 Token、只读、90 秒级轮询）。
@@ -1467,9 +1612,15 @@ window.LMCollab = (function () {
     /* ★ 修复72：指针事件丢失兜底（拖拽时在窗口外松手 / 触屏 pointercancel / 切后台再回来）——
        旧逻辑一旦收不到 mouseup，pointerDown 恒为真，远端包就永远挂起（只有刷新才恢复） */
     document.addEventListener('pointercancel', function () { pointerDown = false; pointerAt = 0; }, true);
-    window.addEventListener('blur', function () { pointerDown = false; pointerAt = 0; flushPending(); });
+    window.addEventListener('blur', function () { pointerDown = false; pointerAt = 0; flushPending(); flushPushSoon('窗口失焦'); });
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) return;
+      if (document.hidden) {
+        /* ★ 修复140：手机切走 / 锁屏前把「刚退出的那一笔」立刻推上云 —— 后台定时器会被系统冻结，
+           focusout 也可能根本收不到，这里是最后的发射窗口 */
+        pointerDown = false; pointerAt = 0;
+        flushPushSoon('切后台');
+        return;
+      }
       pointerDown = false; pointerAt = 0; flushPending();
       /* ★ 修复88：手机切回前台立刻补拉一次 + 马上重播自己的 presence（否则要等下一个轮询
          周期，15 秒后别人那边才重新看到「你在编辑」，看着就像「很久才同步」） */
@@ -1503,8 +1654,13 @@ window.LMCollab = (function () {
       }
       takeLock(t);
     });
-    document.addEventListener('focusout', function () { releaseLock(); flushPending(); });
+    /* ★ 修复140：「退出键入」= 立刻发送 —— editor.js 先加载、监听先执行，这次改动已经写进 state
+       并 commit 过，这里补一记「立刻推」，不再等 2.6s / 6s 的防抖 */
+    document.addEventListener('focusout', function () { releaseLock(); flushPending(); flushPushSoon('退出键入'); });
     window.addEventListener('beforeunload', function () { releaseLock(); send({ type: 'bye' }); });
+    /* ★ 修复140：关页面/前进后退前也把最后一笔推出去（beforeunload 里不能再等异步，pushFail 会记账，
+       页面真被销毁时至少脏标记已写进本地内容，下次打开 first-push 会补） */
+    window.addEventListener('pagehide', function () { flushPush('关页面'); });
     window.addEventListener('load', function () { paintChip(); enforceBans(); });
     enforceBans();
     ghInit();
@@ -1512,6 +1668,14 @@ window.LMCollab = (function () {
   init();
   return {
     publish: publish,
+    flushPush: flushPush,          /* ★ 修复140：退出键入 / 切后台 / 关页面 → 跳过防抖立刻推（editor.js 也调） */
+    flushPushSoon: flushPushSoon,
+    pushState: function () {       /* ★ 修复140：现场核对「这一笔到底发出去没有」 */
+      return { 待推送: GH.dirty, 待推送秒: GH.dirtyAt ? Math.round((Date.now() - GH.dirtyAt) / 1000) : 0,
+               推送中: GH.pushBusy, 退避剩秒: GH.blockUntil > Date.now() ? Math.round((GH.blockUntil - Date.now()) / 1000) : 0,
+               有补推定时代: !!GH.kickT, 连续补推: GH.kickN,
+               上次推送秒前: GH.lastPush ? Math.round((Date.now() - GH.lastPush) / 1000) : -1 };
+    },
     mode: function () { return modeLabel; },
     me: function () { return { id: me.id, name: me.name, fp: me.fp }; },
     setName: setName,
@@ -1566,6 +1730,16 @@ window.LMCollab = (function () {
         通道: modeLabel,
         内容分支: (function () { try { return ghBranch() + (GH.useMain ? '（已回退 main）' : '') + (ghBranch() !== ghMainRef() ? '（不触发 Pages 构建）' : ''); } catch (e) { return '?'; } })(),
         额度剩余: (GH.rateLeft == null ? '未知（还没收到 GitHub 响应头）' : (GH.rateLeft + ' 次/小时 · 当前推送间隔 ' + (Math.max(pushWaitMin(peersHot()), rateGap()) / 1000) + ' 秒')),
+        /* ★ 修复140：推送状态机 —— 「改了却没同步过去」时先看这几项（待推送=true 表示还有一笔没上云） */
+        推送: {
+          待推送: GH.dirty ? ('是（' + Math.round((Date.now() - (GH.dirtyAt || Date.now())) / 1000) + ' 秒前记账）') : '否',
+          推送中: GH.pushBusy ? '是' : '否',
+          限流退避剩秒: GH.blockUntil > Date.now() ? Math.round((GH.blockUntil - Date.now()) / 1000) : 0,
+          有补推定时代: !!GH.kickT,
+          连续补推次: GH.kickN || 0,
+          上次推送秒前: GH.lastPush ? Math.round((Date.now() - GH.lastPush) / 1000) : -1,
+          上次触发: GH.flushWhy || ''
+        },
         /* ★ 修复88：现场可核对当前节奏（有人在线会自动更快） */
         节奏: (function () {
           try {

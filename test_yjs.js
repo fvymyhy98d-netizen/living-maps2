@@ -2280,14 +2280,15 @@ console.log('【9.56】修复90：403 不再误降级 · 快照窗口跨刷新 �
 
   T('降级收窄：只有「分支真的不存在」(404 / 建 ref 失败) 才退回发布分支，其余错误不动分支策略',
     collab.indexOf('const branchMissing = !!r._mkFail || r.status === 404;') > 0
-      && collab.indexOf('if (!branchMissing) return;') > 0
+      && collab.indexOf('if (!branchMissing) { pushFail(8000); return; }') > 0
       && collab.indexOf('GH.useMain = true;') > 0);
 
-  T('限流不哑火：403/429 按响应头退避 + 只提示一次；退避期内 ghPush 直接不写；401 提示换 Token',
+  T('限流不哑火：403/429 按响应头退避 + 只提示一次；退避期内不发 PUT 且到期自动补推；401 提示换 Token',
     collab.indexOf('if (r.status === 403 || r.status === 429) {') > 0
       && collab.indexOf('GH.blockUntil = Date.now() + ms;') > 0
       && collab.indexOf('if (!GH._rlToast) {') > 0
-      && collab.indexOf('if (now < GH.blockUntil) return;') > 0
+      && collab.indexOf("if (bu && now < bu) return { go: false, why: 'blocked'") > 0
+      && collab.indexOf('pushFail(Math.min(ms, 5000));') > 0
       && collab.indexOf('if (r.status === 401) {') > 0
       && collab.indexOf('if (!GH._authToast) {') > 0);
 
@@ -2297,7 +2298,7 @@ console.log('【9.56】修复90：403 不再误降级 · 快照窗口跨刷新 �
       && collab.indexOf('localStorage.setItem(SNAP_TS_KEY, String(now))') > 0);
 
   T('去重：文本与上次成功推送完全一致 → 不发 PUT（协同里很多 commit 只动 _ts，纯烧额度）',
-    collab.indexOf('if (text === GH.lastText) return;') > 0
+    collab.indexOf('if (text === GH.lastText) { pushClean(); return; }') > 0
       && collab.indexOf('GH.lastText = text;') > 0
       && collab.indexOf("lastText: '',") > 0);
 
@@ -3579,10 +3580,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=139 · LM_ASSET_VER=139',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=140 · LM_ASSET_VER=140',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=138/g) || []).length === 0 && /\?v=139/.test(html)
-      && /LM_ASSET_VER = '139'/.test(appJs));
+      && (html.match(/\?v=139/g) || []).length === 0 && /\?v=140/.test(html)
+      && /LM_ASSET_VER = '140'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4483,12 +4484,135 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 139（?v=139 共 22 处 · v138 无残留 · LM_ASSET_VER=139）',
-    (html.match(/\?v=139/g) || []).length === 22 && (html.match(/\?v=138/g) || []).length === 0
-      && /LM_ASSET_VER = '139'/.test(appJs),
-    'v139=' + (html.match(/\?v=139/g) || []).length + ' v138=' + (html.match(/\?v=138/g) || []).length);
+  T('版本已升到 140（?v=140 共 22 处 · v139 无残留 · LM_ASSET_VER=140）',
+    (html.match(/\?v=140/g) || []).length === 22 && (html.match(/\?v=139/g) || []).length === 0
+      && /LM_ASSET_VER = '140'/.test(appJs),
+    'v140=' + (html.match(/\?v=140/g) || []).length + ' v139=' + (html.match(/\?v=139/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
+})();
+
+/* ---------- 修复140：退出键入立刻推 · 推送/拉取拆锁 · 脏标记补推（最后一笔永不丢） ---------- */
+console.log('【修复140】协同推送状态机：退出键入立刻发 · 两把锁 · 记账补推 · 脏标记跨刷新');
+
+(function () {
+  const col = srcOf('js/collab.js'), edt = srcOf('js/editor.js');
+
+  /* 1) 锁拆分：推送不再复用拉取锁 */
+  T('修复140 · 推送与轮询拉取拆成两把锁（旧版共用 GH.inFlight，拉取期间的 commit 全被静默丢弃）',
+    col.indexOf('pushBusy: false,') > 0
+      && col.indexOf('function pushBusyStale() {') > 0
+      && col.indexOf('busy: GH.pushBusy, blockUntil: GH.blockUntil') > 0
+      && col.indexOf('GH.pushBusy = true; GH.pushBusyAt = now;') > 0
+      && col.indexOf('if (GH.inFlight) return;') > 0                       /* 拉取侧仍守自己的锁 */
+      && col.indexOf('GH.inFlight = true; GH.inFlightAt = Date.now();') > 0);
+
+  /* 2) 三条「不能立刻发」的原因都记账 + 补推，不再裸 return */
+  T('修复140 · 发不出去就记账补推：busy / blocked / defer 都不丢（wantPush + kickPush + pushFail）',
+    col.indexOf("if (st.busy) return { go: false, why: 'busy', wait: 0 };") > 0
+      && col.indexOf("if (bu && now < bu) return { go: false, why: 'blocked'") > 0
+      && col.indexOf('function wantPush() {') > 0
+      && col.indexOf('function kickPush(ms) {') > 0
+      && col.indexOf('function pushFail(ms) { pushUnlock(); wantPush(); kickPush(ms); }') > 0
+      && col.indexOf("if (gate.why !== 'busy') kickPush(gate.wait);") > 0
+      && col.indexOf('pushDone(text);') > 0);
+
+  /* 3) 退出键入 / 切后台 / 关页面立刻推 */
+  T('修复140 · 退出键入（focusout）/ 窗口失焦 / 切后台 / 关页面 全走 flushPush（跳过 2.6s / 6s 防抖）',
+    col.indexOf("flushPushSoon('退出键入')") > 0
+      && col.indexOf("flushPushSoon('窗口失焦')") > 0
+      && col.indexOf("flushPushSoon('切后台')") > 0
+      && col.indexOf("window.addEventListener('pagehide', function () { flushPush('关页面'); });") > 0
+      && col.indexOf('flushPush: flushPush,') > 0
+      && edt.indexOf("LMCollab.flushPush('切后台')") > 0
+      && col.indexOf('var FLUSH_HARD_MIN = 700;') > 0);
+
+  /* 4) 脏标记落本机 → 关页面 / 崩溃后下次打开自动补推 */
+  T('修复140 · 脏标记落 localStorage（lm_gh_dirty_v1）→ 下次打开自动补推，不必等用户再改一次',
+    col.indexOf("const DIRTY_KEY = 'lm_gh_dirty_v1';") > 0
+      && col.indexOf("localStorage.setItem(DIRTY_KEY, '1')") > 0
+      && col.indexOf('localStorage.removeItem(DIRTY_KEY)') > 0
+      && col.indexOf("if (localStorage.getItem(DIRTY_KEY) === '1') { wantPush(); kickPush(1500); }") > 0);
+
+  /* 5) 诊断能看清「这一笔到底发出去没有」 */
+  T('修复140 · LMCollab.diag() 多一段「推送」状态（待推送 / 推送中 / 退避剩秒 / 补推定时器）',
+    col.indexOf('推送: {') > 0 && col.indexOf('待推送: GH.dirty') > 0
+      && col.indexOf('pushState: function () {') > 0);
+})();
+
+/* 修复140 · 真跑：把推送状态机从源码里切出来，用假定时器跑「锁被占用 → 补推」全流程 */
+(function () {
+  const col = srcOf('js/collab.js');
+  const src = col.replace(/\r\n/g, '\n');
+  const i0 = src.indexOf('  function pushGate(st) {');
+  const i1 = src.indexOf('  function ghPush(content) {');
+  const code = (i0 >= 0 && i1 > i0) ? src.slice(i0, i1) : '';
+  let ok = false, detail = '切片不可用';
+  if (code) {
+    try {
+      const timers = [];
+      const setT = function (fn, ms) { timers.push({ fn: fn, ms: ms || 0 }); return timers.length; };
+      const store = {
+        t: '',
+        getItem: function (k) { return k === 'lm_gh_dirty_v1' ? store.t : null; },
+        setItem: function (k, v) { if (k === 'lm_gh_dirty_v1') store.t = String(v); },
+        removeItem: function (k) { if (k === 'lm_gh_dirty_v1') store.t = ''; }
+      };
+      const page = { content: { pages: [], config: { collab: { syncTs: 1000 } } } };
+      const pushed = [];
+      const LMStore = { _txt: 'A', buildFileText: function () { return LMStore._txt; } };
+      let api = null;
+      const ghPushStub = function (c) { pushed.push({ content: c, asap: api.GH.flushAsap }); };
+      /* GH / DIRTY_KEY / LMApp 在源码里是文件级 const，切片外 → 这里按同一套字段给桩 */
+      const GH0 = { cfg: { owner: 'o', repo: 'r', branch: 'main' }, token: 't', lastPush: 0, blockUntil: 0, lastText: '', lastPushTs: 0,
+                    pushBusy: false, pushBusyAt: 0, dirty: false, dirtyAt: 0, kickT: 0, kickN: 0, flushAsap: false };
+      const LMApp0 = { state: page };
+      api = new Function('setTimeout', 'clearTimeout', 'localStorage', 'LMStore', 'validContent',
+        'window', 'LMApp', 'ghPush', 'GH', 'DIRTY_KEY', code + '\nreturn { pushGate: pushGate, wantPush: wantPush,'
+        + ' pushClean: pushClean, pushDone: pushDone, pushFail: pushFail, flushPush: flushPush, GH: GH };')(
+          setT, function () { /* noop */ }, store, LMStore, function () { return true; },
+          { LMApp: LMApp0 }, LMApp0, ghPushStub, GH0, 'lm_gh_dirty_v1');
+
+      const G = api.pushGate;
+      const gates = [
+        [G({ now: 1000, lastPush: 0, waitMin: 2600 }), false, 'defer', 1600],
+        [G({ now: 5000, lastPush: 0, waitMin: 2600 }), true, 'go', 0],
+        [G({ now: 1000, lastPush: 0, busy: true }), false, 'busy', 0],
+        [G({ now: 1000, lastPush: 0, blockUntil: 61000, waitMin: 0, rateGap: 0 }), false, 'blocked', 5000],
+        [G({ now: 1000, lastPush: 0, waitMin: 0, rateGap: 12000 }), false, 'defer', 11000]
+      ];
+      const gateOk = gates.every(function (g) { return g[0].go === g[1] && g[0].why === g[2] && g[0].wait === g[3]; });
+
+      api.wantPush();
+      const dirtySaved = api.GH.dirty === true && store.t === '1';
+      LMStore._txt = 'A';
+      api.pushDone('A');                              /* 推上去的内容与当前一致 → 结清 */
+      const cleanOk = api.GH.dirty === false && store.t === '';
+
+      api.wantPush();
+      LMStore._txt = 'B';                             /* 推的过程中又改了一笔 */
+      timers.length = 0; api.GH.kickT = 0;
+      api.pushDone('A');
+      const changedOk = api.GH.dirty === true && api.GH.kickT !== 0 && timers.length === 1;
+
+      pushed.length = 0;                              /* 补推定时器到点真的会再推 */
+      const t0 = timers[0]; api.GH.kickT = 0; t0.fn();
+      const kickOk = pushed.length === 1;
+
+      api.GH.lastPushTs = 1000; pushed.length = 0;    /* 同一版本戳：退出键入不再白做全量序列化 */
+      const same = api.flushPush('退出键入');
+      const dedupeOk = same === false && pushed.length === 0;
+
+      page.content.config.collab.syncTs = 2000;       /* 新版本：立刻推且跳过防抖 */
+      const sent = api.flushPush('退出键入');
+      const asapOk = sent === true && pushed.length === 1 && pushed[0].asap === true && api.GH.flushAsap === false;
+
+      ok = gateOk && dirtySaved && cleanOk && changedOk && kickOk && dedupeOk && asapOk;
+      if (!ok) detail = JSON.stringify({ gateOk: gateOk, dirtySaved: dirtySaved, cleanOk: cleanOk,
+        changedOk: changedOk, kickOk: kickOk, dedupeOk: dedupeOk, asapOk: asapOk, pushed: pushed.length });
+    } catch (e) { ok = false; detail = '抛出 ' + e.message; }
+  }
+  T('修复140（真跑）· 锁占用/限流/防抖都只是「记账」不丢；锁释放后补推；同版本戳的退出键入不再白序列化', ok, detail);
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
