@@ -1327,6 +1327,11 @@ window.LMEditor = (function () {
     modal('<h3>页面管理</h3>'
       + '<p class="modal-note">修改导航名称、页面标题与说明（<b>留空的行页面上不会显示</b>）；点「图标」框弹出图标面板，<b>点选一个即替换</b>，<b>再点一下图标框就收起</b>，也可以直接键入 emoji。新增页面：点最下面的虚线框，会多出一个空白模板行，填好后点「保存修改」。</p>'
       + '<div class="page-rows">' + rows + '</div>'
+      /* ★ 修复155：访客可见性开关（存在 config.ui 里，随内容同步，不用改代码） */
+      + '<label class="ask-toggle" title="关掉后访客界面右下角不再出现「提问」浮钮；管理员自己仍能看到，方便确认效果">'
+      +   '<input type="checkbox" id="pgHideAsk"' + (((c.config || {}).ui || {}).hideAsk ? ' checked' : '') + '>'
+      +   '<span>访客不显示右下角「提问」按钮<span class="ask-tip">（管理员自己仍可见，随时可改回来）</span></span>'
+      + '</label>'
       + '<button type="button" class="page-row new-page" id="npAdd" title="点击添加一个空白页面模板，填好后点「保存修改」">＋ 点击新增空白页面模板</button>'
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
       + '<button type="button" class="btn btn-primary" id="pagesSave">保存修改</button></div>', function (root) {
@@ -1362,6 +1367,11 @@ window.LMEditor = (function () {
             blocks: []
           });
         });
+        /* ★ 修复155：访客是否可见「提问」浮钮 */
+        const askBox = root.querySelector('#pgHideAsk');
+        c.config = c.config || {};
+        c.config.ui = c.config.ui || {};
+        c.config.ui.hideAsk = !!(askBox && askBox.checked);
         closeModal();
         LMApp.applyEdit('页面设置已保存');
       });
@@ -1578,6 +1588,11 @@ window.LMEditor = (function () {
         } else {
           p.icon = g('icon'); p.label = g('label'); p.title = g('title');
           p.description = g('description'); p.heroAlign = g('heroAlign');
+          /* ★ 修复152：页面字段也要打「后写优先」的落款。以前只有块有 _ts，页面对象没有 ——
+             mergePageFields 里「两边都改了同一字段」的比较就成了 0 vs 0（永远平手，
+             按代码顺序总是远端赢），于是「两台设备同时改页名/图标，先改的那台白改」。
+             顺带让 pageStamp（删页墓碑的比较基准）也认得出「这页刚被改过」。 */
+          p._ts = Date.now();
           closeModal();
           LMApp.applyEdit('条目设置已保存');
         }
@@ -1748,12 +1763,18 @@ window.LMEditor = (function () {
             if (now) now.textContent = '当前模型：读取失败（不影响重训）\n当前内容：' + corpusLen + ' 字';
           });
       }
+      const otherHost = !/\.github\.io$/.test(location.hostname);
       const show = function (r, ok) {
+        const upLine = r.uploaded
+          ? ('✅ 已提交到 ' + r.branch + ' 分支（GitHub Pages 1-2 分钟后生效）'
+            + (otherHost ? '\nℹ️ 本站（' + location.hostname + '）是静态副本，不会自动更新：'
+              + '点「⤓ 下载 lm.json」拿到文件，交给维护者重新发布一次即可。' : ''))
+          : '⚠️ 只在当前标签页生效（未上传）';
         out.style.color = ok ? '#0a7d32' : '#b3261e';
         out.textContent = [
           '语料 ' + r.chars + ' 字 · ' + r.order + '-gram · 上下文 ' + r.contexts + ' 个 · 条目 ' + r.entries,
           '产物 ' + (r.bytes / 1024).toFixed(1) + ' KB · 困惑度 ' + r.ppl.toFixed(2) + ' · 耗时 ' + r.ms + ' ms',
-          r.uploaded ? '✅ 已提交到 ' + r.branch + ' 分支（Pages 1-2 分钟后生效）' : '⚠️ 只在当前标签页生效（未上传）'
+          upLine
         ].join('\n');
       };
       go.addEventListener('click', function () {

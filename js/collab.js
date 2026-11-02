@@ -49,6 +49,18 @@ window.LMCollab = (function () {
   var FLUSH_HARD_MIN = 400;
   var me = readDevice();
   var lastTs = +(localStorage.getItem(TS_KEY) || 0);
+  /* ★ 修复153（「电脑改了五分钟，手机还没同步」的第一真凶，跨会话累积）：
+     lastTs 是「本机已应用到的内容版本」，存在 localStorage 里。只要这台设备的时钟被调快过
+     （手机自动对时、跨时区、手动改时间都算），就会存下一个**未来时刻**：此后对端按真实时间
+     发来的每一包都 <= lastTs，全被判成「过期包」丢掉 —— 直到本机时钟追上那个未来时刻（几分钟）
+     才恢复。用户感受就是「他改了五分钟我这都没动静，然后突然全来了」。
+     启动时自愈：未来戳一律归零，重新从对端的版本开始建立。 */
+  if (lastTs > Date.now() + 60000) {
+    const _skew = Math.round((lastTs - Date.now()) / 1000);
+    lastTs = 0;
+    try { localStorage.removeItem(TS_KEY); } catch (eT0) { /* noop */ }
+    try { console.warn('[协同·自愈] 本机存着一个「未来」的内容版本戳（设备时钟曾快过 ' + _skew + ' 秒），已重置基线 —— 这正是一直收不到别人修改的原因'); } catch (eT1) { /* noop */ }
+  }
   var peers = {};    /* 设备id -> {name, fp, ts, page} */
   var locks = {};    /* '页面id:块号' -> {by, name, ts} */
   var myLock = null;
@@ -310,15 +322,27 @@ window.LMCollab = (function () {
       const bt = Math.min(+bp._ts || 0, nowT), rt = Math.min(+rp._ts || 0, nowT);
       if (bt > rt) { try { rp[k] = bp[k]; } catch (e3) { /* noop */ } }
     });
+    /* ★ 修复152：合并后的页要带一份「双方落款取大」（封顶到此刻，防未来戳外溢）。
+       否则本机的字段赢了、页对象却还是远端那枚旧 _ts，下一次和删除墓碑比新旧就会判错
+       （页面刚改过却因为戳旧被判成「删除前的回魂包」而消失）。
+       两边都没有 _ts 时不写这个键 —— 免得凭空多出一个字段，让「内容没变」的判定失真。 */
+    const mt = Math.max(+bp._ts || 0, +rp._ts || 0);
+    if (mt > 0) { try { rp._ts = Math.min(mt, nowT); } catch (e4) { /* noop */ } }
   }
   /* 同一页：结构一致 → 字段级三向；结构变了 → 整页取远端（与旧版一致，但**页面本身不丢**） */
-  function mergePageBlocks(bp, rp) {
+  function mergePageBlocks(bp, rp, staleP) {
     if (!bp || !rp || !Array.isArray(bp.blocks) || !Array.isArray(rp.blocks)) return;
     const anc = _base;
     const pid = rp.id || bp.id;
     const ap = (anc && Array.isArray(anc.pages)) ? anc.pages.filter(function (p) { return p && p.id === pid; })[0] : null;
     mergePageFields(ap, bp, rp);
-    if (bp.blocks.length !== rp.blocks.length) return;   /* 该页结构变了 → 整页取远端 */
+    if (bp.blocks.length !== rp.blocks.length) {
+      /* ★ 修复153：块没有 id，结构不同时只能「整页取远端」。但这份远端内容**不比本机新**
+         （过期包 / 云端落后）时，整页取远端等于用旧页顶掉本机刚加的块 —— 所以改成**保留本机这一页**。
+         新内容照旧（staleP=false）走整页取远端。 */
+      if (staleP) { try { rp.blocks = JSON.parse(JSON.stringify(bp.blocks)); } catch (eSB) { /* noop */ } }
+      return;
+    }
     const ancOk = !!(ap && Array.isArray(ap.blocks) && ap.blocks.length === rp.blocks.length);
     rp.blocks.forEach(function (rb, j) {
       const bb = bp.blocks[j];
@@ -362,7 +386,7 @@ window.LMCollab = (function () {
     out._ts = Math.min(Math.max(+l0._ts || 0, +r0._ts || 0), nowT);   /* ★ 修复122：未来戳不外溢 */
     return out;
   }
-  function mergeBlocks(c) {
+  function mergeBlocks(c, staleP) {
     try {
       const base = window.LMApp ? LMApp.state.content : null;
       if (!base || !Array.isArray(base.pages) || !Array.isArray(c.pages)) return c;
@@ -376,7 +400,7 @@ window.LMCollab = (function () {
       /* ② 远端每一页：与本机同 id 的那一页做块级 / 字段级合并 */
       const localById = {};
       base.pages.forEach(function (p) { if (p && p.id) localById[p.id] = p; });
-      c.pages.forEach(function (rp) { if (rp && rp.id && localById[rp.id]) mergePageBlocks(localById[rp.id], rp); });
+      c.pages.forEach(function (rp) { if (rp && rp.id && localById[rp.id]) mergePageBlocks(localById[rp.id], rp, !!staleP); });
       /* ③ 有墓碑且墓碑比远端那页还新 → 远端这份是「删除前的回魂包」，去掉 */
       const kept = c.pages.filter(function (p) {
         if (!p || !p.id) return true;
@@ -501,7 +525,7 @@ window.LMCollab = (function () {
       LMApp.toast('⚠ 与「' + (by || '其他设备') + '」的结构改动冲突：本页已采用对方版本，你在这页新增/删除的块可能被覆盖');
     } catch (e) { /* 提示失败不影响同步 */ }
   }
-  function doApply(c, ts, by) {
+  function doApply(c, ts, by, staleP) {
     bump(ts);
     /* 讨论区保护：远端整包覆盖前，把本机还没广播出去的新发言并进去（id 并集 + 墓碑），防止丢评论 */
     try {
@@ -510,7 +534,8 @@ window.LMCollab = (function () {
       }
     } catch (e0) { /* noop */ }
     rosterFromRemote(c);           /* 设备名单双向可见 */
-    c = mergeBlocks(c);            /* 字段级三向合并（见上方注释；无祖先时退回块级后写优先） */
+    c = mergeBlocks(c, !!staleP);  /* 字段级三向合并（见上方注释；无祖先时退回块级后写优先）
+                                      ★ 修复153：staleP → 结构冲突时保留本机页（不拿旧页顶掉本机新块） */
     const before = LMApp.state.content;
     let same = false;              /* 内容一模一样（重复帧 / 别人保存但没改东西）→ 不重绘不提示：
                                       协作模式下对方每次保存不再引发本机整页重绘，这是“开协作就卡”的主因之一 */
@@ -519,6 +544,10 @@ window.LMCollab = (function () {
     structConflictWarn(c, by); /* ★ 修复88：被整页覆盖前先提醒一句（见函数注释） */
     try { LMApp.applyRemoteContent(c); } catch (e) { return; }
     noteBase(c);   /* ★ 修复121：真正应用成功后才推进共同祖先（被挂起的包不能推进） */
+    /* ★ 修复152：远端内容必须立刻落盘。旧版只改了内存里的 state.content，靠 app.js 那个 20 秒的
+       自动保存兜底 —— 这 20 秒内刷新 / 关页面（课堂上很常见），刚同步来的内容就白同步了，
+       而且下次打开还是旧内容，旧内容又会照 v149 的路径推回云端。 */
+    try { if (window.LMStore && LMStore.saveLocal) LMStore.saveLocal(LMApp.state.content); } catch (eS0) { /* 落盘失败：内存已生效，20 秒自动保存会再试 */ }
     try { pushFeedFrom(before, c, by); } catch (eF0) { /* noop */ }
     setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
     LMApp.toast('🔄 已同步「' + (by || '其他设备') + '」的修改');
@@ -546,6 +575,16 @@ window.LMCollab = (function () {
         + '），本机内容未改动 —— 若反复出现，说明某台设备的内容已损坏，请在那台设备上「恢复初始内容」后重新编辑');
     } catch (e) { /* noop */ }
   }
+  /* ★ 修复152：一个包「真实的版本」= max(消息时刻, 内容里的 syncTs)。
+     为什么要取 max：`send()` 会把 msg.ts 覆盖成**发送方的墙上时钟**，而内容里的 syncTs 是发布时
+     用 nextSyncTs() 发的号（可能比墙上时钟更大 —— _pubTs 被对端更大的戳抬高过）。
+     旧版只按 msg.ts 判过期：对端时钟慢几十秒时，它的**每一包** msg.ts 都 <= 本机 lastTs，
+     于是它在自己那边改什么都传不过来（现场＝「我这边看得到他在打字，字就是不出现」）。
+     取 max 之后：新内容不会被误丢，真正旧的包（内容和 msg 都旧）照旧丢弃。 */
+  function packetTs(msgTs, contentTs) {
+    const a = +msgTs || 0, b = +contentTs || 0;
+    return a > b ? a : b;
+  }
   function applyRemote(msg) {
     let c = msg.content;
     if (!validContent(c)) return false;
@@ -563,15 +602,31 @@ window.LMCollab = (function () {
     /* ★ 修复72：force = Yjs 网状通道专用。Y.Doc 本身就只给出「更新的整包」（因果有序），
        不该再拿墙上时钟挡一道 —— 任一端时钟快一点，更新就被静默丢掉，
        表现正是「徽标上看得到有人在编辑，内容却怎么都不同步」 */
-    if (!msg.force && +(msg.ts || 0) <= lastTs) { warnStale(msg.ts); return false; } /* 过期包忽略（后写优先） */
-    if (localBusy()) { pending = { content: c, ts: msg.ts, by: msg.name }; return false; }
-    if (verifyBanList(c)) { doApply(c, msg.ts, msg.name); return true; } /* 管理员设备会核对屏蔽名单签名，坏条目剔除后再用 */
+    /* ★ 修复152：判过期用 packetTs（消息时刻与内容版本戳取大者），不再只看 msg.ts —— 见函数注释 */
+    /* ★ 修复153（「电脑改了五分钟，手机还没同步」的第二真凶 —— 也是最后一道丢包闸门）：
+       这里原来是**硬丢弃**：`pts <= lastTs` 直接 return false。而 pts 永远是对方按自己的时钟/版本
+       发出来的号：只要本机时钟快过对方（几分钟很常见），对方的每一包都 <= 本机 lastTs，
+       于是「他改他的，我这边一个字都不进来」，直到本机时钟追上 —— 恰好就是「五分钟」的体感。
+       现在改成：**不丢包**。理由很硬 —— 合并本身是按块级 / 页级 `_ts` 的后写优先（旧包压不掉新内容），
+       页有并集 + 墓碑，内容真的一模一样时 doApply 会自己 JSON 比对后提前 return（不重绘、不弹提示）。
+       同时把「未来戳」夹到此刻 +60 秒，避免它再被 bump 进 lastTs/_pubTs 里继续放大时间差。 */
+    const nowT = Date.now();
+    const pts = Math.min(packetTs(msg.ts, (((c.config || {}).collab || {}).syncTs || 0)), nowT + 60000);
+    const staleP = !msg.force && pts <= lastTs;   /* 版本不占优（但仍要合并：见上面注释） */
+    if (staleP) warnStale(pts);                   /* 只留诊断（5 秒一条），不再 return false */
+    if (localBusy()) {
+      /* ★ 修复152：挂起包只保留「更新的那一个」。旧版无条件覆盖 —— 拖着块/正在输入时先后到的两个包，
+         后到的**旧包**会把先到的新包顶掉，松手只应用旧包，新内容要等对方再动一次才来。 */
+      if (!pending || pts >= (+pending.ts || 0)) pending = { content: c, ts: pts, by: msg.name, stale: staleP };
+      return false;
+    }
+    if (verifyBanList(c)) { doApply(c, pts, msg.name, staleP); return true; } /* 管理员设备会核对屏蔽名单签名，坏条目剔除后再用 */
     return false;
   }
   function flushPending() {
     if (!pending || localBusy()) return false;
     const p = pending; pending = null;
-    if (verifyBanList(p.content)) { doApply(p.content, p.ts, p.by); return true; }
+    if (verifyBanList(p.content)) { doApply(p.content, p.ts, p.by, p.stale); return true; }   /* ★ 修复153：把「是否过期」带过去 */
     return false;
   }
   function recv(msg) {
@@ -581,7 +636,11 @@ window.LMCollab = (function () {
     try {
       switch (msg.type) {
       case 'hello':
-        peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page };
+        /* ★ 修复152：多记一个「本机收到时刻」—— peers 的过期判定必须用本机时钟。
+           旧版用 msg.ts（发送方的墙上时钟）：对端时钟慢 30 秒时，它的 iam 一进来就已经
+           「超过 PEER_TTL」，sweep 每 6 秒把它删掉又从下一个 iam 加回来 → 对面不停弹
+           「已断线 / 又回来了」，面板和徽章的台数也跟着跳。 */
+        peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page, seenAt: Date.now() };
         clearLeft(msg.from); /* 回来了：清掉「已退出页面」的短暂屏蔽 */
         if (msg.want) { /* 新设备要全量：只让「设备号最小」的那台回，避免多台同时灌 */
           const ids = Object.keys(peers).concat([me.id]).sort();
@@ -589,7 +648,7 @@ window.LMCollab = (function () {
         }
         presenceTick(); break;
       case 'iam':
-        peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page };
+        peers[msg.from] = { name: msg.name, fp: msg.fp, ts: msg.ts, page: msg.page, seenAt: Date.now() };   /* ★ 修复152：同 hello */
         clearLeft(msg.from);
         presenceTick(); break;
       case 'state':
@@ -947,17 +1006,36 @@ window.LMCollab = (function () {
     /* ★ 修复71/73：与设备面板同一个数（本机 + 在线设备，去重）；断线的单独报出来，不再悄悄少一台 */
     const n = liveCount();
     const lost = lostCount();
-    const txt = '<span class="dot' + (lost ? ' warn' : '') + '"></span>协作中 · ' + n + ' 台设备'
-      + (lost ? '（' + lost + ' 台已断线）' : '') + '（' + modeLabel + yChannelLabel() + '）';
+    /* ★ 修复153：把「本机这一笔还没上云」直接写在胶囊上 —— 以前这种情况完全静默
+       （现场＝「我改了五分钟，对方一点动静都没有」），现在一眼看到「⚠ 未上传 87 秒」+ 胶囊转橙，
+       就知道不是对方的问题，而是这一笔卡在本机（限流退避 / Token 失效 / 云端不可用）。 */
+    const stuckSec = (function () {   /* ★ 修复153：TDZ 安全（paintChip 可能在 GH 初始化前被调用） */
+      try { return (GH.dirty && GH.dirtyAt) ? Math.round((Date.now() - GH.dirtyAt) / 1000) : 0; }
+      catch (eG) { return 0; }
+    })();
+    const stuck = stuckSec > 45;
+    const txt = '<span class="dot' + (lost || stuck ? ' warn' : '') + '"></span>协作中 · ' + n + ' 台设备'
+      + (lost ? '（' + lost + ' 台已断线）' : '')
+      + (stuck ? '（⚠ 未上传 ' + stuckSec + ' 秒）' : '')
+      + '（' + modeLabel + yChannelLabel() + '）';
     if (chip.innerHTML !== txt) chip.innerHTML = txt; /* ★ 修复73：2 秒一拍也不重复重排 DOM */
-    chip.title = '我：' + me.name + '（#' + shortId(me.id) + '）— 点开看在线 / 断线设备';
+    if (chip.classList.contains('stuck') !== stuck) chip.classList.toggle('stuck', stuck);
+    chip.title = '我：' + me.name + '（#' + shortId(me.id) + '）— 点开看在线 / 断线设备'
+      + (stuck ? '｜本机有改动还没上传：' + stuckSec + ' 秒' : '');
+    /* ★ 修复153：胶囊宽度会随台数/模式变化 → 正贴着的提示条要重新贴合，别被胶囊压住 */
+    try { if (window.LMApp && LMApp.reposeToast) LMApp.reposeToast(); } catch (eRp) { /* noop */ }
   }
   function renderPanel() {
     let pan = document.getElementById(PANEL_ID);
     if (!pan) {
       pan = document.createElement('div'); pan.id = PANEL_ID;
       document.body.appendChild(pan);
-      pan.addEventListener('click', function (e) { if (e.target === pan) pan.classList.remove('show'); });
+      pan.addEventListener('click', function (e) {
+        if (e.target === pan) { pan.classList.remove('show'); return; }
+        /* ★ 修复153：「🔄 立即同步」用事件委托（面板内容会被 2 秒一拍重绘，绑在按钮上会丢） */
+        const b = (e.target && e.target.closest) ? e.target.closest('[data-sync]') : null;
+        if (b) { forceSync(); }
+      });
     }
     const admin = !!(window.LMApp && LMApp.state.admin);
     /* ★ 修复73：名单来自设备状态机（在线 + 断线），花名册只补「最近活跃」 */
@@ -983,6 +1061,11 @@ window.LMCollab = (function () {
           + '<span class="cp-id">' + new Date(f2.ts).toLocaleTimeString('zh-CN') + '</span></div>';
       }).join('');
     }
+    /* ★ 修复153：底部一栏「云端同步卡在哪一步 + 一键重试」——
+       手机上看不出「为什么五分钟都没同步」时，点开胶囊就能看到：待上传多久 / 限流退避多久 /
+       是不是回退到了 main / 上次云端更新是几秒前，再点「🔄 立即同步」把退避和缓存全清掉重来。 */
+    html += '<div class="cp-sync"><span>' + escHtml(syncLine()) + '</span>'
+      + '<button type="button" class="cp-btn" data-sync="1">🔄 立即同步</button></div>';
     html += admin
       ? '<div class="cp-note">改名 / 查看全部设备 / 屏蔽管理：右上角 ⚙ 设置 → 协作与设备</div>'
       : '<div class="cp-note">设备昵称由管理员在 ⚙ 设置里统一管理（同昵称多设备允许，靠设备号区分）</div>';
@@ -990,13 +1073,48 @@ window.LMCollab = (function () {
     pan.classList.add('show');
   }
   function escHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  /* ★ 修复153：云端同步「卡在哪一步」的一句话摘要（面板/诊断共用，手机上看一眼就懂） */
+  function syncLine() {
+    try {
+      if (!GH.cfg || !GH.cfg.owner || !GH.cfg.repo) {
+        return GH.token ? '云端：未配置仓库（点「☁ 同步」绑定）' : '云端：未接入（只有本机互连通道）';
+      }
+      if (!GH.token) {   /* 访客：只读轮询 */
+        const s = GH.lastPullAt ? Math.round((Date.now() - GH.lastPullAt) / 1000) : -1;
+        return '云端只读：' + (s < 0 ? '还没取到内容' : (s < 3 ? '刚刚更新过' : '上次更新 ' + s + ' 秒前'))
+          + (GH.useMain ? '（已回退 main）' : '');
+      }
+      const bits = [];
+      if (GH.dirty) bits.push('待上传 ' + Math.round((Date.now() - (GH.dirtyAt || Date.now())) / 1000) + ' 秒');
+      if (GH.blockUntil > Date.now()) bits.push('限流退避 ' + Math.round((GH.blockUntil - Date.now()) / 1000) + ' 秒');
+      if (GH.useMain) bits.push('已回退 main');
+      if (GH.pushBusy) bits.push('正在上传');
+      const lp = GH.lastPullAt ? Math.round((Date.now() - GH.lastPullAt) / 1000) : -1;
+      if (lp >= 0) bits.push('云端 ' + (lp < 3 ? '刚刚' : lp + ' 秒前') + ' 变过');
+      return '云端：' + (bits.length ? bits.join(' · ') : '已同步');
+    } catch (e) { return '云端：状态未知'; }
+  }
+  /* ★ 修复153：一键「重新核对 + 立刻同步」—— 手动清掉所有会卡住同步的粘性状态：
+     限流退避（403/429 最长会挡 5 分钟）、回退 main、ETag/sha/已合并戳缓存、在飞锁。
+     然后先拉一次（拉完自动补推），本机脏内容交给 kickPush 补发；控制台 LMCollab.forceSync() 同效。 */
+  function forceSync() {
+    GH.blockUntil = 0; GH.useMain = false; GH.etag = ''; GH.mergedTs = 0;
+    GH.inFlight = false; GH.inFlightAt = 0; GH.pushBusy = false; GH.pushBusyAt = 0;
+    GH.pulledOnce = false; GH.coldAt = 0; GH.timer = 0; GH._409T = 0;
+    try { Object.keys(shaOf).forEach(function (k) { delete shaOf[k]; }); } catch (e0) { /* noop */ }
+    try { if (window.LMApp) LMApp.toast('🔄 正在重新核对云端版本…'); } catch (e1) { /* noop */ }
+    try { ghPull(); } catch (e2) { /* noop */ }
+    if (GH.token) { wantPush(); kickPush(1500); }   /* 有写权限才记账：访客没有东西要上传 */
+    try { paintChip(); } catch (e3) { /* noop */ }
+    return true;
+  }
   function sweep() {
     try {
       const now = Date.now();
       Object.keys(locks).forEach(function (k) {
         if (now - locks[k].ts > LOCK_TTL) { delete locks[k]; delete coEdit[k]; repaintLocks(); }
       });
-      Object.keys(peers).forEach(function (k) { if (now - peers[k].ts > PEER_TTL) delete peers[k]; });
+      Object.keys(peers).forEach(function (k) { if (now - (+(peers[k].seenAt || peers[k].ts) || 0) > PEER_TTL) delete peers[k]; });   /* ★ 修复152：用本机接收时刻判过期（对端时钟慢不再被反复踢出） */
       /* ★ 修复73：断线 / 退出 / 重连 / 超时移除 全部交给设备状态机（2 秒一拍）——
          旧版这里只认旧通道 peers，Yjs 掉线根本没有提示 */
       presenceTick();
@@ -1196,6 +1314,10 @@ window.LMCollab = (function () {
       }
     } catch (e) { /* noop */ }
     send({ type: 'commit', content: content, ts: ts });
+    /* ★ 修复152：用户又改了一笔 → 清掉「连续补推放慢」的计数。
+       否则断网/额度受限连着失败 6 次后，kickPush 会退避到 15 秒；网络恢复后第一笔仍要干等 15 秒
+       （现场＝「网好了还要半天才同步」）。用户主动编辑时值得立刻再试一次。 */
+    try { GH.kickN = 0; } catch (eKN) { /* noop */ }
     /* ★ Yjs 网状协同：本地保存同步写入 Y.Doc（CRDT 合并），与 GitHub 回传完全解耦、互不阻塞 */
     if (window.LMYCollab && window.LMYCollab.pushLocal) { try { window.LMYCollab.pushLocal(content); } catch (eY) { /* noop */ } }
   }
@@ -1215,6 +1337,9 @@ window.LMCollab = (function () {
                blockUntil: 0,       /* ★ 修复90：限流/退避到期时刻，到期前一律不写（越撞越死） */
                rateLeft: null,      /* ★ 修复90：X-RateLimit-Remaining 观测值 */
                lastText: '',        /* ★ 修复90：上次成功推送的文件文本，内容没变就不重复 PUT */
+               syncedText: '',      /* ★ 修复153：「上一次和云端对齐时的原文」（拉取成功记云端那版、推送成功记已推文本）。
+                                        flushPush 靠它判断「本机还有没有东西要推」——按 syncTs 比大小会被
+                                        mergeBlocks 改写 syncTs 的副作用骗过去（见 flushPush 注释） */
                mergedTs: 0,         /* ★ 修复105：已按块级合并过的云端版本戳（同一份不反复合并） */
                pulledOnce: false,   /* ★ 修复149：本页会话里「至少成功跟云端对过一次话」（拉取落地/304）。
                                        为 false 时一律不许推 —— 否则刚打开的旧标签页会把云端内容倒退 */
@@ -1357,6 +1482,9 @@ window.LMCollab = (function () {
         GH.useMain = true; GH.etag = ''; GH.timer = 0;
         GH.inFlight = false;
         GH.pulledOnce = false;   /* ★ 修复149：刚换分支，还没读到 main —— 40ms 后那一次拉取才算「对过话」 */
+        GH._swapRetry = true;    /* ★ 修复152：这一轮不算「拿到云端内容」—— 否则下面那行会把
+                                    pulledOnce 又置真，冷启动闸门在「数据分支还不存在」这个最该拦的
+                                    场景下正好失效（旧标签页一 focusout 就把首屏旧内容写上去） */
         setTimeout(ghPull, 40);
         return null;
       }
@@ -1368,13 +1496,19 @@ window.LMCollab = (function () {
       });
     }).then(function (c) {
       GH.inFlight = false;
+      /* ★ 修复152：刚做过「数据分支不存在 → 改读 main」的切换，这一轮没有任何内容到手，不算「对过话」 */
+      if (GH._swapRetry) { GH._swapRetry = false; return; }
       GH.pulledOnce = true;   /* ★ 修复149：云端内容已到手（哪怕解析失败/是旧版）—— 现在允许推送了 */
       if (!validContent(c)) return;
+      /* ★ 修复153：先记下「云端那一版的原文」（**合并之前**）—— flushPush 用它判断
+         「本机内容是否已经和云端对齐」，比按 syncTs 比大小可靠（合并会把 syncTs 改成云端那一版）。 */
+      let cloudText = '';
+      try { cloudText = window.LMStore ? LMStore.buildFileText(c) : ''; } catch (eCT) { cloudText = ''; }
       const ts = +(((c.config || {}).collab || {}).syncTs || 0) || 1;
       const stale = (ts <= lastTs || ts <= GH.lastPullTs);
       if (!stale) {
         notePulled(ts);   /* ★ 修复142：版本戳封顶 + 记账「云端刚变过」+ 抬高本机发号器 */
-        applyRemote({ content: c, ts: ts, name: '云端（GitHub）' });
+        if (applyRemote({ content: c, ts: ts, name: '云端（GitHub）' })) { if (cloudText) GH.syncedText = cloudText; }
         return;
       }
       /* 时间戳不占优 ≠ 内容相同：多端并发或时钟错位时，云端可能带着本机没有的修改。
@@ -1393,7 +1527,7 @@ window.LMCollab = (function () {
         if (same) { GH.mergedTs = ts; return; }
         if (localBusy() || !verifyBanList(c)) return;   /* 本机正在输入 → 下一轮再来，不打断 */
         let merged = null;
-        try { merged = mergeBlocks(JSON.parse(JSON.stringify(c))); } catch (eM0) { return; }
+        try { merged = mergeBlocks(JSON.parse(JSON.stringify(c)), true); } catch (eM0) { return; }   /* ★ 修复153：走到这里说明云端不比本机新 → 结构冲突保留本机页 */
         let sameM = false;
         try { sameM = JSON.stringify(merged) === JSON.stringify(LMApp.state.content); } catch (eS1) { sameM = false; }
         if (sameM) { GH.mergedTs = ts; return; }        /* 合并后没有实质变化：记账后不再重算 */
@@ -1401,6 +1535,9 @@ window.LMCollab = (function () {
           LMApp.applyRemoteContent(merged);
           if (window.LMStore) LMStore.saveLocal(LMApp.state.content);
           GH.mergedTs = ts;
+          /* ★ 修复153：云端「有」的仍是 cloudText（本机合进去的那些改动还没有上云）——
+             记下来，flushPush 一比对就知道还欠一次推送，不会再误判成「没东西可推」 */
+          if (cloudText) GH.syncedText = cloudText;
           /* ★ 修复142：合并应用成功 = 云端这一版已吃进来 → lastTs / 发号器一起顶到它之上，
              下一笔本机保存的戳必比云端新，不会再被 `GH.lastPullTs > myTs` 改道成「只拉不发」 */
           notePulled(ts); bump(ts);
@@ -1409,12 +1546,25 @@ window.LMCollab = (function () {
         LMApp.toast('🔄 已吸收「云端（GitHub）」另一台设备的修改');
         return;
       }
-      try { if (JSON.stringify(c) === JSON.stringify(LMApp.state.content)) return; } catch (eC) { return; }
+      /* ★ 修复152（访客路径的「每 4 秒重复应用一次」）：
+         旧版只比「云端原文 vs 本机」，但**合并结果本来就会和云端原文不同**（本机多一页 / 本机有更晚的块），
+         于是每一轮轮询都重新 apply 一遍：弹一次「🔄 已同步」、落一次盘、还往撤销栈压一帧
+         （visitorGapNow 前台 4 秒一轮 = 每分钟 15 次；用户感受是「一直在同步，撤销还退不动」）。
+         现在与管理员路径用同一套判据：同一份云端版本只合并一次；合并后和本机一模一样就什么都不做。 */
+      if (GH.mergedTs === ts) return;
+      try { if (JSON.stringify(c) === JSON.stringify(LMApp.state.content)) { GH.mergedTs = ts; return; } } catch (eC) { return; }
       if (localBusy() || !verifyBanList(c)) return;
+      let merged = null;
+      try { merged = mergeBlocks(c, true); } catch (eM2) { return; }   /* ★ 修复153：云端不占优 → 结构冲突保留本机页 */
+      let sameM = false;
+      try { sameM = JSON.stringify(merged) === JSON.stringify(LMApp.state.content); } catch (eS2) { sameM = false; }
+      if (sameM) { GH.mergedTs = ts; return; }     /* 合并后没有实质变化：记账后不再重算 */
       try {
-        LMApp.applyRemoteContent(mergeBlocks(c));
+        LMApp.applyRemoteContent(merged);
         noteBase(LMApp.state.content);   /* ★ 修复121：应用后本机内容即新的共同祖先（与 doApply 保持一致） */
         if (window.LMStore) LMStore.saveLocal(LMApp.state.content);
+        GH.mergedTs = ts;
+        if (cloudText) GH.syncedText = cloudText;   /* ★ 修复153：云端那一版记下来（同管理员路径） */
         notePulled(ts); bump(ts);        /* ★ 修复142：同上 —— 吃进来的版本要顶到发号器之上 */
       } catch (eD) { return; }
       setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
@@ -1540,6 +1690,7 @@ window.LMCollab = (function () {
   function pushDone(okText) {
     pushUnlock();
     if (okText) {
+      GH.syncedText = okText;   /* ★ 修复153：云端此刻这一份 = 刚推上去的原文（flushPush 的内容基线） */
       let same = false;
       try { const c = latestContent(); same = !!c && LMStore.buildFileText(c) === okText; } catch (e) { same = false; }
       if (same) pushClean();
@@ -1562,14 +1713,17 @@ window.LMCollab = (function () {
     if (!GH.cfg || !GH.token) return false;   /* 没有云端写通道：同浏览器 / 教室服务器通道本来就是即时广播 */
     const c = latestContent();
     if (!c) return false;
-    const ts = +(((c.config || {}).collab || {}).syncTs || 0);
-    /* 这一版已经推上去了（内容没变就别做全量序列化，切来切去不花钱） */
-    if (ts && ts === GH.lastPushTs) { pushClean(); return false; }
-    /* ★ 修复149：内容并不比云端新（本页只是把刚拉到的同一版又摆了一遍）→ 没东西可推。
-       这条同时挡住「旧标签页 focusout 就把云端写回旧版」的第二条路：
-       publish 的版本戳恒 > 已拉到的云端戳（_pubTs 在 notePulled 里被抬高），
-       所以 ts <= 云端戳 只可能是「本页自那次拉取之后一个字都没改」。 */
-    if (ts && GH.lastPullTs && ts <= GH.lastPullTs) { pushClean(); return false; }
+    /* ★ 修复153（「我电脑上改了，手机永远看不到」的第三条丢包路径）：判「有没有东西要推」必须比**内容**。
+       旧守卫按 syncTs 比大小：`ts === lastPushTs` / `ts <= GH.lastPullTs` → pushClean() 直接跳过。
+       而 applyRemote → mergeBlocks 会把本机的改动**合进「云端那个对象」**，本机内容的 syncTs 于是
+       变成云端那一版（== GH.lastPullTs）—— 守卫误判成「这版已经推过了」，还顺手把脏标记清掉：
+       本机的改动从此再也上不去云，直到用户**再改一次**（新 publish 才产生更大的戳）。
+       现在改成与「上一次和云端对齐时的原文」逐字比对（GH.syncedText：拉取成功记云端原文、
+       推送成功记已推文本），内容真的一样才跳过；不一样就一定推 —— 这才是「有没有东西要推」的正解。 */
+    let sameText = false;
+    try { sameText = !!GH.syncedText && !!LMStore && LMStore.buildFileText(c) === GH.syncedText; }
+    catch (eSame) { sameText = false; }
+    if (sameText) { pushClean(); return false; }
     GH.flushAsap = true;
     try { ghPush(c); } finally { GH.flushAsap = false; }
     try { GH.flushWhy = why || ''; } catch (eF) { /* noop */ }
@@ -1765,6 +1919,7 @@ window.LMCollab = (function () {
     if (_sig !== GH._sig) {
       GH._sig = _sig;
       GH.useMain = false; GH.etag = ''; GH.lastText = ''; GH.blockUntil = 0; GH.rateLeft = null;
+      GH.syncedText = '';      /* ★ 修复153：换仓库/分支 → 内容基线作废（下一轮重新比对） */
       /* ★ 修复140：换仓库/换 Token → 上一套的推送状态一并清掉（否则会拿旧的脏标记/版本戳乱补推） */
       GH.lastPushTs = 0; GH.dirty = false; GH.dirtyAt = 0; GH.kickN = 0;
       GH.pulledOnce = false;   /* ★ 修复149：换仓库了 → 必须重新拉一次才知道云端是哪一版，不许急着推 */
@@ -1810,6 +1965,19 @@ window.LMCollab = (function () {
         }, 500);
       }
       ghPull();
+    } else if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(h) && location.protocol !== 'file:') {
+      /* ★ 修复153（「手机上永远不更新，但看不出为什么」）：访客通道靠 GitHub Pages 的网址推导
+         owner/repo；一旦站点是从**自定义域名 / 镜像 / 反代**打开的，这里推不出来 → 云端轮询
+         **根本没启动**，而旧版完全静默：手机上看着正常、就是永远不更新。现在明确提示一次。 */
+      try {
+        console.warn('[协同·云端] 当前域名 ' + h + ' 不是 *.github.io，无法自动推导 owner/repo → 云端轮询未启动（本机 / 局域网通道照常工作）');
+        if (!sessionStorage.getItem('lm_gh_nohost')) {
+          sessionStorage.setItem('lm_gh_nohost', '1');
+          setTimeout(function () {
+            try { if (window.LMApp) LMApp.toast('提示：本页不在 github.io 域名下，收不到云端更新（用 GitHub Pages 的地址打开即可）'); } catch (eT3) { /* noop */ }
+          }, 2600);
+        }
+      } catch (eNo) { /* noop */ }
     }
   }
   /* ---------- 配置漂移自愈（防旧缓存分房）----------
@@ -2010,6 +2178,9 @@ window.LMCollab = (function () {
       try { ghPull(); } catch (e2) { /* noop */ }
       return true;
     },
+    /* ★ 修复153：一键硬重试（清退避/回退/main/缓存 → 先拉再补推）。手机端胶囊面板上的「🔄 立即同步」 */
+    forceSync: forceSync,
+    syncLine: syncLine,
     presenceTick: presenceTick, /* ★ 修复73：awareness 增减时由 ycollab 立刻催一拍，不必等 2 秒定时 */
     devices: function () { return deviceList(); },
     applyExternal: function (c, by) { /* Yjs 网状协同与旧通道共用同一个「远端应用」漏斗 */
@@ -2034,6 +2205,7 @@ window.LMCollab = (function () {
         额度剩余: (GH.rateLeft == null ? '未知（还没收到 GitHub 响应头）' : (GH.rateLeft + ' 次/小时 · 当前推送间隔 ' + (Math.max(pushWaitMin(peersHot()), rateGap()) / 1000) + ' 秒')),
         /* ★ 修复142：云端侧的「到底走到哪一步」—— 现场排查「内容没过去 / 没回来」先看这四项 */
         云端: {
+          同步摘要: syncLine(),   /* ★ 修复153：一句话说明卡在哪一步（与胶囊面板同一句） */
           上次云端变更秒前: GH.lastPullAt ? Math.round((Date.now() - GH.lastPullAt) / 1000) : -1,
           云端版本戳: GH.lastPullTs || 0,
           本机版本戳: (function () { try { return +((((LMApp || {}).state || {}).content || {}).config.collab.syncTs || 0); } catch (e) { return 0; } })(),

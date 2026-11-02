@@ -148,7 +148,22 @@
             }
             pruneConfirmed = true;
           }
-          stale.forEach(function (k) { ymap.delete(k); });
+          stale.forEach(function (k) {
+            /* ★ 修复152：删页必须同步留墓碑 —— 修复151 起「页面」走 id 并集合并（只在有墓碑时才接受删除），
+               旧的 Y.Doc 删键没有任何删除凭据，对端一合并就把这页复活并回写 Y.Doc，
+               症状就是「删了又自己回来」，两台设备还会来回打架。 */
+            try {
+              var pid0 = String(k).slice(5);
+              var mm0 = {}; try { mm0 = JSON.parse(ymap.get('meta') || '{}') || {}; } catch (eMM) { mm0 = {}; }
+              var cfg0 = mm0.config = mm0.config || {};
+              var cb0 = cfg0.collab = cfg0.collab || {};
+              var tb0 = (cb0.tomb && typeof cb0.tomb === 'object') ? cb0.tomb : {};
+              tb0[pid0] = Date.now();
+              cb0.tomb = tb0;
+              ymap.set('meta', JSON.stringify(mm0));
+            } catch (eTb) { /* 墓碑写不进去也不能挡住删除本身 */ }
+            ymap.delete(k);
+          });
         }
       }, 'lm-local');
     } catch (e) { /* noop */ }

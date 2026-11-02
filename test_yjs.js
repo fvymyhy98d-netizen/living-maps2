@@ -344,7 +344,9 @@ T('协同局部刷新：applyRemoteContent 结构一致时逐块 diff 替换（r
     && appSrc.indexOf("nu.classList.contains('reveal')") > 0
     && appSrc.indexOf('applyRemoteContent: applyRemoteContent') > 0
     && col.indexOf('LMApp.applyRemoteContent(c)') > 0
-    && col.indexOf('LMApp.applyRemoteContent(mergeBlocks(c))') > 0);
+    /* ★ 修复152：访客路径也改成「先合并 → 判等 → 再应用」（同一条判据两处都在） */
+    && col.indexOf('LMApp.applyRemoteContent(merged)') > 0
+    && col.split('if (sameM) { GH.mergedTs = ts; return; }').length - 1 === 2);
 T('撤销基准随远端局部更新同步（applyRemoteContent 尾部 hPush）',
   appSrc.indexOf("hPush('其他设备的修改（协同同步）'); /* ★ 撤销基准随远端内容同步") > 0);
 T('手机排版兜底：free-box 不溢出屏 + 长词/链接自动断行',
@@ -718,7 +720,9 @@ T('collab.js：localBusy 改判「按键 1.2s 内才算输入中」+ 指针 20s 
 })();
 T('Yjs 通道 force 绕过墙上时钟门 · 过期包留诊断 · 未来时间戳不进 lastTs · 未真正应用时不回写 Y.Doc',
   col.indexOf('force: true') > 0
-    && col.indexOf('if (!msg.force && +(msg.ts || 0) <= lastTs) { warnStale(msg.ts); return false; }') > 0
+    && col.indexOf('const pts = Math.min(packetTs(msg.ts,') > 0   /* ★ 修复152/153：取 max(消息时刻, 内容 syncTs)，且夹到「此刻+60s」 */
+    && col.indexOf('const staleP = !msg.force && pts <= lastTs;') > 0   /* ★ 修复153：先判「版本不占优」 */
+    && col.indexOf('if (staleP) warnStale(pts);') > 0   /* ★ 修复153：只诊断，不再丢包 */
     && col.indexOf('function warnStale(ts) {') > 0
     && col.indexOf('if (ts > Date.now() + 60000) ts = Date.now();') > 0
     && col.indexOf('diag: function () {') > 0
@@ -1736,7 +1740,7 @@ T('旧实现已清除：freeJump（整格移动）与 swapWith（放回流再换
 console.log('【9.53】修复105：手机改了、电脑一两分钟没反应 → ghPull 管理员分支不再无条件 return');
 T('collab.js：管理员拉云端时按「内容不同就块级合并」收敛（旧的无条件 return 已删除）',
   col.indexOf('if (GH.mergedTs === ts) return;') > 0
-    && col.indexOf('merged = mergeBlocks(JSON.parse(JSON.stringify(c)));') > 0
+    && col.indexOf('merged = mergeBlocks(JSON.parse(JSON.stringify(c)), true);') > 0   /* ★ 修复153：云端不占优 → 结构冲突保留本机页 */
     && col.indexOf('已吸收「云端（GitHub）」另一台设备的修改') > 0
     && col.indexOf('mergedTs: 0,') > 0
     && col.indexOf('if (GH.token) return;') < 0);
@@ -2760,11 +2764,12 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       return /'<mark class="lm-ai-hit">' \+ esc\(seg\) \+ '<\/mark>' : esc\(seg\)/.test(s);
     })());
 
-  T('细节117：手机单层滚动 · 提示条移到顶部 · 窄屏圆形浮标 · 气泡收角 · 选中标签下划条',
+  T('细节117：手机单层滚动 · 提示条不再压顶部导航（★修复153：回到底部，由 toastPose 贴胶囊）· 窄屏圆形浮标 · 气泡收角 · 选中标签下划条',
     (function () {
       const c = srcOf('css/style.css');
       return c.indexOf('.lm-ai-chat{max-height:none;overflow:visible') > 0
-        && /\.toast\{top:calc\(12px \+ env\(safe-area-inset-top/.test(c)
+        && c.indexOf('.toast{top:auto;bottom:96px}') > 0
+        && c.indexOf('.toast{top:calc(12px + env(safe-area-inset-top') < 0
         && c.indexOf('.lm-ai-fab .lm-ai-fab-t{display:none}') > 0
         && c.indexOf('.lm-ai-msg.me{border-bottom-right-radius:6px}') > 0
         && c.indexOf('.lm-ai-mode.on{box-shadow:inset 0 -2px 0 0 currentColor}') > 0
@@ -3022,7 +3027,9 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         && s.indexOf('okDel = window.confirm(') > 0
         && s.indexOf("已跳过删除 ' + stale.length + ' 个页面") > 0
         && s.indexOf('confirmPrune: function () { pruneConfirmed = true; }') > 0
-        && s.indexOf('stale.forEach(function (k) { ymap.delete(k); });') > 0;
+        && s.indexOf('stale.forEach(function (k) {') > 0
+        && s.indexOf('ymap.delete(k);') > 0
+        && s.indexOf('tb0[pid0] = Date.now();') > 0;   /* ★ 修复152：删页同时写墓碑，否则对端并集合并会把它复活 */
     })());
 
 
@@ -3602,10 +3609,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=151 · LM_ASSET_VER=151',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=153 · LM_ASSET_VER=153',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=150/g) || []).length === 0 && /\?v=151/.test(html)
-      && /LM_ASSET_VER = '151'/.test(appJs));
+      && (html.match(/\?v=152/g) || []).length === 0 && /\?v=153/.test(html)
+      && /LM_ASSET_VER = '153'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4506,10 +4513,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 151（?v=151 共 22 处 · v150 无残留 · LM_ASSET_VER=151）',
-    (html.match(/\?v=151/g) || []).length === 22 && (html.match(/\?v=150/g) || []).length === 0
-      && /LM_ASSET_VER = '151'/.test(appJs),
-    'v151=' + (html.match(/\?v=151/g) || []).length + ' v150=' + (html.match(/\?v=150/g) || []).length);
+  T('版本已升到 153（?v=153 共 22 处 · v152 无残留 · LM_ASSET_VER=153）',
+    (html.match(/\?v=153/g) || []).length === 22 && (html.match(/\?v=152/g) || []).length === 0
+      && /LM_ASSET_VER = '153'/.test(appJs),
+    'v153=' + (html.match(/\?v=153/g) || []).length + ' v152=' + (html.match(/\?v=152/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -4621,11 +4628,13 @@ console.log('【修复140】协同推送状态机：退出键入立刻发 · 两
       const t0 = timers[0]; api.GH.kickT = 0; t0.fn();
       const kickOk = pushed.length === 1;
 
-      api.GH.lastPushTs = 1000; pushed.length = 0;    /* 同一版本戳：退出键入不再白做全量序列化 */
+      LMStore._txt = 'A';                             /* 内容回到与云端对齐的那一版 */
+      api.GH.syncedText = 'A'; pushed.length = 0;     /* ★ 修复153：与云端对齐过的原文一致 → 退出键入不再白做全量序列化 */
       const same = api.flushPush('退出键入');
       const dedupeOk = same === false && pushed.length === 0;
 
-      page.content.config.collab.syncTs = 2000;       /* 新版本：立刻推且跳过防抖 */
+      LMStore._txt = 'B';                             /* ★ 修复153：内容真变了（与对齐基线不同）→ 立刻推且跳过防抖 */
+      page.content.config.collab.syncTs = 2000;
       const sent = api.flushPush('退出键入');
       const asapOk = sent === true && pushed.length === 1 && pushed[0].asap === true && api.GH.flushAsap === false;
 
@@ -4634,7 +4643,7 @@ console.log('【修复140】协同推送状态机：退出键入立刻发 · 两
         changedOk: changedOk, kickOk: kickOk, dedupeOk: dedupeOk, asapOk: asapOk, pushed: pushed.length });
     } catch (e) { ok = false; detail = '抛出 ' + e.message; }
   }
-  T('修复140（真跑）· 锁占用/限流/防抖都只是「记账」不丢；锁释放后补推；同版本戳的退出键入不再白序列化', ok, detail);
+  T('修复140（真跑）· 锁占用/限流/防抖都只是「记账」不丢；锁释放后补推；内容没变（与对齐基线一致）的退出键入不再白序列化', ok, detail);
 })();
 
 /* ---------- 修复141：反馈与处理跨设备即时同步 · 已采纳的条目也能删（推不上去的根因在 sync） ---------- */
@@ -5230,8 +5239,10 @@ console.log('【修复149】推送不再「冷启动盲推」：首包没落地 
       && C.indexOf('GH.pulledOnce = true;   /* ★ 修复149') > 0
       && C.indexOf('GH.pulledOnce = false;   /* ★ 修复149') > 0);
 
-  T('修复149 · flushPush 再堵一层：内容不比云端新（ts <= 已拉到的云端戳）就不推，只结清脏标记',
-    C.indexOf('if (ts && GH.lastPullTs && ts <= GH.lastPullTs) { pushClean(); return false; }') > 0);
+  T('修复149/153 · flushPush 的「不用推」判据 = 与云端对齐过的原文逐字比对（旧版「比版本戳」会被合并改写 syncTs 骗过）',
+    C.indexOf('sameText = !!GH.syncedText && !!LMStore && LMStore.buildFileText(c) === GH.syncedText;') > 0
+      && C.indexOf('if (sameText) { pushClean(); return false; }') > 0
+      && C.indexOf('if (ts && GH.lastPullTs && ts <= GH.lastPullTs) { pushClean(); return false; }') < 0);
 
   T('修复149 · 手动上传（☁ 同步 / 确认上传 / 网页重训小模型）都先过 guardManualPush',
     C.indexOf('function guardManualPush() {') > 0
@@ -5336,7 +5347,7 @@ console.log('【修复151】页面并集 + 删除墓碑 + 孤儿父页自愈：�
   /* 把 commonPre … mergeBlocks 整段切出来（连续的一段，mergeBlocks 依赖前面全部助手） */
   function cutMerge() {
     const a = C.indexOf('  function commonPre(a, b2) {');
-    const b0 = C.indexOf('  function mergeBlocks(c) {');
+    const b0 = C.indexOf('  function mergeBlocks(c, staleP) {');
     if (a < 0 || b0 < 0) return '';
     let d = 0, end = -1;
     for (let j = C.indexOf('{', b0); j < C.length; j++) {
@@ -5444,8 +5455,298 @@ console.log('【修复151】页面并集 + 删除墓碑 + 孤儿父页自愈：�
       && E.indexOf('kill.forEach(function (k) { tomb[k] = now; });') > 0
       && C.indexOf('if (base.pages.length !== c.pages.length) return c;') < 0
       && C.indexOf('extra.push(JSON.parse(JSON.stringify(p)));') > 0
-      && C.indexOf('function mergePageBlocks(bp, rp) {') > 0
+      && C.indexOf('function mergePageBlocks(bp, rp, staleP) {') > 0
       && S.indexOf('pages: unionPages(bundled.pages, local.pages, tomb)') > 0);
+})();
+
+/* =========================================================
+   【修复152】协同里剩下的几个「内容明明到了却进不来 / 明明同步了却白做」的洞
+   ========================================================= */
+console.log('\n【修复152】判过期取 max(消息时刻, 内容版本戳) · 访客不再每轮重复应用 · 远端内容立刻落盘 · 挂起包只留最新');
+(function () {
+  const C = srcOf('js/collab.js').replace(/\r\n/g, '\n');
+  const S = srcOf('js/store.js').replace(/\r\n/g, '\n');
+  const Y = srcOf('js/ycollab.js').replace(/\r\n/g, '\n');
+
+  /* 切出一段「函数定义」（按花括号配对，和 修复151 同一手法） */
+  function cut(src, head) {
+    const a = src.indexOf(head);
+    if (a < 0) return '';
+    let d = 0, end = -1;
+    for (let j = src.indexOf('{', a); j < src.length; j++) {
+      if (src[j] === '{') d++;
+      else if (src[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+    }
+    return end > 0 ? src.slice(a, end) : '';
+  }
+  function fnOf(src, head, ret) {
+    const code = cut(src, head);
+    if (!code) return null;
+    try { return new Function(code + '\nreturn ' + ret + ';')(); } catch (e) { return null; }
+  }
+
+  /* ① 真跑 packetTs：这是「对端时钟慢」能不能同步的分水岭 */
+  const packetTs = fnOf(C, '  function packetTs(msgTs, contentTs) {', 'packetTs');
+  T('修复152 · 真跑 packetTs：取 max(消息时刻, 内容 syncTs) —— 对端时钟慢 30 秒也不会被误判过期', (function () {
+    if (!packetTs) return false;
+    const now = 1793586543732;
+    /* 对端时钟慢 30 秒：它的 msg.ts 比本机 lastTs 小，但内容里的 syncTs 是新的 */
+    if (packetTs(now - 30000, now + 3) !== now + 3) return false;
+    /* 正常情况：消息时刻更大 → 用消息时刻 */
+    if (packetTs(now + 50, now - 10) !== now + 50) return false;
+    /* 内容里没有 syncTs（老数据 / 手工编辑的文件）→ 退回消息时刻，不能变成 0 */
+    if (packetTs(now, undefined) !== now) return false;
+    if (packetTs(0, 0) !== 0) return false;
+    return packetTs(undefined, 42) === 42;
+  })());
+
+  /* ② 真跑「过期闸门」：同一份数据，旧判据丢包、新判据放行 —— 这是现场「他改了我这边没反应」的直接复现 */
+  T('修复152 · 真跑 过期闸门：本机 lastTs 已推进、对端时钟慢 30 秒 —— 旧判据丢包，新判据应用', (function () {
+    if (!packetTs) return false;
+    const lastTs = 1793586543732;                    /* 本机上次发布/应用到的版本 */
+    const peerNow = lastTs - 30000;                  /* 对端墙上时钟慢 30 秒 */
+    const peerContent = { config: { collab: { syncTs: lastTs + 3 } } };   /* 但它发布出来的号是新的 */
+    const oldGate = function (msg, c) {
+      return ((+msg.ts || 0) <= lastTs) ? 'drop' : 'apply';               /* 旧：只看 msg.ts */
+    };
+    const newGate = function (msg, c) {
+      const pts = packetTs(msg.ts, (((c.config || {}).collab || {}).syncTs || 0));
+      return pts <= lastTs ? 'drop' : 'apply';                            /* 新：取 max */
+    };
+    const msg = { ts: peerNow };
+    if (oldGate(msg, peerContent) !== 'drop') return false;               /* 旧行为确实是丢 */
+    return newGate(msg, peerContent) === 'apply';                         /* 新行为放行 */
+  })());
+
+  /* ③ 真跑 store.pickNewer：墓碑删掉一页 + 补进另一页（长度相同，内容不同）—— 不能因为「长度一样」就原样返回 */
+  T('修复152 · 真跑 pickNewer：长度相同但内容已变（墓碑删一页 + 补一页）→ 返回合并结果，不把该删的页留下', (function () {
+    const head = S.indexOf('  function tsOf(c) {');
+    const tail = S.indexOf('  function load() {');
+    if (head < 0 || tail < 0) return false;
+    let save = null;
+    try {
+      save = new Function('localStorage', 'saveLocal',
+        S.slice(head, tail) + '\nreturn { pickNewer: pickNewer };')(
+        { setItem: function () {}, getItem: function () { return null; } },
+        function () {});
+    } catch (e) { return false; }
+    const mk = function (pages, ts, tomb) {
+      const c = { pages: pages, config: { collab: { syncTs: ts } } };
+      if (tomb) c.config.collab.tomb = tomb;
+      return c;
+    };
+    const page = function (id, t) { return { id: id, blocks: [{ type: 'p', text: id, _ts: t }] }; };
+    /* 本机：[home, gone(墓碑 9999 > 它的 100)]；文件：[home, newPage]。长度都是 2 */
+    const local = mk([page('home', 100), page('gone', 100)], 5000, { gone: 9999 });
+    const bundled = mk([page('home', 100), page('newPage', 100)], 5000);
+    const r = save.pickNewer(local, bundled);
+    if (!r || !Array.isArray(r.pages)) return false;
+    const ids = r.pages.map(function (p) { return p.id; });
+    return ids.indexOf('newPage') >= 0 && ids.indexOf('gone') < 0;
+  })());
+
+  /* ④ 源码：远端内容必须立刻落盘（否则这 20 秒内刷新，刚同步来的内容就白同步了） */
+  T('修复152 · 源码：doApply 应用远端内容后立刻 saveLocal（不再只靠 20 秒自动保存）',
+    C.indexOf('LMStore.saveLocal(LMApp.state.content); } catch (eS0)') > 0
+      && C.indexOf('const before = LMApp.state.content;') > 0);
+
+  /* ⑤ 源码：挂起包只留更新的那一个 */
+  T('修复152 · 源码：挂起包按版本取大 —— 旧包不会顶掉新包（拖拽/输入时的双包场景）',
+    C.indexOf('if (!pending || pts >= (+pending.ts || 0)) pending = { content: c, ts: pts, by: msg.name, stale: staleP };') > 0);
+
+  /* ⑥ 源码：访客轮询不再每轮重复应用；数据分支 404 换读 main 那一轮不算「已对过话」 */
+  T('修复152 · 源码：访客路径同一份云端版本只合并一次 · 404 换分支不置 pulledOnce · 推送失败退避计数随新编辑清零',
+    C.split('if (GH.mergedTs === ts) return;').length - 1 >= 2
+      && C.indexOf('GH._swapRetry = true;') > 0
+      && C.indexOf('if (GH._swapRetry) { GH._swapRetry = false; return; }') > 0
+      && C.indexOf('try { GH.kickN = 0; } catch (eKN)') > 0);
+
+  /* ⑦ Yjs 层删页要写墓碑（否则并集合并会把它复活 =「删了又回来」） */
+  T('修复152 · 源码：ycollab 删页同时写墓碑（与 collab.js 的并集合并对齐）',
+    Y.indexOf('tb0[pid0] = Date.now();') > 0
+      && Y.indexOf('cb0.tomb = tb0;') > 0);
+
+  /* ⑧ 真跑 mergePageFields：两边都改了同一页同名字段 → 按页面 _ts 后写优先，合并后的页带回「取大」的落款 */
+  T('修复152 · 真跑 mergePageFields：页名字段冲突按 _ts 决胜（本机更晚 → 本机赢），合并后 _ts 取大', (function () {
+    const head = C.indexOf('  var PAGE_FIELDS = [');
+    const code = cut(C, '  function mergePageFields(ap, bp, rp) {');
+    if (head < 0 || !code) return false;
+    let fns = null;
+    try {
+      fns = new Function('Date',
+        C.slice(head, C.indexOf('\n', head) + 1) + code + '\nreturn { mergePageFields: mergePageFields };')(
+        { now: function () { return 9000; } });
+    } catch (e) { return false; }
+    if (!fns) return false;
+    const anc = { title: '旧名', icon: '📄' };
+    const local = { title: '本机改的名字', icon: '📄', _ts: 8000 };   /* 本机更晚 */
+    const remote = { title: '别人改的名字', icon: '📄', _ts: 7000 };
+    fns.mergePageFields(anc, local, remote);
+    if (remote.title !== '本机改的名字') return false;                /* 本机更晚 → 本机赢 */
+    if (remote._ts !== 8000) return false;                            /* 落款取大（封顶到「此刻」9000） */
+    const anc2 = { title: '旧名' };
+    const local2 = { title: '本机改的名字', _ts: 6000 };              /* 本机更早 */
+    const remote2 = { title: '别人改的名字', _ts: 7000 };
+    fns.mergePageFields(anc2, local2, remote2);
+    return remote2.title === '别人改的名字' && remote2._ts === 7000;
+  })());
+
+  /* ⑨ 源码：页面设置保存时打 _ts（以前页面对象没有落款 → 冲突永远平手、永远远端赢） */
+  T('修复152 · 源码：页面字段编辑写 _ts（页名/图标冲突不再「永远远端赢」）',
+    srcOf('js/editor.js').indexOf("p.description = g('description'); p.heroAlign = g('heroAlign');") > 0
+      && srcOf('js/editor.js').indexOf('p._ts = Date.now();') > 0
+      && C.indexOf('const mt = Math.max(+bp._ts || 0, +rp._ts || 0);') > 0);
+})();
+
+/* =========================================================
+   【修复153】手机端弹窗不再压住导航 / 工具条 · 「改了五分钟对方还是没同步」的三条丢包路径
+   ========================================================= */
+console.log('\n【修复153】手机弹窗贴到「协作中」胶囊右侧（等高）· 不再按墙上时钟丢包 · 本机改动一定上云');
+(function () {
+  const A = srcOf('js/app.js').replace(/\r\n/g, '\n');
+  const C = srcOf('js/collab.js').replace(/\r\n/g, '\n');
+  const CS = srcOf('css/style.css').replace(/\r\n/g, '\n');
+
+  /* 切出一段「函数定义」（按花括号配对，与 修复151/152 同一手法） */
+  function cut(src, head) {
+    const a = src.indexOf(head);
+    if (a < 0) return '';
+    let d = 0, end = -1;
+    for (let j = src.indexOf('{', a); j < src.length; j++) {
+      if (src[j] === '{') d++;
+      else if (src[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+    }
+    return end > 0 ? src.slice(a, end) : '';
+  }
+  function poseWith(rec, w) {
+    const code = cut(A, '  function toastPose(t) {');
+    if (!code) return null;
+    const doc = {
+      body: { classList: { contains: function (k) { return !!rec.mobile && k === 'mobile-view'; } } },
+      getElementById: function (id) { return (id === 'collabChip' && rec.chip) ? rec.chip : null; },
+      querySelector: function () { return null; },
+      documentElement: { clientWidth: w.innerWidth, clientHeight: w.innerHeight }
+    };
+    try { return new Function('document', 'window', code + '\nreturn toastPose;')(doc, w); } catch (e) { return null; }
+  }
+
+  /* ① 真跑 toastPose（手机 + 有胶囊）：贴到胶囊右侧、与胶囊**等高**、同一行 */
+  T('修复153 · 真跑 toastPose：手机端贴到「协作中」胶囊右侧，高度/行高与胶囊一致', (function () {
+    const chip = { getBoundingClientRect: function () { return { left: 8, right: 120, top: 606, bottom: 632, width: 112, height: 26 }; } };
+    const pose = poseWith({ mobile: true, chip: chip }, { innerWidth: 360, innerHeight: 640 });
+    if (!pose) return false;
+    const t = { style: {} };
+    pose(t);
+    const s = t.style;
+    return s.position === 'fixed' && s.left === '126px' && s.bottom === '8px' && s.transform === 'none'
+      && s.height === '26px' && s.minHeight === '26px' && s.lineHeight === '26px'
+      && s.maxWidth === '226px' && s.whiteSpace === 'nowrap';
+  })());
+
+  /* ② 真跑 toastPose（桌面）：一律交回 CSS（清掉上次手机留下的内联定位） */
+  T('修复153 · 真跑 toastPose：桌面端清空内联定位（布局一字不动，不被手机样式残留污染）', (function () {
+    const pose = poseWith({ mobile: false, chip: null }, { innerWidth: 1400, innerHeight: 900 });
+    if (!pose) return false;
+    const t = { style: { top: '12px', bottom: 'auto', left: '50%', height: '26px', transform: 'none' } };
+    pose(t);
+    return t.style.top === '' && t.style.bottom === '' && t.style.left === '' && t.style.height === ''
+      && t.style.transform === '';
+  })());
+
+  /* ③ 真跑 toastPose（手机 + 没有胶囊）：兜底到底部居中、抬到管理工具条上方 */
+  T('修复153 · 真跑 toastPose：手机端没有协作胶囊时兜底「底部居中、bottom:96px」（不压工具条）', (function () {
+    const pose = poseWith({ mobile: true, chip: null }, { innerWidth: 360, innerHeight: 640 });
+    if (!pose) return false;
+    const t = { style: {} };
+    pose(t);
+    return t.style.bottom === '96px' && t.style.top === 'auto' && t.style.left === '50%'
+      && t.style.transform === 'translateX(-50%)' && t.style.height === '';
+  })());
+
+  /* ④ 源码：CSS 不再把提示条顶到上方（那条正好压在吸顶导航上）；新增「未上传」高亮与面板同步行 */
+  T('修复153 · 源码：640px 媒体查询把 .toast 放回底部（不再 top:…压导航）· 胶囊 .stuck 高亮 · 面板 .cp-sync',
+    CS.indexOf('.toast{top:auto;bottom:96px}') > 0
+      && CS.indexOf('.toast{top:calc(12px + env(safe-area-inset-top,0px))') < 0
+      && CS.indexOf('#collabChip.stuck{background:rgba(255,159,10,.92);color:#1d1d1f}') > 0
+      && CS.indexOf('#collabPanel .cp-sync{') > 0);
+
+  /* ⑤ 源码：applyRemote 不再按墙上时钟硬丢包，且把未来戳夹到「此刻 + 60 秒」 */
+  T('修复153 · 源码：过期包只留诊断不再 return false · 未来戳夹到「此刻+60s」（时钟快的设备不再让对端失联）',
+    C.indexOf('const pts = Math.min(packetTs(msg.ts,') > 0
+      && C.indexOf('const staleP = !msg.force && pts <= lastTs;') > 0
+      && C.indexOf('if (staleP) warnStale(pts);') > 0
+      && C.indexOf('if (!msg.force && pts <= lastTs) { warnStale(pts); return false; }') < 0);
+
+  /* ⑥ 源码：localStorage 里「未来」的 lastTs 启动自愈（跨会话的失联根因） */
+  T('修复153 · 源码：启动时自愈 lastTs（未来戳 → 归零），不再「时钟快过一次就永久收不到对端」',
+    C.indexOf('if (lastTs > Date.now() + 60000) {') > 0
+      && C.indexOf('[协同·自愈] 本机存着一个「未来」的内容版本戳') > 0
+      && C.indexOf('try { localStorage.removeItem(TS_KEY); } catch (eT0)') > 0);
+
+  /* ⑦ 真跑：合并把本机改动合进「云端那个对象」后，syncTs 变成云端那一版 —— 旧的「比版本戳」守卫会误判「不用推」 */
+  T('修复153 · 真跑 旧守卫的误判：合并后 syncTs == 云端戳、内容却多了本机一页 → 按戳判=跳过（丢更新），按内容判=要推',
+    (function () {
+      const cloud = { pages: [{ id: 'home', blocks: [{ type: 'p', text: 'a', _ts: 100 }] }], config: { collab: { syncTs: 5000 } } };
+      const local = { pages: [{ id: 'home', blocks: [{ type: 'p', text: 'a', _ts: 100 }] },
+        { id: 'mine', blocks: [{ type: 'p', text: 'b', _ts: 900 }] }], config: { collab: { syncTs: 4000 } } };
+      const merged = JSON.parse(JSON.stringify(cloud));
+      merged.pages.push(local.pages[1]);                        /* 等价于 mergeBlocks 的页并集 */
+      const cloudText = JSON.stringify(cloud), nowText = JSON.stringify(merged);
+      const guardOld = merged.config.collab.syncTs <= 5000;      /* 旧：ts <= lastPullTs → pushClean 跳过 */
+      const guardNew = nowText === cloudText;                    /* 新：与「云端原文」比 → 不同就必须推 */
+      return guardOld === true && guardNew === false;
+    })());
+
+  /* ⑧ 源码：flushPush 换成「按内容比」（GH.syncedText），两条按戳的守卫已删 */
+  T('修复153 · 源码：flushPush 与 GH.syncedText 逐字比对；旧的 ts===lastPushTs / ts<=lastPullTs 守卫已移除',
+    C.indexOf('sameText = !!GH.syncedText && !!LMStore && LMStore.buildFileText(c) === GH.syncedText;') > 0
+      && C.indexOf('if (ts && GH.lastPullTs && ts <= GH.lastPullTs) { pushClean(); return false; }') < 0
+      && C.indexOf('if (ts && ts === GH.lastPushTs) { pushClean(); return false; }') < 0);
+
+  /* ⑨ 源码：syncedText 三处维护（拉取合并×2 + 推送成功 + 换仓库作废） */
+  T('修复153 · 源码：syncedText 基线四处维护（拉取合并×2 / 推送成功 / 换仓库作废）',
+    (C.match(/if \(cloudText\) GH\.syncedText = cloudText;/g) || []).length >= 2
+      && C.indexOf('GH.syncedText = okText;') > 0
+      && C.indexOf("GH.syncedText = '';") > 0
+      && C.indexOf("syncedText: '',") > 0);
+
+  /* ⑩ 源码：胶囊显示「⚠ 未上传 N 秒」+ 转橙；面板给出「卡在哪一步 + 🔄 立即同步」 */
+  T('修复153 · 源码：胶囊报「⚠ 未上传 N 秒」并转橙 · 面板 .cp-sync 一行状态 + 「🔄 立即同步」（事件委托）',
+    C.indexOf("(stuck ? '（⚠ 未上传 ' + stuckSec + ' 秒）' : '')") > 0
+      && C.indexOf("chip.classList.toggle('stuck', stuck)") > 0
+      && C.indexOf('data-sync="1"') > 0
+      && C.indexOf("e.target.closest('[data-sync]')") > 0
+      && C.indexOf('forceSync: forceSync,') > 0
+      && C.indexOf('syncLine: syncLine,') > 0
+      && C.indexOf('限流退避 ') > 0);
+
+  /* ⑪ 源码：forceSync 清掉所有会「粘住」的状态（限流退避 / 回退 main / ETag / 已合并戳 / 在飞锁） */
+  T('修复153 · 源码：forceSync 清退避+回退+ETag+已合并戳+在飞锁，然后先拉再补推（手机端一键重试）',
+    C.indexOf("GH.blockUntil = 0; GH.useMain = false; GH.etag = ''; GH.mergedTs = 0;") > 0
+      && C.indexOf('GH.pulledOnce = false; GH.coldAt = 0; GH.timer = 0; GH._409T = 0;') > 0
+      && C.indexOf('if (GH.token) { wantPush(); kickPush(1500); }') > 0);
+
+  /* ⑫ 源码：胶囊宽度变化时弹窗重新贴合（paintChip → LMApp.reposeToast）· app 导出 reposeToast */
+  T('修复153 · 源码：paintChip 重绘后调 LMApp.reposeToast() · app.js 导出 reposeToast 并挂 resize',
+    C.indexOf('if (window.LMApp && LMApp.reposeToast) LMApp.reposeToast();') > 0
+      && A.indexOf('reposeToast: reposeToast,') > 0
+      && A.indexOf("window.addEventListener('resize', function () { try { reposeToast(); }") > 0);
+
+  /* ⑬ 源码：不在 *.github.io 域名下时不再静默「永久不更新」，明确提示一次 */
+  T('修复153 · 源码：非 github.io 域名下访客轮询无法启动 → 控制台 + 一次性提示（不再静默失联）',
+    C.indexOf('[协同·云端] 当前域名 ') > 0
+      && C.indexOf("sessionStorage.getItem('lm_gh_nohost')") > 0
+      && C.indexOf('本页不在 github.io 域名下，收不到云端更新') > 0);
+
+  /* ⑭ 源码：过期包 / 云端落后时的**结构冲突**改为保留本机页（否则「不丢包」反而会用旧页顶掉新块） */
+  T('修复153 · 源码：staleP 一路传到 mergePageBlocks —— 结构冲突时保留本机页，只有更新的内容才整页取远端',
+    C.indexOf('const staleP = !msg.force && pts <= lastTs;') > 0
+      && C.indexOf('doApply(c, pts, msg.name, staleP)') > 0
+      && C.indexOf('doApply(p.content, p.ts, p.by, p.stale)') > 0
+      && C.indexOf('mergePageBlocks(localById[rp.id], rp, !!staleP)') > 0
+      && C.indexOf('if (staleP) { try { rp.blocks = JSON.parse(JSON.stringify(bp.blocks)); } catch (eSB)') > 0
+      && C.indexOf('mergeBlocks(JSON.parse(JSON.stringify(c)), true)') > 0
+      && C.indexOf('mergeBlocks(c, true)') > 0);
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */

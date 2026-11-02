@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '151';
+var LM_ASSET_VER = '153';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -122,10 +122,79 @@ window.LMApp = (function () {
     return esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
   }
   let toastTimer = null;
+  /* ★ 修复153（手机端黑弹窗挡住导航栏 / 工具栏）：
+     旧版手机上把提示条挪到了**顶部**（css 里 @media 640px 那条「修复117」），正好压住固定吸顶的
+     导航栏；底部那条又会压管理工具条。现在手机端改成：**贴在左下角「协作中」胶囊的右侧、与它等高**，
+     同一行、同一底面 —— 导航和工具条都腾出来了，视线也不用往上跳。
+     位置用 getBoundingClientRect 真实测量（胶囊会随「N 台设备 / 模式」变宽变窄，横竖屏也变），
+     所以永远贴得住；没有协作胶囊（没接入协同）时退回「底部居中、抬到工具条上方」。 */
+  function toastPose(t) {
+    const s = t.style;
+    const reset = function () {
+      s.position = ''; s.top = ''; s.bottom = ''; s.left = ''; s.right = ''; s.transform = '';
+      s.height = ''; s.minHeight = ''; s.lineHeight = ''; s.padding = ''; s.borderRadius = '';
+      s.fontSize = ''; s.whiteSpace = ''; s.overflow = ''; s.textOverflow = '';
+      s.textAlign = ''; s.maxWidth = ''; s.width = '';
+    };
+    const mob = document.body.classList.contains('mobile-view') || window.innerWidth <= 640;
+    if (!mob) { reset(); return; }   /* 桌面端布局一字不动 */
+    const vw = window.innerWidth || document.documentElement.clientWidth || 360;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 640;
+    let chip = null;
+    try { chip = document.getElementById('collabChip'); } catch (eC0) { chip = null; }
+    if (chip) {
+      const r = chip.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        const left = Math.round(r.right + 6);
+        /* 右下角可能压着 AI 浮标：给它留出宽度，别叠在一起 */
+        let rightCut = 8;
+        try {
+          const fab = document.querySelector('.lm-ai-fab');
+          if (fab) {
+            const fr = fab.getBoundingClientRect();
+            if (fr.width > 0 && fr.bottom > vh - 90) rightCut = Math.max(rightCut, Math.round(vw - fr.left + 6));
+          }
+        } catch (eF) { /* noop */ }
+        s.position = 'fixed';
+        s.top = 'auto';
+        s.bottom = Math.round(vh - r.bottom) + 'px';          /* 与胶囊同一底面 = 同一行 */
+        s.left = left + 'px';
+        s.right = 'auto';
+        s.transform = 'none';                                  /* 盖掉 .toast.show 的 translateX(-50%) */
+        s.height = Math.max(22, Math.round(r.height)) + 'px';  /* 与胶囊等高 */
+        s.minHeight = s.height;
+        s.lineHeight = s.height;                               /* 单行垂直居中 */
+        s.padding = '0 9px';
+        s.borderRadius = '980px';
+        s.fontSize = '11px';
+        s.whiteSpace = 'nowrap';
+        s.overflow = 'hidden';
+        s.textOverflow = 'ellipsis';
+        s.textAlign = 'center';
+        s.width = 'auto';
+        s.maxWidth = Math.max(88, vw - left - rightCut) + 'px';
+        return;
+      }
+    }
+    /* 兜底：底部居中，抬到管理工具条（bottom:44px）上方 */
+    s.position = 'fixed';
+    s.top = 'auto';
+    s.bottom = '96px';
+    s.left = '50%';
+    s.right = 'auto';
+    s.transform = 'translateX(-50%)';
+    s.maxWidth = 'min(88vw,420px)';
+    s.height = ''; s.minHeight = ''; s.lineHeight = '';
+    s.padding = ''; s.borderRadius = ''; s.fontSize = '';
+    s.whiteSpace = ''; s.overflow = ''; s.textOverflow = '';
+    s.textAlign = ''; s.width = '';
+  }
   function toast(msg) {
     const t = document.getElementById('toast');
+    if (!t) return;
     t.textContent = msg;
     t.hidden = false;
+    toastPose(t);            /* ★ 修复153：每次弹都重新量一次胶囊位置（台数/模式变了宽度就变） */
     t.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () {
@@ -133,6 +202,13 @@ window.LMApp = (function () {
       setTimeout(function () { t.hidden = true; }, 300);
     }, 2600);
   }
+  /* ★ 修复153：胶囊宽度/台数变了、横竖屏切换时重新贴一次（collab.js 的 paintChip 与 resize 都会调） */
+  function reposeToast() {
+    const t = document.getElementById('toast');
+    if (t && !t.hidden && t.classList.contains('show')) toastPose(t);
+  }
+  window.addEventListener('resize', function () { try { reposeToast(); } catch (e) { /* noop */ } });
+  window.addEventListener('orientationchange', function () { setTimeout(reposeToast, 220); });
 
   /* ---------- 路由 ---------- */
   function currentId() {
@@ -1163,6 +1239,9 @@ window.LMApp = (function () {
     state.pageId = currentId();
     navTrack(state.pageId); /* ★ 修复80：记一次浏览历史（顶部「‹ 返回」用它退回上一屏） */
     document.body.classList.toggle('admin', !!state.admin);
+    /* ★ 修复155：访客是否能看到右下角「提问」浮钮 —— 管理条「页面管理」里的开关，
+       随内容同步给所有访客；管理员自己始终可见（否则没法判断开关有没有生效） */
+    document.body.classList.toggle('hide-ask', !!(state.content.config && state.content.config.ui && state.content.config.ui.hideAsk));
     renderNav();
     renderFooter();
     const p = state.content.pages.find(function (x) { return x.id === state.pageId; });
@@ -1803,23 +1882,17 @@ window.LMApp = (function () {
   }
   /* 登录弹窗（连续失败 5 次锁定 30 秒，防脚本穷举） */
   function loginModal() {
-    /* ★ 修复57：打开弹窗就先检查锁定状态——避免输完长密码点提交才被告知"系统繁忙"白输一场 */
-    const preLock = +(sessionStorage.getItem('lm_lock_until') || 0);
-    const preNote = (Date.now() < preLock)
-      ? '<p class="modal-note">⏳ 系统繁忙，请等 ' + Math.ceil((preLock - Date.now()) / 1000) + ' 秒后再试（错误码 0x2F）——现在输入不会被接受。</p>'
-      : '';
+    /* ★ 修复155：按需求做成极简 —— 只有输入框 + 取消 + 确认。
+       原来的「管理员登录」标题、密码提示、跨设备同步说明、锁定提示全部去掉：
+       锁定状态改为点提交时用 toast 告知（下面 submit 里本来就有这一层），不占版面。 */
     LMEditor.modal('<form id="pwForm">'
-      + '<h3>管理员登录</h3>'
-      + '<p class="modal-note">' + esc((state.content.config.admin && state.content.config.admin.hint) || '') + '</p>'
-      + '<p class="modal-note">💡 在其他设备改过密码？请先在那台设备点「☁️ 同步到 GitHub」——本机验证失败时会自动尝试云端最新的密码数据。</p>'
-      + preNote
-      + '<label class="field"><span class="field-label">管理密码</span>'
+      + '<label class="field" style="margin-top:2px">'
       + '<div style="position:relative">'
-      + '<input class="input" type="password" name="pw" placeholder="请输入管理密码" autocomplete="current-password" enterkeyhint="done" required style="padding-right:44px">'
-      + '<button type="button" id="pwEye" title="显示 / 隐藏密码（长密码输入时可核对已打内容）" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;font-size:17px;padding:4px 6px;line-height:1;opacity:.65">👁</button>'
+      + '<input class="input" type="password" name="pw" placeholder="密码" autocomplete="current-password" enterkeyhint="done" required style="padding-right:44px">'
+      + '<button type="button" id="pwEye" title="显示 / 隐藏密码" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;font-size:17px;padding:4px 6px;line-height:1;opacity:.55">👁</button>'
       + '</div></label>'
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
-      + '<button class="btn btn-primary" type="submit">进入管理模式</button></div></form>', function (root) {
+      + '<button class="btn btn-primary" type="submit">确认</button></div></form>', function (root) {
       /* ★ 修复58：👁 显示密码切换 —— 长密码输到一半"看不见也确认不了"是排查黑洞；点眼睛明文核对，
          再点恢复圆点；切换后焦点回到输入框，接着打不用重新点 */
       root.querySelector('#pwEye').addEventListener('click', function () {
@@ -1841,7 +1914,7 @@ window.LMApp = (function () {
         const btn = root.querySelector('[type=submit]');
         btn.disabled = true; btn.textContent = '正在验证…';
         verifyPasswordSmart(v).then(function (r) {
-          btn.disabled = false; btn.textContent = '进入管理模式';
+          btn.disabled = false; btn.textContent = '确认';
           const ok = !!(r && r.ok);
           if (ok) {
             /* 屏蔽签名密钥：所有管理员共用一把 —— 统一从「团队管理密码」派生（与登录用的具体密码无关），
@@ -1942,7 +2015,7 @@ window.LMApp = (function () {
             }
           }
         }).catch(function (err) {
-          btn.disabled = false; btn.textContent = '进入管理模式';
+          btn.disabled = false; btn.textContent = '确认';
           toast(err.message);
         });
       });
@@ -1994,24 +2067,26 @@ window.LMApp = (function () {
     pop.querySelectorAll('#gearView [data-v]').forEach(function (b2) {
       b2.classList.toggle('on', state.view === b2.getAttribute('data-v'));
     });
+    /* 访客版没有「管理员模式」这一行，别去碰它 */
     const adm = pop.querySelector('#gearAdmin');
+    if (!adm) return;
     adm.textContent = state.admin ? '退出' : '进入';
     adm.className = 'btn ' + (state.admin ? 'btn-ghost' : 'btn-primary');
-    pop.querySelector('#gearAdminDesc').textContent = state.admin
-      ? '已开启：点击文字即可修改，改动自动保存'
-      : '关闭：访客看到的是只读作品';
+    const desc = pop.querySelector('#gearAdminDesc');
+    if (desc) {
+      desc.textContent = state.admin
+        ? '已开启：点击文字即可修改，改动自动保存'
+        : '关闭：访客看到的是只读作品';
+    }
   }
   function toggleGearPop() {
     if (document.getElementById('gearPop')) { closeGearPop(); return; }
     const pop = document.createElement('div');
     pop.id = 'gearPop';
-    pop.innerHTML = ''
-      + '<div class="gp-row">'
-      +   '<div class="gp-info"><div class="gp-t">管理员模式</div><div class="gp-d" id="gearAdminDesc"></div></div>'
-      +   '<button class="btn btn-primary" id="gearAdmin" type="button">进入</button>'
-      + '</div>'
-      + '<div class="gp-div"></div>'
-      + '<div class="gp-row gp-col">'
+    /* ★ 修复155：访客版极简 —— 只留「界面版本」和一个不显眼的圆形齿轮（管理员入口）。
+       管理员模式下才出现「管理员模式 / 协作与设备 / 全部设备」这些管理项。
+       为什么不给访客看「管理员模式」：那行字等于替陌生人指路，还显得页面很 "后台"。 */
+    const viewBlock = '<div class="gp-row gp-col">'
       +   '<div class="gp-t">界面版本</div>'
       +   '<div class="gp-seg" id="gearView">'
       +     '<button type="button" data-v="auto">自动</button>'
@@ -2019,22 +2094,39 @@ window.LMApp = (function () {
       +     '<button type="button" data-v="desktop">电脑版</button>'
       +   '</div>'
       +   '<div class="gp-d">自动 = 按设备识别（本机：' + (isMobileDevice() ? '手机' : '电脑') + '）</div>'
-      + '</div>'
-      + '<div class="gp-div"></div>'
-      + '<div class="gp-row gp-col">'
-      +   '<div class="gp-t">协作与设备</div>'
-      +   '<div class="gp-d" id="gpCollabMode"></div>'
-      +   '<label class="field" style="margin-top:8px"><span class="field-label">本机昵称（协同/屏蔽按设备识别，同昵称多设备允许）</span>'
-      +     '<input class="input" id="gpNick" maxlength="16" placeholder="如：小明-笔记本"></label>'
-      +   '<button class="btn btn-mini" id="gpNickSave" type="button" style="margin-top:6px">保存昵称</button>'
-      + '</div>'
-      + '<div class="gp-row gp-col" id="gpDevArea" style="display:none">'
-      +   '<div class="gp-t">全部设备与屏蔽（仅管理员可见）</div>'
-      +   '<div id="gpDevList"></div>'
       + '</div>';
+    pop.innerHTML = state.admin
+      ? ('<div class="gp-row">'
+          +   '<div class="gp-info"><div class="gp-t">管理员模式</div><div class="gp-d" id="gearAdminDesc"></div></div>'
+          +   '<button class="btn btn-primary" id="gearAdmin" type="button">进入</button>'
+          + '</div>'
+        + '<div class="gp-div"></div>'
+        + viewBlock
+        + '<div class="gp-div"></div>'
+        + '<div class="gp-row gp-col">'
+        +   '<div class="gp-t">协作与设备</div>'
+        +   '<div class="gp-d" id="gpCollabMode"></div>'
+        +   '<label class="field" style="margin-top:8px"><span class="field-label">本机昵称（协同/屏蔽按设备识别，同昵称多设备允许）</span>'
+        +     '<input class="input" id="gpNick" maxlength="16" placeholder="如：小明-笔记本"></label>'
+        +   '<button class="btn btn-mini" id="gpNickSave" type="button" style="margin-top:6px">保存昵称</button>'
+        + '</div>'
+        + '<div class="gp-row gp-col" id="gpDevArea" style="display:none">'
+        +   '<div class="gp-t">全部设备与屏蔽（仅管理员可见）</div>'
+        +   '<div id="gpDevList"></div>'
+        + '</div>')
+      : (viewBlock
+        + '<button class="gp-gear" id="gpAdminEnter" type="button" title="管理员入口" aria-label="管理员入口">⚙</button>');
     document.body.appendChild(pop);
     refreshGearPop();
-    pop.querySelector('#gearAdmin').addEventListener('click', function () {
+    pop.querySelectorAll('#gearView [data-v]').forEach(function (b2) {
+      b2.addEventListener('click', function () { setViewMode(b2.getAttribute('data-v')); refreshGearPop(); });
+    });
+    /* ---- 访客：圆形齿轮 → 只弹密码框 ---- */
+    const enter = pop.querySelector('#gpAdminEnter');
+    if (enter) enter.addEventListener('click', function () { closeGearPop(); loginModal(); });
+    /* ---- 管理员：退出 / 进入 ---- */
+    const admBtn = pop.querySelector('#gearAdmin');
+    if (admBtn) admBtn.addEventListener('click', function () {
       closeGearPop();
       if (state.admin) {
         state.admin = false; state.root = false;
@@ -2043,10 +2135,7 @@ window.LMApp = (function () {
         render(); toast('已退出管理模式');
       } else loginModal();
     });
-    pop.querySelectorAll('#gearView [data-v]').forEach(function (b2) {
-      b2.addEventListener('click', function () { setViewMode(b2.getAttribute('data-v')); refreshGearPop(); });
-    });
-    /* ---- 协作与设备 ---- */
+    /* ---- 协作与设备（只有管理员版才有这些节点） ---- */
     const cm = pop.querySelector('#gpCollabMode');
     if (cm) cm.textContent = window.LMCollab
       ? ('通道：' + LMCollab.mode() + '；在线 ' + (LMCollab.devices ? LMCollab.devices().filter(function (p) { return !p.recent && !p.lost; }).length : LMCollab.onlineList().length) + ' 台（左下角徽章点开看名单）')
@@ -2323,6 +2412,7 @@ window.LMApp = (function () {
       + '<label class="fb-field"><span>内容（必填，最多 800 字）</span><textarea id="fbText" class="fb-input" rows="4" maxlength="800" placeholder="请写清楚：针对哪个页面 / 哪项工作，遇到了什么问题或有什么建议…"></textarea></label>'
       + '<label class="fb-field"><span>相关链接（选填）</span><input id="fbUrl" class="fb-input" maxlength="300" placeholder="https://…"></label>'
       + '<div class="fb-actions"><button type="submit" class="fb-send">发送</button><span class="fb-hint">提交后会显示在下方「大家的反馈」里，<b>对所有人公开</b>（可匿名）；我们会在每条下面写清「怎样核实 → 改了什么 → 为什么这样处理」。</span></div>'
+      + '<p class="fb-privacy">⚠️ 反馈内容将<b>公开展示</b>：请勿填写个人隐私、账号凭据或敏感信息（手机号、学号、身份证号、密码、API Key 等）。</p>'
       + '<p class="fb-ok" id="fbOk" hidden></p>'
       + '</form></section>';
   }
@@ -2531,6 +2621,19 @@ window.LMApp = (function () {
     fb.forEach(function (it) { if (it.dev) devs[it.dev] = 1; });
     const devN = Object.keys(devs).length;
     return '<section class="fb-sec fb-admin"><h2 class="fb-title">🔐 反馈处理（管理员通道）</h2>'
+      /* ★ 新增：老师要求的「反馈表必须建在 WorkBuddy 云服务共享数据库上」——把现状和处理入口写清楚 */
+      + (function () {
+        const w = (window.LMFB && LMFB.wbInfo) ? LMFB.wbInfo() : { on: false, table: '', text: '未加载' };
+        return '<p class="fb-hint">'
+          + (w.on
+            ? '🟢 <b>反馈表已建在 WorkBuddy 云服务</b>（<code>' + esc(w.table || 'lm_feedback') + '</code>'
+              + (w.host ? ' · ' + esc(w.host) : '') + '）：任何人换手机、换电脑都能看到同一条留言。'
+              + '按课程要求，<b>状态与小组回复请在「WorkBuddy 云服务 → 数据库 → 数据」的 <code>lm_feedback</code> 表里改</b>'
+              + '—— 前端只被授予「新增 + 读取」，改不了状态和回复（这是权限设计，不是坏了）；改完本页 15 秒内会自动更新。'
+            : '⚠ WorkBuddy 云服务未就绪：' + esc(w.text || '原因未知')
+              + '（在 GitHub Pages 等其它域名下 Origin 对不上，会自动跳过；下面的云存档 / GitHub 通道照常工作）')
+          + '</p>';
+      })()
       /* ★ 修复95：先讲清老师要求的「四段记录」，再加统计 */
       + '<p class="fb-hint">待处理 <b>' + pending + '</b> / 共 ' + fb.length + ' 条 · 来自 <b>' + devN + '</b> 个设备身份码'
       + (devN < 3 ? '（作业要求至少 3 名非本组同学，还差 ' + (3 - devN) + ' 位）' : '（已满足「至少 3 名非本组同学」）') + '。'
@@ -2628,13 +2731,14 @@ window.LMApp = (function () {
         if (n) toast('📥 收到 ' + n + ' 条反馈（公开列表）');
       });
     }
-    /* ★ 修复96：云存档是「永不丢」的那一份 —— 管理员设备也要拉（他可能没绑 Token / 换了浏览器） */
+    /* ★ 新增：云服务 / 云存档都读一遍 —— 老师要求的「反馈表建在云服务上」是主通道，
+       原来只在配置了云存档时才拉，现在两条都拉（合并规则按 id + 时间戳，谁新用谁） */
     try {
-      if (LMFB.cloudCfg && LMFB.cloudCfg()) {
-        LMFB.cloudList().then(function (r) {
+      if (LMFB.listAny) {
+        LMFB.listAny().then(function (r) {
           if (!r || !r.ok || !r.list.length) return;
           const n = fbMergeIncoming(r.list);
-          if (n) toast('☁ 从云存档收到 ' + n + ' 条反馈');
+          if (n) toast('☁ 从云端收到 ' + n + ' 条反馈');
         });
       }
     } catch (eC) { /* noop */ }
@@ -2739,17 +2843,23 @@ window.LMApp = (function () {
       };
       /* ★ 修复96：先把留言写进「云存档」（提交者浏览器直接写永久存储 → 谁都不用开着网页，也不受 6 小时限制）；
          同时发 MQTT 实时通知；两条都失败才退回「复制给组长」链接。 */
-      const cloudP = (window.LMFB && LMFB.cloudSave) ? LMFB.cloudSave(it) : Promise.resolve(false);
+      /* ★ 新增：云服务优先（老师要求的共享反馈表）→ 失败自动降级到云存档；
+         MQTT 实时推送同时进行。三条都失败才退回「复制给组长」链接。 */
+      const cloudP = (window.LMFB && LMFB.saveAny) ? LMFB.saveAny(it) : Promise.resolve({ ok: false, via: '' });
       const mqP = (window.LMFB && LMFB.publish) ? LMFB.publish(it) : Promise.resolve(false);
       Promise.all([cloudP, mqP]).then(function (r) {
         const el = document.getElementById('fbOk');
         if (!el) return;
-        const saved = !!r[0], sent = !!r[1];
-        if (sent) {
-          el.textContent = '✅ 已提交（' + it.id + '）并已直达小组：组长下次打开反馈页会自动看到（他当时没开电脑也不会丢）。'
-            + (saved ? ' 同时已存进云存档。' : '');
+        const cr = r[0] || {}, saved = !!cr.ok, sent = !!r[1];
+        const where = cr.via === 'wbcloud' ? '云服务' : (cr.via === 'archive' ? '云存档' : '');
+        if (saved && sent) {
+          el.textContent = '✅ 已提交（' + it.id + '）并已存进' + where
+            + '：换手机、换电脑、别人打开都能看到，同时已实时通知小组。';
         } else if (saved) {
-          el.textContent = '✅ 已提交（' + it.id + '）并已存进云存档：小组下次打开反馈页会自动收取（不受 6 小时补收窗口限制）。';
+          el.textContent = '✅ 已提交（' + it.id + '）并已存进' + where
+            + '：任何人下次打开反馈页都会看到（不受补收窗口限制）。';
+        } else if (sent) {
+          el.textContent = '✅ 已提交（' + it.id + '）并已直达小组：组长下次打开反馈页会自动看到。';
         } else {
           fbFallback();
         }
@@ -2860,9 +2970,12 @@ window.LMApp = (function () {
     }
 
     if (t.id === 'fbCloudTest') {
-      if (!window.LMFB || !LMFB.cloudCfg || !LMFB.cloudCfg()) { toast('还没配置云存档（先选类型、填 URL、点保存）'); return; }
-      toast('☁ 正在读取云存档…');
-      LMFB.cloudList().then(function (r) {
+      const canWb = !!(window.LMFB && LMFB.wbReady && LMFB.wbReady());
+      if (!canWb && (!window.LMFB || !LMFB.cloudCfg || !LMFB.cloudCfg())) {
+        toast('云服务未就绪，也还没配置云存档（先选类型、填 URL、点保存）'); return;
+      }
+      toast('☁ 正在读取云服务 / 云存档…');
+      LMFB.listAny().then(function (r) {
         if (!r || !r.ok) {
           const why = (r && r.why) || '未知原因';
           cloudMsg('❌ 读取失败：' + why);
@@ -2870,8 +2983,9 @@ window.LMApp = (function () {
           return;
         }
         const n = fbMergeIncoming(r.list);
-        cloudMsg('✅ 云存档可读：共 ' + r.list.length + ' 条' + (n ? '，本次新增/更新 ' + n + ' 条' : ''));
-        toast(n ? ('云存档可读：共 ' + r.list.length + ' 条，本次新增/更新 ' + n + ' 条') : ('云存档可读：共 ' + r.list.length + ' 条，没有新内容'));
+        cloudMsg('✅ 可读：共 ' + r.list.length + ' 条' + (n ? '，本次新增/更新 ' + n + ' 条' : '')
+          + '（云服务 ' + ((r.wb && r.wb.ok) ? '✓' : '✗') + ' · 云存档 ' + ((r.archive && r.archive.ok) ? '✓' : '✗') + '）');
+        toast(n ? ('云端共 ' + r.list.length + ' 条，本次新增/更新 ' + n + ' 条') : ('云端共 ' + r.list.length + ' 条，没有新内容'));
         mountFeedback();
       });
       return;
@@ -3034,6 +3148,8 @@ window.LMApp = (function () {
       };
     }
     if (!c.config.footer) c.config.footer = {};
+    /* ★ 修复155：界面开关（目前只有 hideAsk：访客不显示「提问」浮钮） */
+    if (!c.config.ui || typeof c.config.ui !== 'object') c.config.ui = {};
     /* ★ 修复96：云存档配置（缺省关闭；管理员在反馈处理面板里填，随内容同步给所有访客） */
     if (!c.config.fbCloud || typeof c.config.fbCloud !== 'object') {
       c.config.fbCloud = { kind: '', url: '', key: '', table: 'lm_feedback' };
@@ -3253,6 +3369,7 @@ window.LMApp = (function () {
 
   return {
     state: state, render: render, applyEdit: applyEdit, toast: toast,
+    reposeToast: reposeToast,   /* ★ 修复153：协作胶囊宽度变了（台数/模式）→ 弹窗重新贴合，别叠上去 */
     trainLM: trainLM, lmCorpus: lmCorpus,   /* ★ 修复145：网页内重训小模型 */
     /* ★ 修复101：对方 dcommit 到达后要重绘「讨论区」——以前错接成 mountFeedback，
        结果数据合进来了、页面还不刷新（要手动切页才看到别人的发言/删除）。

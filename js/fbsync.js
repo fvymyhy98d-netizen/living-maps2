@@ -17,6 +17,10 @@
 W.LMFB = (function () {
   'use strict';
   const FILE_PATH = 'data/feedback.json';
+  /* ★ 新增：讨论区的跨站镜像文件（由 tools/mirror-feedback.js 从云表 lm_discuss 推送）。
+     为什么单独一个文件而不塞进 content.js：讨论区天天变，写 content.js 会触发 Pages 重建；
+     独立文件只动数据分支，且前端能直接公开读取。 */
+  const DISCUSS_PATH = 'data/discuss.json';
 
   /* ★ 修复122：带超时的 fetch —— 本文件所有请求原来都没有超时，网络黑洞时会一直挂着：
      反馈「同步中」永远转圈、云存档拉取永不完结（Promise 不落定，界面就一直等）。
@@ -240,9 +244,9 @@ W.LMFB = (function () {
     if (!ref) ref = 'lm-data';
     return { owner: owner, repo: repo, ref: ref };
   }
-  function publicUrl(c, ref) {
+  function publicUrl(c, ref, file) {
     return 'https://raw.githubusercontent.com/' + c.owner + '/' + c.repo + '/'
-      + encodeURIComponent(ref || c.ref) + '/' + FILE_PATH + '?t=' + Date.now();
+      + encodeURIComponent(ref || c.ref) + '/' + (file || FILE_PATH) + '?t=' + Date.now();
   }
   /* 依次尝试 [数据分支, main]，谁都读不到就返回 ok:false（前端静默，不影响留言） */
   function pullPublic() {
@@ -452,48 +456,116 @@ W.LMFB = (function () {
     });
     return out;
   }
-  /* 批量写（upsert）：同一个 id 再写就覆盖 —— 删除墓碑、昵称修改都要能更新到云端 */
+  /* 批量写（upsert）：同一个 id 再写就覆盖 —— 删除墓碑、昵称修改都要能更新到云端
+     ★ 新增 2026-11-02：WorkBuddy 云表（lm_discuss）作为**始终可用**的第一通道。
+       原来这里只写 Supabase，没配 Supabase 的设备发言就出不了这台机器
+       （旧代码 `if (!c || !arr.length) return` 直接短路，连「没配就换条路」的机会都没有）。
+       现在两条都写（双保险），任一成功即算成功；都失败才返回 false 由调用方提示。 */
   function dcSave(items) {
-    var c = cloudCfg();
     var arr = (Array.isArray(items) ? items : [items]).map(dcSlim).filter(Boolean);
-    if (!c || !arr.length) return Promise.resolve(false);
-    if (c.kind !== 'supabase') return Promise.resolve(false);   /* 讨论区只支持 Supabase */
-    try {
-      return fetchT(c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?on_conflict=id', {
-        method: 'POST', cache: 'no-store',
-        headers: {
-          'Content-Type': 'application/json', apikey: c.key,
-          Authorization: 'Bearer ' + c.key,
-          Prefer: 'resolution=merge-duplicates,return=minimal'
-        },
-        body: JSON.stringify(arr)
-      }).then(function (r) { return !!r && r.ok; }).catch(function () { return false; });
-    } catch (e) { return Promise.resolve(false); }
-  }
-  /* 读全部（按时间正序；limit 1000 足够一个课程站） */
-  function dcList() {
-    var c = cloudCfg();
-    if (!c) return Promise.resolve({ ok: false, list: [], why: '未配置' });
-    if (c.kind !== 'supabase') return Promise.resolve({ ok: false, list: [], why: '讨论区云存档只支持 Supabase' });
-    var url = c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?select=*&order=ts.asc&limit=1000';
-    var opt = { cache: 'no-store', headers: { apikey: c.key, Authorization: 'Bearer ' + c.key } };
-    try {
-      return fetchT(url, opt).then(function (r) {
-        if (!r || !r.ok) {
-          var st = (r && r.status) || 0, bad = { ok: false, list: [], why: 'HTTP ' + st, status: st };
-          if (!r) return bad;
-          var rd = r.text ? r.text()
-            : (r.json ? r.json().then(function (j) { return JSON.stringify(j); }) : Promise.resolve(''));
-          return Promise.resolve(rd)
-            .then(function (b) { bad.why = whyText(st, b); return bad; })
-            .catch(function () { return bad; });
+    if (!arr.length) return Promise.resolve(false);
+    /* ① WorkBuddy 云服务（表 lm_discuss，见 js/wbdisc.js） */
+    var wbP = (function () {
+      try {
+        var D = win().LMWBDisc;
+        if (D && typeof D.save === 'function') {
+          return D.save(arr).then(function (ok) { return !!ok; }).catch(function () { return false; });
         }
-        return r.json().then(function (j) {
-          var arr = Array.isArray(j) ? j : (j && Array.isArray(j.items) ? j.items : []);
-          return { ok: true, list: arr, why: '' };
-        });
-      }).catch(function () { return { ok: false, list: [], why: '网络失败（CSP / 域名白名单）' }; });
-    } catch (e) { return Promise.resolve({ ok: false, list: [], why: String(e && e.message || e) }); }
+      } catch (e0) { /* noop */ }
+      return Promise.resolve(false);
+    })();
+    /* ② 原 Supabase 云存档（配置了才写，行为与以前一致） */
+    var sbP = (function () {
+      try {
+        var c = cloudCfg();
+        if (!c || c.kind !== 'supabase') return Promise.resolve(false);
+        return fetchT(c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?on_conflict=id', {
+          method: 'POST', cache: 'no-store',
+          headers: {
+            'Content-Type': 'application/json', apikey: c.key,
+            Authorization: 'Bearer ' + c.key,
+            Prefer: 'resolution=merge-duplicates,return=minimal'
+          },
+          body: JSON.stringify(arr)
+        }).then(function (r) { return !!r && r.ok; }).catch(function () { return false; });
+      } catch (e) { return Promise.resolve(false); }
+    })();
+    return Promise.all([wbP, sbP]).then(function (rs) { return !!(rs[0] || rs[1]); });
+  }
+  /* 读全部（按时间正序；limit 1000 足够一个课程站）
+     ★ 新增：云表 + 原 Supabase **并行拉、并集合并** —— 只拉一边会在切换后端时丢历史发言，
+       两边的定位不同（云表是常驻通道，Supabase 是历史存档），合起来才完整。 */
+  function dcList() {
+    var wbP = (function () {
+      try {
+        var D = win().LMWBDisc;
+        if (D && typeof D.list === 'function') {
+          return D.list().catch(function () { return { ok: false, list: [], why: '云服务读取失败' }; });
+        }
+      } catch (e0) { /* noop */ }
+      return Promise.resolve({ ok: false, list: [], why: '云服务未加载' });
+    })();
+    var sbP = (function () {
+      var c = cloudCfg();
+      if (!c) return Promise.resolve({ ok: false, list: [], why: '未配置' });
+      if (c.kind !== 'supabase') return Promise.resolve({ ok: false, list: [], why: '讨论区云存档只支持 Supabase' });
+      var url = c.url + '/rest/v1/' + encodeURIComponent(dcTableName()) + '?select=*&order=ts.asc&limit=1000';
+      var opt = { cache: 'no-store', headers: { apikey: c.key, Authorization: 'Bearer ' + c.key } };
+      try {
+        return fetchT(url, opt).then(function (r) {
+          if (!r || !r.ok) {
+            var st = (r && r.status) || 0, bad = { ok: false, list: [], why: 'HTTP ' + st, status: st };
+            if (!r) return bad;
+            var rd = r.text ? r.text()
+              : (r.json ? r.json().then(function (j) { return JSON.stringify(j); }) : Promise.resolve(''));
+            return Promise.resolve(rd)
+              .then(function (b) { bad.why = whyText(st, b); return bad; })
+              .catch(function () { return bad; });
+          }
+          return r.json().then(function (j) {
+            var arr = Array.isArray(j) ? j : (j && Array.isArray(j.items) ? j.items : []);
+            return { ok: true, list: arr, why: '' };
+          });
+        }).catch(function () { return { ok: false, list: [], why: '网络失败（CSP / 域名白名单）' }; });
+      } catch (e) { return Promise.resolve({ ok: false, list: [], why: String(e && e.message || e) }); }
+    })();
+    /* ③ GitHub 数据分支的 data/discuss.json（镜像任务写入）
+       为什么需要：云表只认本域 Origin，GitHub 版读不到云表；镜像文件放在公开仓库，
+       GitHub 版访客无需任何 Token 就能看到全部发言。WorkBuddy 域名下 publicCtx 推导不出仓库
+       → 这一条自动跳过，不影响上面两条。 */
+    var ghP = (function () {
+      var c = null;
+      try { c = publicCtx(); } catch (e0) { c = null; }
+      if (!c) return Promise.resolve({ ok: false, list: [], why: '无法推导仓库' });
+      var refs = [c.ref];
+      if (c.ref !== 'main') refs.push('main');
+      var i = 0;
+      function tryNext() {
+        if (i >= refs.length) return Promise.resolve({ ok: false, list: [], why: 'raw 读取失败' });
+        var ref = refs[i++];
+        return fetchT(publicUrl(c, ref, DISCUSS_PATH), { cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) return tryNext();
+            return r.text().then(function (t) {
+              var list = [];
+              try { list = JSON.parse(t); } catch (e) { list = []; }
+              if (!Array.isArray(list)) return tryNext();
+              return { ok: true, list: list, ref: ref };
+            });
+          }).catch(tryNext);
+      }
+      return tryNext();
+    })();
+    return Promise.all([wbP, sbP, ghP]).then(function (rs) {
+      var a = (rs && rs[0]) || {}, b = (rs && rs[1]) || {}, g = (rs && rs[2]) || {};
+      var merged = dcMerge(dcMerge(a.list || [], b.list || []), g.list || []);
+      var anyOk = !!(a.ok || b.ok || g.ok);
+      return {
+        ok: anyOk, list: merged,
+        why: anyOk ? '' : ((a.why || '') + ' / ' + (b.why || '') + ' / ' + (g.why || '')),
+        wb: a, archive: b, mirror: g
+      };
+    }).catch(function () { return { ok: false, list: [], why: '读取失败' }; });
   }
 
   /* ---------- ②d 粘贴导入（★ 修复96）：云文档导出后直接粘进来 ----------
@@ -583,6 +655,63 @@ W.LMFB = (function () {
       }));
     }
     return out.filter(Boolean);
+  }
+
+  /* ---------- ②e WorkBuddy 云服务（★ 新增：第一优先通道，课程要求的那一张反馈表）----------
+     顺序固定为：WorkBuddy 云服务 lm_feedback → Supabase/Worker 云存档 → 都失败才交给
+     调用方的 MQTT 实时推送 / 「复制给组长」链接。任一条挂了都不影响另外两条，
+     所以 GitHub Pages 那份（Origin 对不上、云服务会自动跳过）照旧能用。 */
+  function wbInfo() {
+    try {
+      var W = win().LMWB;
+      return (W && W.info) ? W.info() : { on: false, table: '', text: '云服务模块未加载（js/wbcloud.js）' };
+    } catch (e) { return { on: false, table: '', text: '云服务状态未知' }; }
+  }
+  function wbReady() {
+    try { return !!wbInfo().on; } catch (e) { return false; }
+  }
+  function wbSave(item) {
+    var W = win().LMWB;
+    if (!W || !W.save) return Promise.resolve(false);
+    try { return Promise.resolve(W.save(slim(item))).then(function (ok) { return !!ok; }); }
+    catch (e) { return Promise.resolve(false); }
+  }
+  function wbList() {
+    var W = win().LMWB;
+    if (!W || !W.list) return Promise.resolve({ ok: false, list: [], why: '云服务未加载' });
+    try {
+      return Promise.resolve(W.list()).then(function (r) {
+        return (r && typeof r === 'object') ? r : { ok: false, list: [], why: '云服务返回异常' };
+      });
+    } catch (e) { return Promise.resolve({ ok: false, list: [], why: String((e && e.message) || e) }); }
+  }
+  /* 写：云服务优先，失败降级到云存档。返回 {ok, via} */
+  function saveAny(item) {
+    return wbSave(item).then(function (ok) {
+      if (ok) return { ok: true, via: 'wbcloud' };
+      return cloudSave(item).then(function (ok2) {
+        return { ok: !!ok2, via: ok2 ? 'archive' : '' };
+      });
+    }).catch(function () {
+      return cloudSave(item).then(function (ok2) {
+        return { ok: !!ok2, via: ok2 ? 'archive' : '' };
+      });
+    });
+  }
+  /* 读：两条通道都读，按 id + updatedAt 合并（面板里改过的状态/回复也能读到，不会互相覆盖） */
+  function listAny() {
+    return Promise.all([wbList(), cloudList()]).then(function (rs) {
+      var a = (rs && rs[0]) || { ok: false, list: [] };
+      var b = (rs && rs[1]) || { ok: false, list: [] };
+      var merged = merge(a.list || [], b.list || []);
+      return {
+        ok: !!(a.ok || b.ok), list: merged,
+        wb: a, archive: b,
+        why: (a.ok || b.ok) ? '' : ((a.why || '') + ' / ' + (b.why || ''))
+      };
+    }).catch(function () {
+      return { ok: false, list: [], why: '读取失败' };
+    });
   }
 
   function hasCloud() { return !!ctx(); }
@@ -720,6 +849,9 @@ W.LMFB = (function () {
     fixStatus: fixStatus, statuses: STS.slice(),
     /* ★ 修复96：云存档（永久收件箱，不受 6 小时限制）+ 粘贴导入 */
     cloudCfg: cloudCfg, cloudInfo: cloudInfo, cloudSave: cloudSave, cloudList: cloudList,
+    /* ★ 新增：WorkBuddy 云服务（第一优先）+ 双方案调度 */
+    wbInfo: wbInfo, wbReady: wbReady, wbSave: wbSave, wbList: wbList,
+    saveAny: saveAny, listAny: listAny,
     parseImport: parseImport, contentCfg: contentCfg, cloudWhy: whyText,
     /* ★ 修复100：讨论区云存档（独立表 lm_discuss，upsert + 并集合并） */
     dcTableName: dcTableName, dcSlim: dcSlim, dcMerge: dcMerge, dcSave: dcSave, dcList: dcList

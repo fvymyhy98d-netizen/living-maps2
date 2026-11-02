@@ -989,6 +989,16 @@ body.mobile-view .blk-typebar button{padding:5px 9px;font-size:12px}
 #collabPanel .cp-lost{color:#c93400;font-weight:600;font-size:11px;margin-left:6px}
 #collabPanel .cp-row-lost b{color:#86868b}
 #collabChip .dot.warn{background:#ff9f0a}
+/* ★ 修复153：本机有改动还没上云（>45 秒）→ 胶囊整体转橙，手机上即使文字被截断也一眼看得出
+   「不是对方没改，是我这一笔卡在本机」 */
+#collabChip.stuck{background:rgba(255,159,10,.92);color:#1d1d1f}
+/* ★ 修复153：设备面板底部「云端同步状态 + 立即同步」——手机上一眼看出卡在哪一步，一键重试 */
+#collabPanel .cp-sync{display:flex;align-items:center;gap:8px;justify-content:space-between;
+  margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:11.5px;color:var(--text2)}
+#collabPanel .cp-sync span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#collabPanel .cp-sync .cp-btn{flex:none;border:1px solid var(--line);background:#fff;color:var(--blue);
+  font-size:11.5px;padding:5px 10px;border-radius:980px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+#collabPanel .cp-sync .cp-btn:active{transform:scale(.97)}
 /* ★ 修复㊴：手机端协作徽章缩小避让 —— 之前 60vw 宽的「协作中·…」长胶囊（bottom:12px）与底部居中的
    管理工具栏 #adminBar（bottom:22px、最宽 94vw）互相压住；徽章缩到 42vw、字号/内边距同步收紧、
    背景更透；管理工具栏与设备面板整体上移 22px 给徽章让出整条底边，手机上两者不再叠 */
@@ -1350,8 +1360,9 @@ body.admin .lm-ai-panel{bottom:136px}
   .lm-ai-fab{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
   /* ★ 修复117：手机端只留「面板」一层滚动，对话区不再自己滚（以前两级滚动容易滚错地方） */
   .lm-ai-chat{max-height:none;overflow:visible;overscroll-behavior:auto}
-  /* ★ 修复117：提示条挪到顶部，不再压住面板的输入框 */
-  .toast{top:calc(12px + env(safe-area-inset-top,0px));bottom:auto}
+  /* ★ 修复153：提示条不再挪到顶部（那条会压住吸顶导航栏）。手机端位置由 app.js 的 toastPose()
+     实测「协作中」胶囊后贴到它右侧、与胶囊等高；这里只做兜底：底部居中、抬到管理工具条上方。 */
+  .toast{top:auto;bottom:96px}
 }
 /* ★ 修复117：窄屏把浮标收成圆形图标，别在右上角挤成一长条 */
 @media (max-width:420px){
@@ -1404,3 +1415,38 @@ body.lm-lock{position:fixed;left:0;right:0;width:100%;overflow:hidden}
   .lm-ai-head{gap:6px}
 }
 
+
+/* ★ 新增：反馈表单隐私提示（课程要求「反馈内容公开展示，请勿填写隐私」） */
+.fb-privacy{margin:8px 0 0;padding:9px 12px;border-radius:10px;font-size:12.5px;line-height:1.65;
+  color:#8a5300;background:rgba(255,159,10,.10);border:1px solid rgba(255,159,10,.28)}
+.fb-privacy b{color:#7a4a00}
+@media (prefers-color-scheme:dark){
+  .fb-privacy{color:#f0c583;background:rgba(255,159,10,.12);border-color:rgba(255,159,10,.30)}
+  .fb-privacy b{color:#ffd79a}
+}
+
+/* ===== ★ 修复155：访客界面收敛 ===== */
+/* 管理员在「页面管理」里关掉后，访客右下角不再出现「提问」浮钮（管理员自己仍可见） */
+body.hide-ask:not(.admin) .lm-ai-fab{display:none!important}
+
+/* 访客设置弹层里的管理员入口：浅灰圆形齿轮，居中、很低调 */
+.gp-gear{display:block;margin:16px auto 2px;width:30px;height:30px;padding:0;border-radius:50%;
+  border:1px solid rgba(0,0,0,.07);background:rgba(0,0,0,.04);color:#a8a8ad;
+  font-size:14px;line-height:28px;text-align:center;cursor:pointer;
+  transition:background .15s ease,color .15s ease;opacity:.9}
+.gp-gear:hover{background:rgba(0,0,0,.08);color:#6e6e73}
+.gp-gear:active{transform:scale(.95)}
+.gp-gear:focus-visible{outline:2px solid rgba(0,0,0,.2);outline-offset:2px}
+
+/* 「页面管理」里的访客可见性开关 */
+.ask-toggle{display:flex;align-items:flex-start;gap:8px;margin:10px 0 14px;padding:10px 12px;
+  border-radius:10px;background:rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.06);
+  font-size:13px;line-height:1.55;cursor:pointer}
+.ask-toggle input{margin-top:2px;flex:none}
+.ask-tip{display:block;color:var(--text2);font-size:12px;margin-top:2px}
+
+@media (prefers-color-scheme:dark){
+  .gp-gear{border-color:rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:rgba(255,255,255,.42)}
+  .gp-gear:hover{background:rgba(255,255,255,.12);color:rgba(255,255,255,.75)}
+  .ask-toggle{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.10)}
+}

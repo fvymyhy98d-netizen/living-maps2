@@ -148,7 +148,12 @@ window.LMStore = (function () {
         /* 本机更新：也不整包否决 —— 文件里可能有本机没有的页（另一台设备新建的） */
         const tombL = mergeTombOf(tombOf(local), tombOf(bundled));
         const pagesL = unionPages(local.pages, bundled.pages, tombL);
-        if (pagesL.length === local.pages.length) return local;   /* 一页没多 → 原样返回，避免无谓改动 */
+        /* ★ 修复152：判「一页没变」必须比元素身份，不能只比长度 ——
+           unionPages 末尾那段墓碑过滤可能删掉一页、同时又补进另一页，长度相同但内容已经不同，
+           旧写法会把「该删的页」原样留在本机（要等下一次协同合并才清掉，期间还可能被推回云端）。 */
+        const sameList = pagesL.length === local.pages.length
+          && pagesL.every(function (p, i) { return p === local.pages[i]; });
+        if (sameList) return local;      /* 一页没变 → 原样返回，避免无谓改动/无谓推送 */
         const mergedL = Object.assign({}, local, { pages: pagesL });
         try {
           const cb = ((mergedL.config = mergedL.config || {}).collab = (mergedL.config || {}).collab || {});
