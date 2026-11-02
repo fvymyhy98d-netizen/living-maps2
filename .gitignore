@@ -5,3 +5,9 @@ package-lock.json
 # 系统与编辑器杂物
 Thumbs.db
 .DS_Store
+
+# WorkBuddy 代理的本地记忆 / 运行时状态（不属于站点内容，别提交）
+.workbuddy/
+
+# tools/pull-remote-data.js 覆盖前的备份（data/content.js.prev 等）
+*.prev
