@@ -49,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793587681501,
+      "syncTs": 1793587678755,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -57,7 +57,8 @@ window.SITE_CONTENT = {
         "salt": "yqLWFqqzza7isqR0iJPY4w==",
         "iv": "Bye7WMujFJ7+nBME",
         "ct": "j6DakV99jlSmx8AAuO1x5T+hmfxQ+p+MiDdS6dF1CvZSM5PFvIx0a1z7/lg799rA4OHTbh4osY1O8/8ad2n5QJdWuk0NKuU2quA9vxiMWmgXYXA4jCYFIAee3WomtotfeSbAqYACSVpqDD0P/BwkNxJbMoqSwX6A2NwT3z7y2LRXzaeE9ttjUQrwNMNhrHfQxyWg0lQWHJRY4dfJqmKZqqahrxnV+7AyCYPMPi4QeuXy0qK69OJ2UXSKa/Tli9/G7ikG0uGd+tr4t9kkcXq1Zuns25K6saNidUZcTDhI3B4eBaLjywLaTFdGVg=="
-      }
+      },
+      "tomb": {}
     },
     "fbCloud": {
       "kind": "supabase",
