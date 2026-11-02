@@ -49,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793587602439,
+      "syncTs": 1793587619460,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -108,9 +108,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "哈哈",
+          "text": "**厉害**"
         },
         {
           "type": "heading",
