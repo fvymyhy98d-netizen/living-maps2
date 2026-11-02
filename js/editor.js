@@ -4654,6 +4654,100 @@ window.LMEditor = (function () {
     if (p.y < r.top - 60) return false;                  /* 离得太远（还在很上面）不算 */
     return p.y <= r.top + h / 2;                         /* 只认框的上半部分：下半部分=放到下面 */
   }
+  /* ★ 修复161（「两个块并排时，拖动下面那块来换位，一堆 bug」）：
+     并排组（free.g）在落点判定里必须当成**一整行**。旧版逐个自由框判定，松手只把命中的
+     **那一个**框挪到块的下面 —— 同组另一个留在原处，一行瞬间被拆成上下两半：
+     留下的一半继续压着流块、挪走的一半又压住新位置，让位引擎再按「半行」算，
+     屏幕上就是表格/正文互相重叠、标题被压住，而且越拖越乱。
+     下面三个函数把「行」抽象出来，并把判定/位移做成纯函数（可直接喂数值真跑）。 */
+  /* 收集页面上所有「行」：并排组 = 一行（多框），散装自由框 = 自己一行。
+     行矩形取组内所有框的**并集** —— 指针落在行内任何一处都算对着这一行 */
+  function freeRowsOf(col, page) {
+    const rows = [], byG = new Map();
+    if (!col || !col.querySelectorAll || !page || !page.blocks) return rows;
+    col.querySelectorAll(':scope > .block-wrap.free-box').forEach(function (w) {
+      const b = page.blocks[+w.getAttribute('data-idx')];
+      if (!b || !b.free) return;
+      const g = b.free.g;
+      let row = (g == null) ? null : (byG.get(g) || null);
+      if (!row) {
+        row = { g: (g == null ? null : g), blocks: [], wraps: [] };
+        if (g != null) byG.set(g, row);
+        rows.push(row);
+      }
+      row.blocks.push(b); row.wraps.push(w);
+    });
+    rows.forEach(function (r) {
+      let top = Infinity, left = Infinity, bottom = -Infinity, right = -Infinity;
+      r.wraps.forEach(function (w) {
+        const rc = w.getBoundingClientRect();
+        if (!rc || (!rc.height && !rc.width)) return;
+        if (rc.top < top) top = rc.top;
+        if (rc.left < left) left = rc.left;
+        if (rc.bottom > bottom) bottom = rc.bottom;
+        if (rc.right > right) right = rc.right;
+      });
+      r.top = top; r.left = left; r.bottom = bottom; r.right = right;
+      r.height = Math.max(0, bottom - top);
+    });
+    return rows.filter(function (r) { return r.blocks.length && isFinite(r.top) && r.height > 0; });
+  }
+  /* 纯函数：多行里挑「指针落在其上半部分」的那一行；几行同时命中取最靠上的那行 */
+  function pickDropRow(rows, p) {
+    let hit = null;
+    (rows || []).forEach(function (r) {
+      if (!r || !r.blocks || !r.blocks.length) return;
+      if (!dropAboveBox(p, r)) return;
+      if (!hit || r.top < hit.top) hit = r;
+    });
+    return hit;
+  }
+  /* 纯函数：这一行要整体下移多少 px（0 = 本来就在块下面，不用动）。
+     me = 块实测矩形 {top,height}；rowTop = 行矩形顶端；colTop = .blocks 顶端；
+     m0 = 块当前让位量（margin-top，过渡中取 computed 当前值）→
+     块的自然顶端 = 实测顶端 − 让位量，落点才贴得紧（同 ↑↓ 修复104 的算法） */
+  function rowYieldDelta(me, rowTop, colTop, m0) {
+    if (!me || !(+me.height)) return 0;
+    if (me.top + 2 < rowTop) return 0;                 /* 块已经在行上方：行不用让 */
+    const nat = Math.max(0, Math.round(me.top - (+colTop || 0) - (+m0 || 0)));
+    return Math.round(nat + me.height + 16) - Math.round(rowTop); /* 16px = FREE_GAP */
+  }
+  /* 整行同一位移：并排组一起动，行内相对位置（x / y 差 / free.gi）完全不变。
+     返回是否真的移动过（false = 已贴合，不必提示「框让到了下面」） */
+  function shiftFreeRow(row, dy) {
+    if (!row || !row.blocks || !row.blocks.length || !dy) return false;
+    let minY = Infinity;
+    row.blocks.forEach(function (b) { if (b && b.free) minY = Math.min(minY, +b.free.y || 0); });
+    if (!isFinite(minY)) return false;
+    const d = Math.max(Math.round(dy), -minY);          /* 整行不穿到负坐标（钳制也整行一致） */
+    if (!d) return false;
+    row.blocks.forEach(function (b, k) {
+      if (!b || !b.free) return;
+      b.free.y = Math.round((+b.free.y || 0) + d);
+      /* ★ 修复138 同理：绝对位置已给定 → 「随上文下移」的记账量过期，归零免得被拉回去 */
+      b.free.ride = 0;
+      const w = row.wraps && row.wraps[k];
+      if (w && w.style) w.style.top = b.free.y + 'px';
+    });
+    return true;
+  }
+  /* ★ 修复161：自由框是 position:absolute，不撑高文档流 —— .blocks 的 padding-bottom 是
+     页面唯一能让它「滚得到」的占位（见 app.js 的 padB）。拖动把整行挪到更下面以后，
+     这个占位必须同步加长，否则被挪下去的那一行落到 padding 之外：页面再也滚不到它
+     （看着就是「拖完那个框不见了」）。只增不减：突然变短会让页面抽掉一截，像内容消失 */
+  function padFreeBottom(col, page) {
+    if (!col || !col.style || !col.querySelectorAll) return;
+    let pb = 0;
+    col.querySelectorAll(':scope > .block-wrap.free-box').forEach(function (w) {
+      const b = (page && page.blocks) ? page.blocks[+w.getAttribute('data-idx')] : null;
+      const y = (b && b.free) ? Math.round(+b.free.y || 0) : 0;
+      pb = Math.max(pb, y + (w.offsetHeight || 60) + 56);
+    });
+    if (!pb) return;
+    const cur = parseFloat(col.style.paddingBottom) || 0;
+    pb = Math.min(Math.max(pb, cur), 4000);
+    col.style.paddingBottom = pb + 'px';
+  }
   /* ---------- 块拖拽排序：拖动让位动画 + 屏幕边缘自动滚页 ---------- */
   function startBlockDrag(e, handle) {
     const wrap = handle.closest('.block-wrap');
@@ -4689,7 +4783,10 @@ window.LMEditor = (function () {
     function flowList() {
       return Array.prototype.filter.call(
         document.querySelectorAll('.blocks > .block-wrap'),
-        function (w) { return w !== wrap && !w.classList.contains('free-box'); }
+        /* ★ 修复161：ph（蓝色虚线占位）也必须排除 —— 它是「将要落的位置」而不是真块，
+           旧版算插入下标时把它自己也算进去：占位一动、中点跟着动、下标又变 → 抖；
+           排除后下标只在真块之间算，落点稳定（ph 自己的 rect 不再影响判定） */
+        function (w) { return w !== wrap && w !== ph && !w.classList.contains('free-box'); }
       );
     }
     function reorder(clientY) {
@@ -4751,35 +4848,27 @@ window.LMEditor = (function () {
          表达不出「在框的上方」：拖动时插入线最上也只能落到框下面那块之前（flowList 只收流块），
          松手一看什么都没有变 —— 这正是反复报的「核心概念移不到那个表格上面」。
          现在按 ↑↓ 换位（修复104）同一套算法让框让路：松手时指针落在某个自由框的**上半部分**
-         → 把那个框整体挪到这一块的下方（框的下缘 = 块的自然底 + 16px 标准缝）。 */
+         → 把那个框整体挪到这一块的下方（框的下缘 = 块的自然底 + 16px 标准缝）。
+         ★ 修复161：判定与位移都改成「整行」—— 并排组（free.g）的多个框是一个整体，
+           按行矩形并集命中，命中后整行同一位移（旧版只动命中的那一个框，一行被拆成
+           上下两半 → 重叠、错位，用户报的「并排时拖动换位一堆 bug」就是这个）。 */
       const boxYield = (function () {
         const col0 = wrap.parentNode;
         if (!col0 || !col0.querySelectorAll) return null;
-        let hit = null;
-        col0.querySelectorAll(':scope > .block-wrap.free-box').forEach(function (w2) {
-          const r2 = w2.getBoundingClientRect();
-          if (!dropAboveBox({ x: lastX, y: lastY }, r2)) return;
-          const b2 = page.blocks[+w2.getAttribute('data-idx')];
-          if (b2 && b2.free) hit = { b: b2, w: w2, r: r2 };
-        });
-        return hit;
+        return pickDropRow(freeRowsOf(col0, page), { x: lastX, y: lastY });
       })();
       const yielded = (function () {
         if (!boxYield) return false;
         const rMe = wrap.getBoundingClientRect();
         if (!rMe.height) return false;
-        if (rMe.top + 2 < boxYield.r.top) return false; /* 已经落在框上方了：不用动框 */
         const colTop = wrap.parentNode.getBoundingClientRect().top;
         let m0 = 0; /* 让位量（margin-top）：实测顶端 − 让位量 = 块的自然顶端 */
         try { m0 = parseFloat(getComputedStyle(wrap).marginTop) || 0; } catch (eM) { m0 = 0; }
-        const natMe = Math.max(0, Math.round(rMe.top - colTop - m0));
-        boxYield.b.free.y = Math.round(natMe + rMe.height + 16); /* 16px = 让位引擎的 FREE_GAP */
-        /* ★ 修复138：连 free.ride 一起归零 —— 那是「随上文下移」的记账量，手动给定绝对位置后
-           它就过期了；不归零的话 commitFreeRide 会算 d = 0 − ride 把框又往上拉回去，
-           框重新压住块、块又被推下去 → 看着就是「怎么都移不上去」 */
-        boxYield.b.free.ride = 0;
-        boxYield.w.style.top = boxYield.b.free.y + 'px';
-        return true;
+        /* ★ 修复161：dy 由纯函数算（含「块已经在行上方 → 不用动」的守卫），
+           再整行移动；free.ride 归零的理由同修复138 —— 绝对位置已给定，记账量过期 */
+        const dy = rowYieldDelta(rMe, boxYield.top, colTop, m0);
+        if (!dy) return false;
+        return shiftFreeRow(boxYield, dy);
       })();
       if (same && !yielded) return; /* 拖回原位、也没有框要让路 = 数据没变：同理不重绘（防闪屏） */
       /* 只重排文档流块；自由文本框（绝对定位）对象保留、集中到数组尾部（渲染先后不影响其摆放位置） */
@@ -4809,7 +4898,9 @@ window.LMEditor = (function () {
       LMApp.commit({ silent: true, rerender: false });
       markSaved();
       if (window.LMApp && LMApp.adjustFreeLayout) LMApp.adjustFreeLayout();
-      LMApp.toast(yielded ? '已放到那个框的上面（框让到了下面）' : '顺序已调整');
+      /* ★ 修复161：整行被让到块下面以后，把 .blocks 的底部占位加长到能滚到它 */
+      padFreeBottom(wrap.parentNode, page);
+      LMApp.toast(yielded ? '已放到那个并排行的上面（整行一起让到了下面，同组相对位置不变）' : '顺序已调整');
     };
     const up = function () { finish(true); };
     const esc = function (ev) { if (ev.key === 'Escape') finish(false); };

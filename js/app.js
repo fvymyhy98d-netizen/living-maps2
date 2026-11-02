@@ -9,7 +9,7 @@
    ★ 修复158（教训）：v154~v157 发版时只改了 index.html 的 ?v=，忘了改这里 —— 探针比的是「正在跑的
      这份 app.js」和「刚拉下来的 app.js」，两边都停在旧号码 → 永远相等 → 老客户端一直不刷新。
      发版顺序固定为：① 改这里 ② 全文替换 index.html 的 ?v= ③ node test_yjs.js 必须全绿。 */
-var LM_ASSET_VER = '160';
+var LM_ASSET_VER = '161';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1080,9 +1080,18 @@ window.LMApp = (function () {
             const target = natTop + r.height + 6;
             const dy = Math.round(target - fd.top);
             if (dy > 4) {
-              fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);
-              fd.w.style.top = fd.b.free.y + 'px';
-              fd.top += dy; fd.bot += dy;
+              /* ★ 修复161：并排组整行一起下移 —— 只推其中一个框会把一行拆成上下两半
+                 （留下一半继续压块、推走的一半又压住新位置，越修越乱）。
+                 同组按同一位移走，行内左右关系（x / free.gi）完全不变 */
+              const gid = fd.b.free.g;
+              const mv = (gid == null) ? [fd] : frees.filter(function (o) {
+                return o.b && o.b.free && o.b.free.g === gid;
+              });
+              mv.forEach(function (o) {
+                o.b.free.y = Math.round((+o.b.free.y || 0) + dy);
+                o.w.style.top = o.b.free.y + 'px';
+                o.top += dy; o.bot += dy;
+              });
               moved = true;
               break; /* ★ 修复㊲：单轮只推一次 —— 连环推会一轮把框推到页尾（瞬移观感），
                         剩余重叠留给下一轮渐进消解（每次交互/滚动都会再跑这里） */

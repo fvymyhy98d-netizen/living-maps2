@@ -1115,6 +1115,7 @@ window.LMCollab = (function () {
     GH.blockUntil = 0; GH.useMain = false; GH.etag = ''; GH.mergedTs = 0;
     GH.inFlight = false; GH.inFlightAt = 0; GH.pushBusy = false; GH.pushBusyAt = 0;
     GH.pulledOnce = false; GH.coldAt = 0; GH.timer = 0; GH._409T = 0;
+    GH.pullErr = null; GH.cloudMissing = false; GH.guardAt = 0;   /* ★ 修复161：手动「重新核对」从干净状态开始 */
     try { Object.keys(shaOf).forEach(function (k) { delete shaOf[k]; }); } catch (e0) { /* noop */ }
     try { if (window.LMApp) LMApp.toast('🔄 正在重新核对云端版本…'); } catch (e1) { /* noop */ }
     try { ghPull(); } catch (e2) { /* noop */ }
@@ -1370,6 +1371,9 @@ window.LMCollab = (function () {
                kickN: 0,            /* 连续补推次数（连败就放慢，别把定时器转成电老虎） */
                flushAsap: false,    /* 本次推送跳过最小间隔（退出键入 / 切后台 / 关页面） */
                lastPushTs: 0,       /* 上次成功推送的内容版本戳（syncTs）：相同的直接跳过，省一次全量序列化 */
+               pullErr: null,       /* ★ 修复161：上一次拉取的失败原因 {at,msg} —— 手动上传据此判断「该不该放行」 */
+               cloudMissing: false, /* ★ 修复161：云端还没有这份内容（404）→ 首次上传自动创建，不算「没核对上」 */
+               guardAt: 0,          /* ★ 修复161：手动上传被拦的起点（有界等待 ≤6 秒，绝不永久锁死） */
                _mk: null };         /* 建数据分支的进行中 Promise（去重） */
   const shaOf = {};                  /* 分支 → 该文件 blob sha（乐观锁缓存，按分支分开） */
   /* 内容分支：默认数据分支；dataBranch:'' → 跟随 branch；未配置 → lm-data（判定在 store.js） */
@@ -1502,7 +1506,16 @@ window.LMCollab = (function () {
         setTimeout(ghPull, 40);
         return null;
       }
-      if (!r.ok) throw new Error('http ' + r.status);
+      /* ★ 修复161：数据分支 / 内容文件**还不存在**（第一次落库、分支被删、Private 仓库无权限
+         也会返回 404）≠「没核对上」。旧版这里直接 throw → pulledOnce 永远是 false →
+         手动上传被永久拦死（用户现场：「一直显示在核对云端版本，死活不上传」）。
+         云端既然没有内容可丢，就该放行：下面 ghPush 的 ensureDataBranch + PUT 会把文件建出来。
+         真没权限的话 PUT 会明确报错，用户看到的是真实原因，而不是永远转圈。 */
+      if (r.status === 404) {
+        GH.pulledOnce = true; GH.cloudMissing = true; GH.pullErr = null;
+        return null;
+      }
+      if (!r.ok) throw new Error('http ' + r.status + (ref ? '（' + ref + '）' : ''));
       if (useApi) { const et = r.headers.get('etag'); if (et) GH.etag = et; }
       return r.json().then(function (j) {
         if (useApi) { shaOf[ref] = j.sha; return parseFileText(atobUh(j.content)); }
@@ -1510,6 +1523,7 @@ window.LMCollab = (function () {
       });
     }).then(function (c) {
       GH.inFlight = false;
+      GH.pullErr = null;   /* ★ 修复161：这一轮通了 —— 上一轮的失败原因作废（手动上传据此放行） */
       /* ★ 修复152：刚做过「数据分支不存在 → 改读 main」的切换，这一轮没有任何内容到手，不算「对过话」 */
       if (GH._swapRetry) { GH._swapRetry = false; return; }
       GH.pulledOnce = true;   /* ★ 修复149：云端内容已到手（哪怕解析失败/是旧版）—— 现在允许推送了 */
@@ -1583,7 +1597,15 @@ window.LMCollab = (function () {
       } catch (eD) { return; }
       setTimeout(function () { repaintLocks(); enforceBans(); }, 60);
       LMApp.toast('🔄 已同步「云端（GitHub）」的修改');
-    }).catch(function () { GH.inFlight = false; });
+    }).catch(function (e) {
+      GH.inFlight = false;
+      /* ★ 修复161：把「为什么没核对上」记下来 —— ① 手动上传靠它决定该不该放行；
+         ② 用户/运维终于能看到原因（旧版吞掉所有错误，界面上永远只有一句「正在核对云端版本」） */
+      const msg = (e && e.name === 'AbortError') ? '超时（15 秒没响应）'
+        : String((e && e.message) || e || '网络错误');
+      GH.pullErr = { at: Date.now(), msg: msg };
+      try { console.warn('[协同·云端] 拉取失败：' + msg); } catch (eL) { /* noop */ }
+    });
   }
   /* ★ 修复89：数据分支不存在时按需创建（复用 store.js 的同一实现，避免两份建分支逻辑） */
   function ensureDataBranch() {
@@ -1656,6 +1678,22 @@ window.LMCollab = (function () {
     if (!st.pulled) return 'cold';
     if ((+st.lastPullTs || 0) > (+st.myTs || 0)) return 'behind';
     return 'ok';
+  }
+  /* ★ 修复161 纯函数（可单测）：手动「☁ 同步到 GitHub」这一下要不要放行。
+     返回 'allow' | 'block'。判据见 guardManualPush 里的现场说明 —— 一句话：
+     **核对可以拦，但绝不能把用户永久锁死**（拉取失败时本机内容是唯一出路）。 */
+  function manualGateDecide(st) {
+    st = st || {};
+    const now = +st.now || 0;
+    const errWin = +st.errWindow || 15000;   /* 「刚才拉取明确失败」的有效期 */
+    const flyWin = +st.flyWindow || 6000;    /* 一次拉取最多算「在飞」多久 */
+    const maxWait = +st.maxWait || 6000;     /* 拦下的总时长上限 */
+    if (st.why === 'ok') return 'allow';                                  /* 已核对且不落后 */
+    if (st.pullErrAt && now - (+st.pullErrAt) < errWin) return 'allow';    /* 云端读不到 → 只能按本机传 */
+    const flying = !!st.inFlight && (now - (+st.inFlightAt || now) < flyWin);
+    if (!flying) return 'allow';                                          /* 没有拉取在飞 → 没什么可等 */
+    if (st.guardAt && now - (+st.guardAt) > maxWait) return 'allow';       /* 已经拦太久 → 放行 */
+    return 'block';
   }
   /* 纯函数（可单测）：这次 ghPush 该不该真的发 PUT？
      → { go, why, wait }，why = go / busy（上一笔还在飞）/ blocked（限流退避中）/ defer（防抖未到点）。
@@ -1760,14 +1798,55 @@ window.LMCollab = (function () {
     const c = latestContent();
     const myTs = c ? +(((c.config || {}).collab || {}).syncTs || 0) : 0;
     const why = pushColdGate({ pulled: GH.pulledOnce, lastPullTs: GH.lastPullTs, myTs: myTs });
-    if (why === 'ok') return false;
+    if (why === 'ok') { GH.guardAt = 0; return false; }
+    const now = Date.now();
     try { ghPull(); } catch (e0) { /* noop */ }
+    /* ★ 修复161（「一直显示在核对版本，死活也不上传」）：核对不能变成永久锁。
+       旧版只要 pulledOnce 是 false 就无条件拦下 —— 而 pulledOnce 只有在拉取**成功**时才置真：
+       api.github.com 连不上 / 15 秒超时 / Token 只有读权限 / 限流 403，任何一条都会让它
+       永远 false，于是手动上传点一百次也只弹同一句话（自动推送那边有 15 秒兜底，手动没有）。
+       现在判定交给纯函数 manualGateDecide（可单测），三条放行条件任一成立就不拦：
+         ① 上一轮拉取**明确失败**（15 秒内）—— 云端内容根本读不到，本机这一笔是唯一出路；
+         ② 当前没有拉取在飞（触发失败 / 已复位）—— 没什么可等；
+         ③ 已经拦过 6 秒以上 —— 网络半死不活时也不能把用户锁死在这里。
+       仍然拦的只剩「正在核对」（≤6 秒）和「已知云端更新」（先合再传，安全）。 */
+    const ok = manualGateDecide({
+      why: why, pullErrAt: GH.pullErr ? (+GH.pullErr.at || 0) : 0, now: now,
+      inFlight: GH.inFlight, inFlightAt: GH.inFlightAt, guardAt: GH.guardAt
+    });
+    if (ok === 'allow') {
+      GH.guardAt = 0;
+      try {
+        LMApp.toast(GH.pullErr
+          ? '⚠ 云端版本没核对到（' + GH.pullErr.msg + '）—— 已按本机内容上传；若别的设备刚改过，请先刷新页面再传'
+          : '⚠ 云端版本暂时核对不到 —— 已按本机内容上传（刷新页面可先同步别人的修改）');
+      } catch (e1) { /* noop */ }
+      return false;                                  /* 放行 */
+    }
+    GH.guardAt = GH.guardAt || now;
     try {
-      LMApp.toast(why === 'cold'
-        ? '☁ 正在核对云端版本（本页还没拉到最新内容）—— 等 1 秒再点一次上传'
-        : '⚠ 云端已有更新的版本（别的设备刚存过），已先拉取 —— 合好后请再点一次上传');
-    } catch (e1) { /* noop */ }
-    return true;
+      LMApp.toast(why === 'behind'
+        ? '⚠ 云端有更新的内容（别的设备刚存过），正在先拉取 —— 合好后请再点一次上传'
+        : '☁ 正在核对云端版本（本页还没拉到最新内容）—— 等 1 秒再点一次上传'
+          + (GH.pullErr ? '；上次核对失败：' + GH.pullErr.msg : ''));
+    } catch (e2) { /* noop */ }
+    return true;                                     /* 拦下（有界，最多 6 秒） */
+  }
+  /* ★ 修复161：同步诊断（控制台 LMCollab.ghDiag() 可直接看）——
+     「为什么传不上去」不再只能靠猜：把分支、是否核对过、上次失败原因一次说清 */
+  function ghDiag() {
+    try {
+      const bits = [];
+      bits.push('仓库：' + ((GH.cfg && GH.cfg.owner) || '?') + '/' + ((GH.cfg && GH.cfg.repo) || '?'));
+      bits.push('数据分支：' + ghBranch());
+      bits.push('已核对云端版本：' + (GH.pulledOnce ? '是' : '否'));
+      bits.push('云端版本戳：' + (GH.lastPullTs || 0));
+      if (GH.pullErr) bits.push('上次拉取失败：' + GH.pullErr.msg + '（' + Math.round((Date.now() - GH.pullErr.at) / 1000) + ' 秒前）');
+      if (GH.cloudMissing) bits.push('云端还没有这份内容（首次上传会自动创建）');
+      if (GH.blockUntil > Date.now()) bits.push('限流退避 ' + Math.round((GH.blockUntil - Date.now()) / 1000) + ' 秒');
+      if (GH.dirty) bits.push('有内容待上传');
+      return bits.join(' · ');
+    } catch (e) { return '诊断不可用：' + (e && e.message ? e.message : e); }
   }
   function ghPush(content) {
     if (!GH.cfg || !GH.token || !window.LMStore) return;
@@ -2148,6 +2227,7 @@ window.LMCollab = (function () {
     flushPush: flushPush,          /* ★ 修复140：退出键入 / 切后台 / 关页面 → 跳过防抖立刻推（editor.js 也调） */
     flushPushSoon: flushPushSoon,
     guardManualPush: guardManualPush,   /* ★ 修复149：手动上传前先核对云端版本（落后就先拉，别把云端推回旧版） */
+    ghDiag: ghDiag,                     /* ★ 修复161：控制台 LMCollab.ghDiag() 一眼看清「为什么传不上去」 */
     pushState: function () {       /* ★ 修复140：现场核对「这一笔到底发出去没有」 */
       return { 待推送: GH.dirty, 待推送秒: GH.dirtyAt ? Math.round((Date.now() - GH.dirtyAt) / 1000) : 0,
                推送中: GH.pushBusy, 退避剩秒: GH.blockUntil > Date.now() ? Math.round((GH.blockUntil - Date.now()) / 1000) : 0,

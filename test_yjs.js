@@ -316,7 +316,7 @@ T('手机端自由框手柄不再常显（selected/free-drag/focus-within 才出
 T('并排重叠兜底：fixFreeOverlapVisual 推框写数据（框压块→框下移到块底，持久不振荡；锁定段零改动）',
   appSrc.indexOf('function fixFreeOverlapVisual()') > 0
     && appSrc.indexOf("if (!col || col._freeSession) return;") > 0
-    && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0
+    && appSrc.indexOf('o.b.free.y = Math.round((+o.b.free.y || 0) + dy);') > 0
     && appSrc.indexOf('if (moved) {') > 0
     && appSrc.indexOf('adjustFreeLayout(); /* 框位已持久更新：让位引擎按新位置立即对齐（原版，不再产生兜底抬升） */') > 0
     && appSrc.indexOf('adjustFreeLayout: adjustFreeLayoutSafe') > 0
@@ -396,7 +396,7 @@ T('手机端协作徽章缩小（42vw/11px/紧凑）避让底栏，管理工具�
 console.log('【9.12】修复㊵：推框深压跳过（>24px 交让位引擎），浅压残留照常推框');
 T('fixFreeOverlapVisual 深压跳过 + 浅压推框共存（同一把 24px 尺子，互不越界）',
   appSrc.indexOf('if ((natTop + r.height) - fd.top > 24) continue;') > 0
-    && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0
+    && appSrc.indexOf('o.b.free.y = Math.round((+o.b.free.y || 0) + dy);') > 0
     && appSrc.indexOf('if (commitFreeRide()) { adjustFreeLayout(); fixFreeOverlapVisual(); }') > 0);
 /* ---------- 9.13) 修复㊶：手机键入「✕ 退出键入」红钮 + 工具栏单行滚动 / ⌨️ 常驻右上 ---------- */
 console.log('【9.13】修复㊶：退出键入红钮 · 工具栏单行横滑 · ⌨️ 常驻右上角');
@@ -417,7 +417,10 @@ T('fixFreeOverlapVisual 姿态判定：fd.top<=natTop（从上方放置）浅压
   appSrc.indexOf('if (fd.top <= natTop) continue;') > 0
     && appSrc.indexOf('★ 修复㊷：框顶在块顶上方 = 用户把框从上方放置的姿态') > 0
     && appSrc.indexOf('if ((natTop + r.height) - fd.top > 24) continue;') > 0
-    && appSrc.indexOf('fd.b.free.y = Math.round((+fd.b.free.y || 0) + dy);') > 0);
+    && appSrc.indexOf('o.b.free.y = Math.round((+o.b.free.y || 0) + dy);') > 0
+    /* ★ 修复161：并排组必须整行一起走（只推一个框 = 把一行拆成上下两半） */
+    && appSrc.indexOf('const mv = (gid == null) ? [fd] : frees.filter(function (o) {') > 0
+    && appSrc.indexOf("return o.b && o.b.free && o.b.free.g === gid;") > 0);
 /* ---------- 9.15) 修复㊸：彻查回归批次（跨页残留选中 / ⌨️ 滑出误触 / typing 桌面泄漏） ---------- */
 console.log('【9.15】修复㊸：切页作废残留选中 · ⌨️ 按下确认 · typing 限定手机端');
 T('renderToolbar 切页检测：页变化即作废 tb.active/imgSel/pressBi/hero 残留（不再挂到新页同位块）',
@@ -1863,15 +1866,17 @@ T('editor.js：单元格里没选中文字也能清（清整格：高亮 / 颜�
 console.log('【9.52c】修复138：把块拖到自由框（表格）上面 —— 以前插入线永远画不到框上方');
 T('editor.js：拖动落点认自由框（dropAboveBox 判「指针在框的上半部分」）+ 松手后按 ↑↓ 同一套算法让框下移',
   edt2.indexOf('function dropAboveBox(p, r) {') > 0
-    && edt2.indexOf('if (!dropAboveBox({ x: lastX, y: lastY }, r2)) return;') > 0
-    && edt2.indexOf('boxYield.b.free.y = Math.round(natMe + rMe.height + 16);') > 0
+    /* ★ 修复161：落点判定从「逐个自由框」升级为「整行」（并排组按矩形并集算一行） */
+    && edt2.indexOf('return pickDropRow(freeRowsOf(col0, page), { x: lastX, y: lastY });') > 0
+    && edt2.indexOf('const dy = rowYieldDelta(rMe, boxYield.top, colTop, m0);') > 0
+    && edt2.indexOf('return shiftFreeRow(boxYield, dy);') > 0
     && edt2.indexOf('lastX = ev.clientX;') > 0);
 T('editor.js：拖回原位但框要让路时不再提前 return（旧版 if (same) return 会把这次放置整条吞掉）',
   edt2.indexOf('if (same && !yielded) return;') > 0
     && edt2.indexOf('      if (same) return;') < 0
-    && edt2.indexOf("LMApp.toast(yielded ? '已放到那个框的上面（框让到了下面）' : '顺序已调整');") > 0);
+    && edt2.indexOf("LMApp.toast(yielded ? '已放到那个并排行的上面（整行一起让到了下面，同组相对位置不变）' : '顺序已调整');") > 0);
 T('editor.js：手动给定框位置时 free.ride 归零（否则 commitFreeRide 会把它拉回上面，块再被推下去）',
-  edt2.indexOf('boxYield.b.free.ride = 0;') > 0
+  edt2.indexOf('b.free.ride = 0;') > 0
     && edt2.indexOf('other.free.ride = 0;') > 0
     && edt2.indexOf('mine.free.ride = 0;') > 0);
 
@@ -3610,10 +3615,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=160 · LM_ASSET_VER=160',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=161 · LM_ASSET_VER=161',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=159/g) || []).length === 0 && /\?v=160/.test(html)
-      && /LM_ASSET_VER = '160'/.test(appJs));
+      && (html.match(/\?v=159/g) || []).length === 0 && /\?v=161/.test(html)
+      && /LM_ASSET_VER = '161'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4514,10 +4519,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 160（?v=160 共 25 处 · v159 无残留 · LM_ASSET_VER=160）',
-    (html.match(/\?v=160/g) || []).length === 25 && (html.match(/\?v=159/g) || []).length === 0
-      && /LM_ASSET_VER = '160'/.test(appJs),
-    'v160=' + (html.match(/\?v=160/g) || []).length + ' v159=' + (html.match(/\?v=159/g) || []).length);
+  T('版本已升到 161（?v=161 共 25 处 · v160 无残留 · LM_ASSET_VER=161）',
+    (html.match(/\?v=161/g) || []).length === 25 && (html.match(/\?v=160/g) || []).length === 0
+      && /LM_ASSET_VER = '161'/.test(appJs),
+    'v161=' + (html.match(/\?v=161/g) || []).length + ' v160=' + (html.match(/\?v=160/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -5825,6 +5830,148 @@ console.log('【修复160】「页面设置」面板顶部直接给访客可见�
       && seg.indexOf('cur.config.ui.hideAsk = !!box.checked;') > 0
       && seg.indexOf('已隐藏访客的「提问」按钮') > 0
       && seg.indexOf('访客又能看到「提问」按钮了') > 0);
+})();
+
+/* ---------- 修复161：并排组在拖动换位里必须当成「一整行」+ 手动上传不再永久卡死 ---------- */
+console.log('【修复161】并排换位按「整行」· 手动上传闸门有界放行');
+
+(function () {
+  const edt = srcOf('js/editor.js').replace(/\r\n/g, '\n');
+  const app161 = srcOf('js/app.js');
+
+  /* ① 源码：行抽象（并排组 = 一行）与纯函数都在 */
+  T('修复161 · 源码：freeRowsOf / pickDropRow / rowYieldDelta / shiftFreeRow / padFreeBottom 都在（同组按矩形并集算一行）',
+    edt.indexOf('function freeRowsOf(col, page) {') > 0
+      && edt.indexOf('function pickDropRow(rows, p) {') > 0
+      && edt.indexOf('function rowYieldDelta(me, rowTop, colTop, m0) {') > 0
+      && edt.indexOf('function shiftFreeRow(row, dy) {') > 0
+      && edt.indexOf('function padFreeBottom(col, page) {') > 0
+      && edt.indexOf('let row = (g == null) ? null : (byG.get(g) || null);') > 0);
+
+  /* ② 源码：落点判定 + 整行位移 —— 旧「只动命中的那一个框」必须彻底不存在 */
+  T('修复161 · 源码：finish() 走 pickDropRow(整行) + shiftFreeRow(整行同位移)，旧「单框」写法已不存在',
+    edt.indexOf('return pickDropRow(freeRowsOf(col0, page), { x: lastX, y: lastY });') > 0
+      && edt.indexOf('return shiftFreeRow(boxYield, dy);') > 0
+      && edt.indexOf('boxYield.b.free.y = Math.round(natMe + rMe.height + 16);') < 0
+      && edt.indexOf('if (!dropAboveBox({ x: lastX, y: lastY }, r2)) return;') < 0);
+
+  /* ③ 源码：占位块 ph 不参与插入下标计算（自我参照会让落点抖） */
+  T('修复161 · 源码：flowList() 排除 ph（蓝色虚线占位块），插入下标只在真块之间算',
+    edt.indexOf("function (w) { return w !== wrap && w !== ph && !w.classList.contains('free-box'); }") > 0);
+
+  /* ④ 源码：挪完整行后同步 .blocks 底部占位（自由框绝对定位不撑高，否则滚不到 = 拖完框不见了） */
+  T('修复161 · 源码：拖动后 padFreeBottom 同步底部占位（只增不减，钳到 4000px）',
+    edt.indexOf('padFreeBottom(wrap.parentNode, page);') > 0
+      && edt.indexOf('pb = Math.min(Math.max(pb, cur), 4000);') > 0);
+
+  /* ⑤ 源码：显示层兜底同样整组推（app.js fixFreeOverlapVisual） */
+  T('修复161 · 源码：app.js fixFreeOverlapVisual 推框时同组一起走（不再把并排行拆成上下两半）',
+    app161.indexOf('const mv = (gid == null) ? [fd] : frees.filter(function (o) {') > 0
+      && app161.indexOf('return o.b && o.b.free && o.b.free.g === gid;') > 0);
+
+  /* ===== 真跑：从源码切片，把 5 个函数装进一个沙箱执行 ===== */
+  const aA = edt.indexOf('  function dropAboveBox(p, r) {');
+  const bA = edt.indexOf('  /* ---------- 块拖拽排序', aA);
+  const codeA = (aA >= 0 && bA > aA) ? edt.slice(aA, bA) : '';
+  let FN = null, whyA = '切片不可用';
+  if (codeA) {
+    try {
+      FN = new Function(codeA + '\nreturn { dropAboveBox: dropAboveBox, pickDropRow: pickDropRow, '
+        + 'rowYieldDelta: rowYieldDelta, shiftFreeRow: shiftFreeRow, padFreeBottom: padFreeBottom };')();
+    } catch (e) { whyA = '执行失败 ' + e.message; FN = null; }
+  }
+  T('修复161 · 切片：editor.js 的 5 个函数可直接执行（纯函数，不依赖页面）', !!FN, whyA);
+
+  if (FN) {
+    /* ⑥ 一行 = 并排两框的并集：上半 = 放到这行上面；下半 = 放到下面 */
+    const row = { top: 200, left: 0, right: 1016, height: 300, blocks: [{}] };
+    T('修复161 · 真跑 dropAboveBox：行矩形上/下半判定（上半＝放到这行上面，下半＝放到下面）',
+      FN.dropAboveBox({ x: 100, y: 210 }, row) === true
+        && FN.dropAboveBox({ x: 100, y: 480 }, row) === false);
+
+    /* ⑦ 多行同时命中取最上面那行 */
+    const rA = { top: 500, left: 0, right: 500, height: 200, blocks: [{}] };
+    const rB = { top: 120, left: 0, right: 500, height: 200, blocks: [{}] };
+    T('修复161 · 真跑 pickDropRow：两行都命中时取最靠上的那行（不会挑错行去挪）',
+      FN.pickDropRow([rA, rB], { x: 100, y: 130 }) === rB);
+
+    /* ⑧ rowYieldDelta：整行要下移多少（含「块已在行上方 → 0」的守卫、含让位量还原） */
+    const d1 = FN.rowYieldDelta({ top: 300, height: 120 }, 200, 100, 0);
+    const d2 = FN.rowYieldDelta({ top: 100, height: 120 }, 200, 100, 0);
+    const d3 = FN.rowYieldDelta({ top: 300, height: 120 }, 200, 100, 60);
+    T('修复161 · 真跑 rowYieldDelta：136 / 0（已在上面不动）/ 76（扣掉 60px 让位量，落点贴紧）',
+      d1 === 136 && d2 === 0 && d3 === 76, JSON.stringify({ d1: d1, d2: d2, d3: d3 }));
+
+    /* ⑨ shiftFreeRow：并排两框同一位移、行内相对位置不变、ride 归零 */
+    const bL = { free: { y: 300, x: 0, w: 48, g: 'gx', gi: 0, ride: 40 } };
+    const bR = { free: { y: 300, x: 52, w: 48, g: 'gx', gi: 1, ride: 40 } };
+    const wL = { style: {} }, wR = { style: {} };
+    const movedRow = FN.shiftFreeRow({ blocks: [bL, bR], wraps: [wL, wR] }, 136);
+    T('修复161 · 真跑 shiftFreeRow：并排两框 y 同步 +136（x/gi 不变）· ride 归零 · style.top 同步',
+      movedRow === true && bL.free.y === 436 && bR.free.y === 436
+        && bL.free.x === 0 && bR.free.x === 52
+        && bL.free.gi === 0 && bR.free.gi === 1
+        && bL.free.ride === 0 && bR.free.ride === 0
+        && wL.style.top === '436px' && wR.style.top === '436px',
+      JSON.stringify({ L: bL.free, R: bR.free }));
+
+    /* ⑩ 整行钳制在 y≥0（负位移只退到 0，绝不飞出页面） */
+    const bC = { free: { y: 10 } };
+    T('修复161 · 真跑 shiftFreeRow：整行钳制在 y≥0（钳制也整行一致，不拆行）',
+      FN.shiftFreeRow({ blocks: [bC], wraps: [{ style: {} }] }, -100) === true && bC.free.y === 0);
+  }
+})();
+
+/* 修复161 · 手动上传闸门：核对可以有界地拦，但绝不能永久锁死 */
+(function () {
+  const col161 = srcOf('js/collab.js').replace(/\r\n/g, '\n');
+
+  /* ⑪ 源码：404（云端还没有这份内容）不再当成「没核对上」 */
+  T('修复161 · 源码：ghPull 遇 404 → pulledOnce=true + cloudMissing（首次上传自动建文件，不再永久卡住）',
+    col161.indexOf('if (r.status === 404) {') > 0
+      && col161.indexOf('GH.pulledOnce = true; GH.cloudMissing = true; GH.pullErr = null;') > 0);
+
+  /* ⑫ 源码：拉取失败必须记下来（旧版吞掉所有错误，界面永远只有一句「正在核对」） */
+  T('修复161 · 源码：拉取失败记 GH.pullErr（含超时映射）· 成功即清空 · ghDiag 已导出',
+    col161.indexOf("const msg = (e && e.name === 'AbortError') ? '超时（15 秒没响应）'") > 0
+      && col161.indexOf('GH.pullErr = { at: Date.now(), msg: msg };') > 0
+      && col161.indexOf('GH.pullErr = null;   /* ★ 修复161：这一轮通了') > 0
+      && col161.indexOf('function ghDiag() {') > 0
+      && col161.indexOf('ghDiag: ghDiag,') > 0);
+
+  /* ⑬ 源码：手动闸门改用纯函数，且拦下的总时长有上限 */
+  T('修复161 · 源码：guardManualPush 走 manualGateDecide（纯函数）· 失败放行 / 超时放行都在',
+    col161.indexOf('function manualGateDecide(st) {') > 0
+      && col161.indexOf('const ok = manualGateDecide({') > 0
+      && col161.indexOf("if (st.pullErrAt && now - (+st.pullErrAt) < errWin) return 'allow';") > 0
+      && col161.indexOf("if (st.guardAt && now - (+st.guardAt) > maxWait) return 'allow';") > 0);
+
+  const aG = col161.indexOf('  function manualGateDecide(st) {');
+  const bG = col161.indexOf('\n  }\n', aG);
+  let mg = null;
+  if (aG >= 0 && bG > aG) {
+    try { mg = new Function(col161.slice(aG, bG + 4) + '\nreturn manualGateDecide;')(); } catch (eM) { mg = null; }
+  }
+  T('修复161 · 切片：manualGateDecide 可直接执行', !!mg);
+
+  if (mg) {
+    T('修复161 · 真跑 manualGateDecide：已核对不落后 → allow；拉取刚失败 → allow（云端读不到，不能锁死）',
+      mg({ why: 'ok' }) === 'allow'
+        && mg({ why: 'cold', pullErrAt: 1000, now: 5000 }) === 'allow');
+
+    T('修复161 · 真跑 manualGateDecide：冷启动 + 拉取在飞 → block（等这一轮，最多 6 秒）',
+      mg({ why: 'cold', now: 2000, inFlight: true, inFlightAt: 1000, guardAt: 0 }) === 'block');
+
+    T('修复161 · 真跑 manualGateDecide：拦过 6 秒以上 → allow（网络半死不活也不把用户锁死）',
+      mg({ why: 'cold', now: 10000, inFlight: true, inFlightAt: 100, guardAt: 3000 }) === 'allow');
+
+    T('修复161 · 真跑 manualGateDecide：没有拉取在飞 → allow（没什么可等）',
+      mg({ why: 'cold', now: 2000, inFlight: false }) === 'allow');
+
+    T('修复161 · 真跑 manualGateDecide：云端已知更新 + 正在拉 → block（先合再传）；卡死超时后 → allow',
+      mg({ why: 'behind', now: 2000, inFlight: true, inFlightAt: 1900 }) === 'block'
+        && mg({ why: 'behind', now: 40000, inFlight: true, inFlightAt: 2000, guardAt: 2000 }) === 'allow');
+  }
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
