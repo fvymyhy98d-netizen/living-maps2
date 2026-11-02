@@ -55,6 +55,18 @@ window.LMStore = (function () {
         pages.push(np);
       });
       if (!pages.length) return { ok: false, why: '没有可用的页面（pages 里没有有效页对象）' };
+      /* ★ 修复151：孤儿父页自愈 —— 页面的 parent 指向一个不存在的页时，renderNav / renderHome
+         的 `!p.parent` 过滤会让它**从导航里彻底消失**（内容是好的，但栏目看不见，
+         用户看到的就是「莫名其妙少了一个栏目」）。这里把孤儿提升为顶层页：
+         只清 parent（不删内容、不动其它字段），下次保存即恢复可见。 */
+      const ids = {};
+      pages.forEach(function (p) { ids[p.id] = 1; });
+      pages.forEach(function (p) {
+        if (!p.parent) return;
+        if (ids[p.parent]) return;
+        delete p.parent;               /* 父页已不存在 → 回到顶层导航 */
+        dropped++;
+      });
       const out = Object.assign({}, c, { pages: pages });
       if (!out.site || typeof out.site !== 'object') out.site = (window.SITE_CONTENT && window.SITE_CONTENT.site) || {};
       if (!out.config || typeof out.config !== 'object') out.config = {};
@@ -66,20 +78,94 @@ window.LMStore = (function () {
   function tsOf(c) {
     try { return +(((c || {}).config || {}).collab || {}).syncTs || 0; } catch (e) { return 0; }
   }
+  /* ★ 修复151：墓碑（删除过的页 id → 删除时刻）。与 collab.js 同一口径，两边各自算一遍，
+     因为 store.js 要先于 collab.js 加载、且测试里单独提取执行。 */
+  function tombOf(c) {
+    try {
+      const t = (((c || {}).config || {}).collab || {}).tomb;
+      return (t && typeof t === 'object') ? t : {};
+    } catch (e) { return {}; }
+  }
+  function pageStampOf(p) {
+    if (!p) return 0;
+    let t = +p._ts || 0;
+    const bl = Array.isArray(p.blocks) ? p.blocks : [];
+    for (let i = 0; i < bl.length; i++) {
+      const b = bl[i];
+      const x = +((b && b._ts) || 0), y = +((b && b._t) || 0);
+      if (x > t) t = x;
+      if (y > t) t = y;
+    }
+    return t;
+  }
+  /* ★ 修复151：页面并集 —— 以 prefer 的顺序为主，把 other 里「prefer 没有的页」补回来。
+     旧版 pickNewer 是整包替换：首屏快照只要少一页（11-01 的两份快照就只有 8 页），
+     「更新完刷新一下」本机就少一个栏目；紧接着这台设备一推，云端也跟着少 —— 这就是现场。 */
+  function unionPages(prefer, other, tomb) {
+    const out = (prefer || []).slice();
+    const have = {};
+    out.forEach(function (p) { if (p && p.id) have[p.id] = 1; });
+    (other || []).forEach(function (p) {
+      if (!p || !p.id || have[p.id]) return;
+      const ts = +((tomb || {})[p.id] || 0);
+      if (ts && ts > pageStampOf(p)) return;      /* 这一页确实被删过（墓碑更新） */
+      have[p.id] = 1;
+      out.push(p);
+    });
+    return out.filter(function (p) {
+      const ts = +((tomb || {})[p && p.id] || 0);
+      return !(ts && ts > pageStampOf(p));
+    });
+  }
+  function mergeTombOf(a, b) {
+    const out = {};
+    [a || {}, b || {}].forEach(function (o) {
+      Object.keys(o).forEach(function (k) {
+        const v = +o[k] || 0;
+        if (v > (out[k] || 0)) out[k] = v;
+      });
+    });
+    const ks = Object.keys(out);
+    if (ks.length > 300) {           /* 与 collab.js 同口径：只留最近 300 条删除记录 */
+      ks.sort(function (x, y) { return out[x] - out[y]; })
+        .slice(0, ks.length - 300).forEach(function (k) { delete out[k]; });
+    }
+    return out;
+  }
   /* ★ 修复147：「仓库里的新内容」vs「浏览器里的旧存档」—— 谁的版本戳新用谁的。
      以前 load() 无条件优先 localStorage：只要这台浏览器存过一份内容，之后仓库里推上去的
      新内容就进不来（只能等云端轮询把它合过来，或手动清缓存），
      表现正是「脚本/样式都更新了（管理条变了），内容却没变」。
      规则很保守：只有文件版本**严格更新**才换，且换之前把旧存档留在 lm_prev_v1 备查；
-     本机自己编辑过（版本戳等于或新于文件）时一律保留本机内容，不会误删本地改动。 */
+     本机自己编辑过（版本戳等于或新于文件）时一律保留本机内容，不会误删本地改动。
+     ★ 修复151：换的时候**页面按 id 并集**（见 unionPages）—— 取新内容，但不拿「文件里没有」
+     当成「用户删了」。 */
   function pickNewer(local, bundled) {
     try {
       if (!bundled || !Array.isArray(bundled.pages) || !bundled.pages.length) return local;
       if (!local || !Array.isArray(local.pages)) return bundled;
-      if (tsOf(bundled) <= tsOf(local)) return local;
+      if (tsOf(bundled) <= tsOf(local)) {
+        /* 本机更新：也不整包否决 —— 文件里可能有本机没有的页（另一台设备新建的） */
+        const tombL = mergeTombOf(tombOf(local), tombOf(bundled));
+        const pagesL = unionPages(local.pages, bundled.pages, tombL);
+        if (pagesL.length === local.pages.length) return local;   /* 一页没多 → 原样返回，避免无谓改动 */
+        const mergedL = Object.assign({}, local, { pages: pagesL });
+        try {
+          const cb = ((mergedL.config = mergedL.config || {}).collab = (mergedL.config || {}).collab || {});
+          cb.tomb = tombL;
+        } catch (e1) { /* noop */ }
+        try { saveLocal(mergedL); } catch (e2) { /* noop */ }
+        return mergedL;
+      }
       try { localStorage.setItem('lm_prev_v1', JSON.stringify(local)); } catch (eP) { /* 配额满就跳过备份 */ }
-      try { saveLocal(bundled); } catch (eS) { /* 写不进也只是下次再判一次 */ }
-      return bundled;
+      const tomb = mergeTombOf(tombOf(bundled), tombOf(local));
+      const merged = Object.assign({}, bundled, { pages: unionPages(bundled.pages, local.pages, tomb) });
+      try {
+        const cb2 = ((merged.config = merged.config || {}).collab = (merged.config || {}).collab || {});
+        cb2.tomb = tomb;
+      } catch (e3) { /* noop */ }
+      try { saveLocal(merged); } catch (eS) { /* 写不进也只是下次再判一次 */ }
+      return merged;
     } catch (e) { return local; }
   }
   function load() {

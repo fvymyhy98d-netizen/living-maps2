@@ -1485,6 +1485,19 @@ window.LMEditor = (function () {
     const kids = descendants(id);
     const kill = [id].concat(kids);
     c.pages = c.pages.filter(function (x) { return kill.indexOf(x.id) < 0; });
+    /* ★ 修复151：删页留墓碑（content.config.collab.tomb = { 页id: 删除时刻 }）——
+       没有墓碑时，「这一页被删了」和「另一台设备根本不知道这一页」长得一模一样：
+       合并只能两种选择，要么把删掉的页复活，要么把对方不知道的页删掉（旧版选了后者，
+       于是任何一台少一页的设备一推，全网跟着少一个栏目）。有了墓碑就能区分：
+       只有「墓碑比这页最后一次改动还新」才算真删除，随内容一起同步。 */
+    try {
+      const cfg = c.config = c.config || {};
+      const cb = cfg.collab = cfg.collab || {};
+      const tomb = (cb.tomb && typeof cb.tomb === 'object') ? cb.tomb : {};
+      const now = Date.now();
+      kill.forEach(function (k) { tomb[k] = now; });
+      cb.tomb = tomb;
+    } catch (eT) { /* 记不下墓碑也不影响删除本身 */ }
     /* 顺手清掉指向这些页面的跳转映射，避免留下点不开的死链 */
     if (Array.isArray(c.jumps)) {
       c.jumps = c.jumps.filter(function (j) {

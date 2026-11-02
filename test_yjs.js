@@ -2946,8 +2946,9 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
   T('合并1（真跑）：字段级三向合并 —— A 改文字、B 改字号两边都保住；都改同一字段才按后写优先',
     (function () {
       const s = srcOf('js/collab.js');
+      const h0 = s.indexOf('function commonPre(');    /* ★ 修复151：三向文本合并的助手（mergeBlockFields 依赖） */
       const i0 = s.indexOf('function mergeBlockFields(');
-      if (i0 < 0) return false;
+      if (h0 < 0 || i0 < 0) return false;
       let i = s.indexOf('{', i0), d = 0, end = -1;
       for (; i < s.length; i++) {
         if (s[i] === '{') d++;
@@ -2955,7 +2956,7 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
       }
       if (end < 0) return false;
       let merge;
-      try { merge = new Function('return ' + s.slice(i0, end))(); } catch (e) { return false; }
+      try { merge = new Function(s.slice(h0, end) + '\nreturn mergeBlockFields;')(); } catch (e) { return false; }
       if (typeof merge !== 'function') return false;
       const base = { type: 'paragraph', text: '原文', size: 'normal', _ts: 100 };
       /* ① 各改各的字段 → 两边的改动都要在 */
@@ -2987,7 +2988,19 @@ console.log('【9.57】修复91：本地 AI —— TF-IDF 摘要 · 关键词 ·
         { type: 'paragraph', text: '远端', size: 'normal', _ts: farTs });
       if (!(m6._ts <= Date.now())) return false;
       const m5 = merge({}, { a: 1 }, {});
-      return m5.a === 1 && !('b' in m5);
+      if (!(m5.a === 1 && !('b' in m5))) return false;
+      /* ⑦ ★ 修复151：同一段、两人在不同位置打字 → 两边都保住（旧版整段取 _ts 大的，必丢一边） */
+      const tb = { type: 'paragraph', text: '今天开会讨论方案', _ts: 100 };
+      const m7 = merge(tb,
+        { type: 'paragraph', text: '今天开会讨论方案（已确认）', _ts: 200 },   /* 本机在末尾补了一句 */
+        { type: 'paragraph', text: '明天开会讨论方案', _ts: 300 });           /* 远端改了开头两个字 */
+      if (m7.text !== '明天开会讨论方案（已确认）') return false;
+      /* ⑧ 真的改在同一个位置（整段被两边各写一版）→ 才退回后写优先 */
+      const m8 = merge({ type: 'paragraph', text: '原文', _ts: 100 },
+        { type: 'paragraph', text: '本地版本', _ts: 900 },
+        { type: 'paragraph', text: '远端版本', _ts: 200 });
+      if (m8.text !== '本地版本') return false;
+      return true;
     })());
 
   T('合并2：共同祖先只在「应用成功」后推进 —— 挂起的包不会把祖先顶到前面（否则会压掉远端改动）',
@@ -3589,10 +3602,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=149 · LM_ASSET_VER=149',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=151 · LM_ASSET_VER=151',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=148/g) || []).length === 0 && /\?v=149/.test(html)
-      && /LM_ASSET_VER = '149'/.test(appJs));
+      && (html.match(/\?v=150/g) || []).length === 0 && /\?v=151/.test(html)
+      && /LM_ASSET_VER = '151'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4493,10 +4506,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 149（?v=149 共 22 处 · v148 无残留 · LM_ASSET_VER=149）',
-    (html.match(/\?v=149/g) || []).length === 22 && (html.match(/\?v=148/g) || []).length === 0
-      && /LM_ASSET_VER = '149'/.test(appJs),
-    'v149=' + (html.match(/\?v=149/g) || []).length + ' v143=' + (html.match(/\?v=148/g) || []).length);
+  T('版本已升到 151（?v=151 共 22 处 · v150 无残留 · LM_ASSET_VER=151）',
+    (html.match(/\?v=151/g) || []).length === 22 && (html.match(/\?v=150/g) || []).length === 0
+      && /LM_ASSET_VER = '151'/.test(appJs),
+    'v151=' + (html.match(/\?v=151/g) || []).length + ' v150=' + (html.match(/\?v=150/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -5081,7 +5094,7 @@ console.log('【修复147】load() 比较 syncTs：文件里的内容比浏览�
     return { config: { collab: { syncTs: ts } }, pages: pages };
   }
 
-  T('修复147 · 真跑 load()：文件版更新 → 采用文件版（并刷新存档、旧档存 lm_prev_v1）；本机更新 → 保留本机；无存档 → 用文件版',
+  T('修复147/151 · 真跑 load()：文件版更新 → 采用文件版（刷新存档、旧档存 lm_prev_v1）；本机更新 → 本机为准但页面并集；无存档 → 用文件版',
     (function () {
       /* A：浏览器存档旧（无示例页），文件里更新（有示例页） → 必须采用文件版 */
       const mapA = { lm_content_v1: JSON.stringify(mkC(1000, false)) };
@@ -5091,12 +5104,15 @@ console.log('【修复147】load() 比较 syncTs：文件里的内容比浏览�
         && /demo-rag/.test(String(a.map.lm_content_v1 || ''))
         && !!a.map.lm_prev_v1;
 
-      /* B：本机改过（版本戳更新） → 绝不能被文件版盖掉 */
+      /* B：本机改过（版本戳更新） → 内容仍以本机为准（syncTs 不变），
+         但文件里有、本机没有的页会**并进来**（★ 修复151：并集，不是整包替换；
+         旧期望「demo-rag 绝不能出现」正是「更新完少一个栏目」的根源） */
       const mapB = { lm_content_v1: JSON.stringify(mkC(3000, false)) };
       const b = runLoad(mapB, mkC(2000, true));
       const rb = b.api.load();
-      const okB = !rb.pages.some(function (p) { return p.id === 'demo-rag'; })
-        && rb.config.collab.syncTs === 3000;
+      const okB = rb.config.collab.syncTs === 3000
+        && rb.pages.some(function (p) { return p.id === 'demo-rag'; })
+        && rb.pages.some(function (p) { return p.id === 'home'; });
 
       /* C：第一次访问（没有存档） → 文件版 */
       const c = runLoad({}, mkC(2000, true));
@@ -5106,22 +5122,27 @@ console.log('【修复147】load() 比较 syncTs：文件里的内容比浏览�
       return okA && okB && okC;
     })());
 
-  T('修复147 · 用真实的 data/content.js 跑 load()（存档=用户那台机器上一版 1793547842003）→ 9 页且含示例页',
+  T('修复147/151 · 用真实的 data/content.js 跑 load()（存档=用户那台机器上一版 1793547842003）→ 10 页（含示例页与已补回的认知地图）',
     (function () {
       const fs2 = require('fs'), path2 = require('path');
       const real = {};
       new Function('window', 'var module={};' + fs2.readFileSync(path2.join(DIR, 'data/content.js'), 'utf8'))(real);
       const d = runLoad({ lm_content_v1: JSON.stringify(mkC(1793547842003, false)) }, real.SITE_CONTENT);
       const r = d.api.load();
-      return r.pages.length === 9 && r.pages.some(function (p) { return p.id === 'demo-rag'; });
+      return r.pages.length === 10
+        && r.pages.some(function (p) { return p.id === 'demo-rag'; })
+        && r.pages.some(function (p) { return p.id === 'cognition'; });
     })());
 
   T('修复147 · 源码标记：tsOf / pickNewer / 只有严格更新才换 / 保留本机不变 / lm_prev_v1 备查',
     TSRC.indexOf('function tsOf(c) {') > 0
       && TSRC.indexOf('function pickNewer(local, bundled) {') > 0
-      && TSRC.indexOf('if (tsOf(bundled) <= tsOf(local)) return local;') > 0
+      && TSRC.indexOf('if (tsOf(bundled) <= tsOf(local)) {') > 0
       && TSRC.indexOf("localStorage.setItem('lm_prev_v1'") > 0
-      && TSRC.indexOf('if (v.ok) return pickNewer(v.content, bundled);') > 0);
+      && TSRC.indexOf('if (v.ok) return pickNewer(v.content, bundled);') > 0
+      /* ★ 修复151：换内容时页面按 id 并集 —— 取新内容，但绝不拿「文件里没有」当「用户删了」 */
+      && TSRC.indexOf('function unionPages(prefer, other, tomb) {') > 0
+      && TSRC.indexOf('pages: unionPages(bundled.pages, local.pages, tomb)') > 0);
 })();
 
 /* ---------- 修复148：工具栏「🟦 提示框」（带底色的文本框） ---------- */
@@ -5305,9 +5326,129 @@ console.log('【修复150】节拍再收紧：退出键入 0.4s 硬底 · 推送
       && C.indexOf('if (gate.why !== \'busy\') kickPush(gate.wait);') > 0);   /* 被挡下也不丢：记账 + 补推 */
 })();
 
+/* ---------- 修复151：栏目（页面）再也不能被「合并」吃掉 ---------- */
+console.log('【修复151】页面并集 + 删除墓碑 + 孤儿父页自愈：任何一台设备少一页，不会再让全网少一个栏目');
+(function () {
+  const C = srcOf('js/collab.js').replace(/\r\n/g, '\n');
+  const S = srcOf('js/store.js').replace(/\r\n/g, '\n');
+  const E = srcOf('js/editor.js').replace(/\r\n/g, '\n');
+
+  /* 把 commonPre … mergeBlocks 整段切出来（连续的一段，mergeBlocks 依赖前面全部助手） */
+  function cutMerge() {
+    const a = C.indexOf('  function commonPre(a, b2) {');
+    const b0 = C.indexOf('  function mergeBlocks(c) {');
+    if (a < 0 || b0 < 0) return '';
+    let d = 0, end = -1;
+    for (let j = C.indexOf('{', b0); j < C.length; j++) {
+      if (C[j] === '{') d++;
+      else if (C[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+    }
+    return end > 0 ? C.slice(a, end) : '';
+  }
+  const pg = function (id, ts) { return { id: id, title: id, blocks: [{ type: 'p', text: id, _ts: ts || 100 }] }; };
+  const mkC = function (pages, tomb) {
+    const c = { pages: pages, config: { collab: { syncTs: 5000 } } };
+    if (tomb) c.config.collab.tomb = tomb;
+    return c;
+  };
+  const runMerge = function (local, remote) {
+    const code = cutMerge();
+    if (!code) return null;
+    const app = { state: { content: local } };       /* 源码里 window.LMApp 为真时会走裸 LMApp.xxx，沙箱要一起给 */
+    const fn = new Function('window', 'LMApp', '_base', code + '\nreturn mergeBlocks;')({ LMApp: app }, app, null);
+    return fn(remote);
+  };
+
+  /* ① 真实事故：10-31 22:01:17 还是 9 页（含 🧠认知地图），40 秒后云端只剩 8 页 */
+  T('修复151 · 真跑 mergeBlocks：远端少一页 → 本机那几页全部保留，认知地图不会被吃掉', (function () {
+    const local = mkC([pg('home'), pg('domain'), pg('ecology'), pg('cog'), pg('updates')]);
+    const remote = mkC([pg('home'), pg('domain'), pg('ecology'), pg('updates')]);
+    const r = runMerge(local, remote);
+    if (!r) return false;
+    return r.pages.length === 5
+      && ['home', 'domain', 'ecology', 'cog', 'updates'].every(function (id) {
+        return r.pages.some(function (p) { return p.id === id; });
+      });
+  })());
+
+  /* ② 顺序不同 + 少一页（旧版 page[i].id 对不上也整包取远端，照样丢） */
+  T('修复151 · 真跑 mergeBlocks：页顺序不同且远端少一页 → 仍按 id 并集，页数不缺、位置按本机补回', (function () {
+    const local = mkC([pg('home'), pg('a'), pg('b')]);
+    const remote = mkC([pg('home'), pg('b')]);
+    const r = runMerge(local, remote);
+    if (!r) return false;
+    return r.pages.length === 3 && r.pages[0].id === 'home' && r.pages[1].id === 'a' && r.pages[2].id === 'b';
+  })());
+
+  /* ③ 墓碑：真删（墓碑比该页最后一次改动新）→ 删掉；墓碑更旧（删完又编辑过）→ 保留 */
+  T('修复151 · 真跑 mergeBlocks：墓碑更新 → 真删除不复活；墓碑更旧 → 保留；远端的「回魂包」会被墓碑去掉', (function () {
+    const rDel = runMerge(mkC([pg('home'), pg('cog', 100)], { cog: 200 }), mkC([pg('home')]));
+    if (!rDel || rDel.pages.some(function (p) { return p.id === 'cog'; })) return false;
+    const rKeep = runMerge(mkC([pg('home'), pg('cog', 300)], { cog: 200 }), mkC([pg('home')]));
+    if (!rKeep || !rKeep.pages.some(function (p) { return p.id === 'cog'; })) return false;
+    const rGhost = runMerge(mkC([pg('home')], { cog: 900 }), mkC([pg('home'), pg('cog', 100)]));
+    return !!rGhost && !rGhost.pages.some(function (p) { return p.id === 'cog'; });
+  })());
+
+  /* ④ store：并集函数本身（load 时「文件 vs 存档」靠它才不丢页） */
+  T('修复151 · 真跑 unionPages：文件少一页 → 并回本机 4 页；该页有较新墓碑 → 才真的少（3 页）', (function () {
+    const a = S.indexOf('  function pageStampOf(p) {');
+    const z = S.indexOf('  function mergeTombOf(a, b) {');
+    if (a < 0 || z < 0) return false;
+    let d = 0, end = -1;
+    for (let j = S.indexOf('{', z); j < S.length; j++) {
+      if (S[j] === '{') d++;
+      else if (S[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+    }
+    if (end < 0) return false;
+    let fns;
+    try { fns = new Function(S.slice(a, end) + '\nreturn { unionPages: unionPages };')(); } catch (e) { return false; }
+    const filePages = [pg('home'), pg('domain'), pg('ecology')];
+    const localPages = [pg('home'), pg('domain'), pg('ecology'), pg('cog')];
+    const u1 = fns.unionPages(filePages, localPages, {});
+    if (u1.length !== 4 || !u1.some(function (p) { return p.id === 'cog'; })) return false;
+    const u2 = fns.unionPages(filePages, localPages, { cog: 9999 });     /* 确实删过 → 不并回来 */
+    return u2.length === 3 && !u2.some(function (p) { return p.id === 'cog'; });
+  })());
+
+
+
+  /* ⑤ 孤儿父页自愈：parent 指向不存在的页 → 清 parent（否则 renderNav 的 !p.parent 让它彻底消失） */
+  T('修复151 · 真跑 validateContent：父页不存在的页面自动回到顶层（栏目不再「莫名消失」）', (function () {
+    const a = S.indexOf('  function validateContent(c) {');
+    if (a < 0) return false;
+    let d = 0, end = -1;
+    for (let j = S.indexOf('{', a); j < S.length; j++) {
+      if (S[j] === '{') d++;
+      else if (S[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+    }
+    if (end < 0) return false;
+    let v;
+    try { v = new Function('window', S.slice(a, end) + '\nreturn validateContent;')({ SITE_CONTENT: {} }); } catch (e) { return false; }
+    const c = { pages: [
+      { id: 'home', blocks: [] },
+      { id: 'ecology', blocks: [], parent: 'gone-page' },   /* 父页早就没了 */
+      { id: 'domain', blocks: [] },
+      { id: 'cog', blocks: [], parent: 'domain' }            /* 正常嵌套：不能动 */
+    ], config: {} };
+    const r = v(c);
+    if (!r || !r.ok) return false;
+    const eco = r.content.pages.filter(function (p) { return p.id === 'ecology'; })[0];
+    const cog = r.content.pages.filter(function (p) { return p.id === 'cog'; })[0];
+    return !!eco && !eco.parent && !!cog && cog.parent === 'domain';
+  })());
+
+  /* ⑥ 源码标记：删页写墓碑 + 三处都走并集 */
+  T('修复151 · 源码：removePageDeep 写墓碑 · mergeBlocks 按 id 并集 · pickNewer 走 unionPages · 不再「页数不同就整包取远端」',
+    E.indexOf("const tomb = (cb.tomb && typeof cb.tomb === 'object') ? cb.tomb : {};") > 0
+      && E.indexOf('kill.forEach(function (k) { tomb[k] = now; });') > 0
+      && C.indexOf('if (base.pages.length !== c.pages.length) return c;') < 0
+      && C.indexOf('extra.push(JSON.parse(JSON.stringify(p)));') > 0
+      && C.indexOf('function mergePageBlocks(bp, rp) {') > 0
+      && S.indexOf('pages: unionPages(bundled.pages, local.pages, tomb)') > 0);
+})();
+
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
-
-
 function finishAll() {
   console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
   process.exit(fail ? 1 : 0);

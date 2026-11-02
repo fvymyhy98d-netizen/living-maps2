@@ -209,6 +209,126 @@ window.LMCollab = (function () {
   function noteBase(content) {   /* 收敛后记下共同祖先（深拷贝，避免被后续编辑就地污染） */
     try { _base = content ? JSON.parse(JSON.stringify(content)) : null; } catch (eB) { _base = null; }
   }
+  /* ★ 修复151 · 三向文本合并（同一段两人同时打字，尽量两边都保住）
+     以共同祖先 b 为锚，算出「本机改的区间」和「远端改的区间」：
+       ▸ 两段区间**不重叠**（一个在前面改、一个在后面改）→ 两处改动都保留；
+       ▸ 区间重叠（真的改在同一个字上）→ 返回 null，交给调用方按 _ts 后写优先。
+     返回 null = 「合不了，请按时间戳决定」；绝不返回空串（空串等于删内容）。 */
+  function commonPre(a, b2) {
+    const n = Math.min(a.length, b2.length);
+    let i = 0;
+    while (i < n && a.charCodeAt(i) === b2.charCodeAt(i)) i++;
+    return i;
+  }
+  function commonSuf(a, b2) {
+    const n = Math.min(a.length, b2.length);
+    let i = 0;
+    while (i < n && a.charCodeAt(a.length - 1 - i) === b2.charCodeAt(b2.length - 1 - i)) i++;
+    return i;
+  }
+  function mergeText3(b, l, r) {
+    if (typeof b !== 'string' || typeof l !== 'string' || typeof r !== 'string') return null;
+    if (l === r) return l;
+    if (r === b) return l;
+    if (l === b) return r;
+    const pl = commonPre(b, l), pr = commonPre(b, r);
+    let sl = commonSuf(b, l), sr = commonSuf(b, r);
+    if (pl + sl > b.length) sl = b.length - pl;    /* 前/后缀不许交叉，否则区间会反转 */
+    if (pr + sr > b.length) sr = b.length - pr;
+    if (pl + sl > l.length) sl = l.length - pl;    /* 本机串比 base 短时同样要夹住 */
+    if (pr + sr > r.length) sr = r.length - pr;
+    /* base 里被替换的区间（左闭右开）与各自替换用的文本 */
+    const lB0 = pl, lB1 = Math.max(lB0, b.length - sl);
+    const rB0 = pr, rB1 = Math.max(rB0, b.length - sr);
+    const lTxt = l.slice(pl, Math.max(pl, l.length - sl));
+    const rTxt = r.slice(pr, Math.max(pr, r.length - sr));
+    if (lB1 < rB0) return b.slice(0, lB0) + lTxt + b.slice(lB1, rB0) + rTxt + b.slice(rB1);
+    if (rB1 < lB0) return b.slice(0, rB0) + rTxt + b.slice(rB1, lB0) + lTxt + b.slice(lB1);
+    return null;   /* 同一处（含同一点插入）两边都动了 → 交给后写优先 */
+  }
+  /* 只有这些「长文本」字段值得做三向合并；align / id / 颜色逐字合并没有意义 */
+  var TEXT_FIELDS = { text: 1, html: 1, title: 1, name: 1, body: 1, caption: 1, note: 1, content: 1, desc: 1, description: 1 };
+  /* ---------- ★ 修复151：页面（栏目）级 —— 并集 + 墓碑，永不「因为对方没有」就删页 ----------
+     现场（GitHub lm-data 真实提交）：10-31 22:01:17 还是 9 页（含 🧠认知地图），
+     22:01:57 就变成 8 页 —— 认知地图从此消失；11-01 的两次首屏快照同样只有 8 页。
+     三条独立的丢页路径，全部出在「整包覆盖」：
+       ① mergeBlocks 旧逻辑：`base.pages.length !== c.pages.length` → 直接 return c（整包取远端）。
+          任何一台「少一页」的设备（离线时没收到新建页 / 缓存了旧首屏）一推，全网跟着少；
+       ② store.pickNewer 旧逻辑：文件版本戳更新就**整包替换**本机内容 —— 首屏快照缺页时，
+          「更新完刷新一下」就少一个栏目，接着这台设备再推一次，云端也少；
+       ③ 没有删除墓碑：分不清「这一页被删了」和「对方根本不知道这一页」。
+     现在：页面按 id 做并集；只有**墓碑比该页最后一次改动还新**才算真删除。
+     墓碑写进 content.config.collab.tomb = { 页id: 删除时刻 }，随内容一起同步。 */
+  function tombOf(c) {
+    try {
+      const t = (((c || {}).config || {}).collab || {}).tomb;
+      return (t && typeof t === 'object') ? t : {};
+    } catch (e) { return {}; }
+  }
+  function mergeTomb(a, b2) {
+    const out = {};
+    [a || {}, b2 || {}].forEach(function (o) {
+      Object.keys(o).forEach(function (k) {
+        const v = +o[k] || 0;
+        if (v > (out[k] || 0)) out[k] = v;
+      });
+    });
+    /* 上限 300 条：最老的先剔除（删除记录只需要「比对方那份新」就够用，不需要永久保存） */
+    const ks = Object.keys(out);
+    if (ks.length > 300) {
+      ks.sort(function (x, y) { return out[x] - out[y]; })
+        .slice(0, ks.length - 300).forEach(function (k) { delete out[k]; });
+    }
+    return out;
+  }
+  /* 页面的「最后改动时刻」= 页自身 _ts 与块里最大的 _ts（用来和墓碑比新旧） */
+  function pageStamp(p) {
+    if (!p) return 0;
+    let t = +p._ts || 0;
+    const bl = Array.isArray(p.blocks) ? p.blocks : [];
+    for (let i = 0; i < bl.length; i++) {
+      const b = bl[i];
+      const x = +((b && b._ts) || 0), y = +((b && b._t) || 0);
+      if (x > t) t = x;
+      if (y > t) t = y;
+    }
+    return t;
+  }
+  /* 页级字段（标题 / 图标 / 父级 / 版式）三向合并 —— 只处理这些键，不碰 blocks。
+     parent 尤其重要：它一旦被错误地改成别处（或指向已不存在的页），
+     renderNav 的 `!p.parent` 过滤会让这个栏目**从导航里彻底消失**（数据还在、栏目看不见）。 */
+  var PAGE_FIELDS = ['title', 'name', 'icon', 'desc', 'description', 'parent', 'kind', 'heroAlign', 'heroStyle', 'sort', 'order'];
+  function mergePageFields(ap, bp, rp) {
+    if (!ap || !bp || !rp) return;
+    const nowT = Date.now();
+    PAGE_FIELDS.forEach(function (k) {
+      let A, B, R;
+      try { A = JSON.stringify(ap[k]); B = JSON.stringify(bp[k]); R = JSON.stringify(rp[k]); } catch (e) { return; }
+      if (B === R) return;                                                        /* 远端没动这个字段 */
+      if (A === R) { try { rp[k] = bp[k]; } catch (e2) { /* noop */ } return; }    /* 只有本机动了 */
+      if (A === B) return;                                                        /* 只有远端动了 → 保持远端 */
+      const bt = Math.min(+bp._ts || 0, nowT), rt = Math.min(+rp._ts || 0, nowT);
+      if (bt > rt) { try { rp[k] = bp[k]; } catch (e3) { /* noop */ } }
+    });
+  }
+  /* 同一页：结构一致 → 字段级三向；结构变了 → 整页取远端（与旧版一致，但**页面本身不丢**） */
+  function mergePageBlocks(bp, rp) {
+    if (!bp || !rp || !Array.isArray(bp.blocks) || !Array.isArray(rp.blocks)) return;
+    const anc = _base;
+    const pid = rp.id || bp.id;
+    const ap = (anc && Array.isArray(anc.pages)) ? anc.pages.filter(function (p) { return p && p.id === pid; })[0] : null;
+    mergePageFields(ap, bp, rp);
+    if (bp.blocks.length !== rp.blocks.length) return;   /* 该页结构变了 → 整页取远端 */
+    const ancOk = !!(ap && Array.isArray(ap.blocks) && ap.blocks.length === rp.blocks.length);
+    rp.blocks.forEach(function (rb, j) {
+      const bb = bp.blocks[j];
+      if (!bb || !rb) return;
+      if (JSON.stringify(bb) === JSON.stringify(rb)) return;
+      if (ancOk) { rp.blocks[j] = mergeBlockFields(ap.blocks[j], bb, rb); return; }  /* ★ 字段级 */
+      const bt = +bb._ts || 0, rt = +rb._ts || 0;
+      if (bt > rt) rp.blocks[j] = bb; /* 没有祖先：退回块级后写优先（旧规则） */
+    });
+  }
   /* 纯函数（可单测）：base / local / remote 三份块对象 → 合并结果 */
   function mergeBlockFields(bb, lb, rb) {
     const b0 = bb || {}, l0 = lb || {}, r0 = rb || {};
@@ -223,9 +343,18 @@ window.LMCollab = (function () {
       else if (L === B) v = r0[k];                   /* 只有远端改了 → 用远端 */
       else if (R === B) v = l0[k];                   /* 只有本地改了 → 用本地 */
       else {
-        /* 都改了 → 后写优先；未来时间戳按「此刻」算，避免时钟错的设备长期霸占同一字段 */
-        const lt = Math.min(+l0._ts || 0, nowT), rt = Math.min(+r0._ts || 0, nowT);
-        v = lt > rt ? l0[k] : r0[k];
+        /* ★ 修复151：两边都改了 —— 长文本先试三向合并（两人在同一段的不同位置打字，两边都保住）；
+           合不了（真的改在同一个字上）再按 _ts 后写优先 */
+        let done = false;
+        if (TEXT_FIELDS[k]) {
+          const m = mergeText3(b0[k], l0[k], r0[k]);
+          if (m != null) { v = m; done = true; }
+        }
+        if (!done) {
+          /* 后写优先；未来时间戳按「此刻」算，避免时钟错的设备长期霸占同一字段 */
+          const lt = Math.min(+l0._ts || 0, nowT), rt = Math.min(+r0._ts || 0, nowT);
+          v = lt > rt ? l0[k] : r0[k];
+        }
       }
       if (v === undefined) return;                   /* 两边都没这个字段 → 不写空键 */
       out[k] = v;
@@ -237,28 +366,51 @@ window.LMCollab = (function () {
     try {
       const base = window.LMApp ? LMApp.state.content : null;
       if (!base || !Array.isArray(base.pages) || !Array.isArray(c.pages)) return c;
-      if (base.pages.length !== c.pages.length) return c;
-      for (let i = 0; i < base.pages.length; i++) {
-        if ((base.pages[i] && base.pages[i].id) !== (c.pages[i] && c.pages[i].id)) return c;
-      }
-      const anc = _base;
-      c.pages.forEach(function (rp, i) {
-        const bp = base.pages[i];
-        if (!bp || !rp || !Array.isArray(bp.blocks) || !Array.isArray(rp.blocks)) return;
-        if (bp.blocks.length !== rp.blocks.length) return; /* 该页结构变了 → 整页取远端 */
-        /* 祖先里的同一页：页 id 与块数都必须对得上，否则这次不用祖先（退回块级后写优先） */
-        const pid = rp.id || bp.id;
-        const ap = (anc && Array.isArray(anc.pages)) ? anc.pages.filter(function (p) { return p && p.id === pid; })[0] : null;
-        const ancOk = !!(ap && Array.isArray(ap.blocks) && ap.blocks.length === rp.blocks.length);
-        rp.blocks.forEach(function (rb, j) {
-          const bb = bp.blocks[j];
-          if (!bb || !rb) return;
-          if (JSON.stringify(bb) === JSON.stringify(rb)) return;
-          if (ancOk) { rp.blocks[j] = mergeBlockFields(ap.blocks[j], bb, rb); return; }  /* ★ 字段级 */
-          const bt = +bb._ts || 0, rt = +rb._ts || 0;
-          if (bt > rt) rp.blocks[j] = bb; /* 没有祖先：退回块级后写优先（旧规则） */
-        });
+      /* ① 墓碑并集（本机 + 远端）→ 写回远端内容，随内容继续同步 */
+      const tomb = mergeTomb(tombOf(base), tombOf(c));
+      try {
+        const cfg = c.config = c.config || {};
+        cfg.collab = cfg.collab || {};
+        cfg.collab.tomb = tomb;
+      } catch (eT) { /* 写不进去也不影响下面的合并 */ }
+      /* ② 远端每一页：与本机同 id 的那一页做块级 / 字段级合并 */
+      const localById = {};
+      base.pages.forEach(function (p) { if (p && p.id) localById[p.id] = p; });
+      c.pages.forEach(function (rp) { if (rp && rp.id && localById[rp.id]) mergePageBlocks(localById[rp.id], rp); });
+      /* ③ 有墓碑且墓碑比远端那页还新 → 远端这份是「删除前的回魂包」，去掉 */
+      const kept = c.pages.filter(function (p) {
+        if (!p || !p.id) return true;
+        const ts = +tomb[p.id] || 0;
+        return !(ts && ts > pageStamp(p));
       });
+      /* ④ 本机有、远端没有的页 —— 只有「确实删过」才认删，否则并回去（这是丢栏目的主修复） */
+      const inRemote = {}, have = {};
+      c.pages.forEach(function (p) { if (p && p.id) inRemote[p.id] = 1; });
+      kept.forEach(function (p) { if (p && p.id) have[p.id] = 1; });
+      const extra = [];
+      base.pages.forEach(function (p) {
+        if (!p || !p.id || inRemote[p.id] || have[p.id]) return;
+        const ts = +tomb[p.id] || 0;
+        if (ts && ts > pageStamp(p)) return;                 /* 本机也确认删过了 */
+        extra.push(JSON.parse(JSON.stringify(p)));           /* 深拷贝：别把本机对象塞进远端包 */
+      });
+      if (extra.length) {
+        const idxOf = function (arr, id) {
+          for (let i = 0; i < arr.length; i++) if (arr[i] && arr[i].id === id) return i;
+          return -1;
+        };
+        extra.forEach(function (p) {
+          const li = idxOf(base.pages, p.id);
+          let at = li >= 0 ? Math.min(li, kept.length) : kept.length;
+          /* 紧跟在本机顺序里它前面那个「还在」的页之后，尽量保持栏目顺序 */
+          for (let k = li - 1; k >= 0; k--) {
+            const j = idxOf(kept, base.pages[k] && base.pages[k].id);
+            if (j >= 0) { at = j + 1; break; }
+          }
+          kept.splice(at, 0, p);
+        });
+      }
+      c.pages = kept;
     } catch (e) { /* 任何异常都退回整包 */ }
     return c;
   }
