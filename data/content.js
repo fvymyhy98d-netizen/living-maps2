@@ -1,3 +1,8 @@
+/* =========================================================
+ * 三张活地图 · 内容数据文件
+ * 本文件由网站后台（管理员 → 同步到 GitHub）自动更新。
+ * 手动编辑也可以：改 CONTENT-START 与 CONTENT-END 两个标记之间的 JSON 即可。
+ * ========================================================= */
 /*CONTENT-START*/
 window.SITE_CONTENT = {
   "site": {
@@ -44,14 +49,14 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793587602439,
+      "syncTs": 1793611957702,
       "roster": {},
       "tokenVault": {
         "v": 1,
         "iters": 210000,
-        "salt": "yqLWFqqzza7isqR0iJPY4w==",
-        "iv": "Bye7WMujFJ7+nBME",
-        "ct": "j6DakV99jlSmx8AAuO1x5T+hmfxQ+p+MiDdS6dF1CvZSM5PFvIx0a1z7/lg799rA4OHTbh4osY1O8/8ad2n5QJdWuk0NKuU2quA9vxiMWmgXYXA4jCYFIAee3WomtotfeSbAqYACSVpqDD0P/BwkNxJbMoqSwX6A2NwT3z7y2LRXzaeE9ttjUQrwNMNhrHfQxyWg0lQWHJRY4dfJqmKZqqahrxnV+7AyCYPMPi4QeuXy0qK69OJ2UXSKa/Tli9/G7ikG0uGd+tr4t9kkcXq1Zuns25K6saNidUZcTDhI3B4eBaLjywLaTFdGVg=="
+        "salt": "SoWaQIjCAeI7bt3cz50x3g==",
+        "iv": "OcRqZ7JTbi+YUU/l",
+        "ct": "7wtJA1x316mci+gWwJCdQJdOpPocdO4peb0seYJWnfBUdkTX2aEul5vfi0azcpwc0GuPj14GgyuMVLoJ/1REUPgIW0e5InZmKq7xlDHcB3lzpjBAEDs36skuJRJ8lTdHZO0YZbaONayFNon9SUBuXw6pBM2kyXkj6cAsJyTqOsPNfwu6w0aWC24Y9XqsEHjXLIfdv88CdYhEQ0DAJEjNrTGYjL7BXIxLd7AUDh3xgzRxJ8jzb8SaiP9Z9EQQ1W2OW2n2"
       }
     },
     "fbCloud": {
@@ -59,7 +64,8 @@ window.SITE_CONTENT = {
       "url": "https://yrclasqlcatczjlingii.supabase.co/rest/v1/",
       "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyY2xhc3FsY2F0Y3pqbGluZ2lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0Mjc5NzUsImV4cCI6MjEwOTAwMzk3NX0.WKHIYCA-JlOAdZSbDPbv5LpElMLhwDfF4jKBdKGpXsc",
       "table": "lm_feedback"
-    }
+    },
+    "ui": {}
   },
   "pages": [
     {
@@ -100,12 +106,6 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "语言模型试图解决的核心问题是：**让机器根据上下文预测和生成自然语言。**\n一个典型任务是\"问答\"：用户提问 → 模型理解问题 → 生成回答 → 评估回答质量。"
-        },
-        {
-          "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
         },
         {
           "type": "heading",
