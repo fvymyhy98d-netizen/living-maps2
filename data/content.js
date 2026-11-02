@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793551011054,
+      "syncTs": 1793578891773,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -416,6 +416,12 @@ window.SITE_CONTENT = {
             ]
           ],
           "_ts": 1793290941256
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "chart",
