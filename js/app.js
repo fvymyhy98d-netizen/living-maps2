@@ -9,7 +9,7 @@
    ★ 修复158（教训）：v154~v157 发版时只改了 index.html 的 ?v=，忘了改这里 —— 探针比的是「正在跑的
      这份 app.js」和「刚拉下来的 app.js」，两边都停在旧号码 → 永远相等 → 老客户端一直不刷新。
      发版顺序固定为：① 改这里 ② 全文替换 index.html 的 ?v= ③ node test_yjs.js 必须全绿。 */
-var LM_ASSET_VER = '159';
+var LM_ASSET_VER = '160';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */

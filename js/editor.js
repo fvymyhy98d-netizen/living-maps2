@@ -1678,8 +1678,18 @@ window.LMEditor = (function () {
           + (it[3] ? '<span class="set-desc">' + it[3] + '</span>' : '') + '</button>';
       }).join('') + '</div>';
     };
+    /* ★ 修复160：访客可见性开关也放到这一层 —— 以前只有「页面管理」里才有，
+       而大家找这类开关时通常停在这一屏（现场反馈：在这里找不到）。 */
+    const cSet = LMApp.state.content || {};
+    const hideAskNow = !!((((cSet.config || {}).ui) || {}).hideAsk);
     modal('<h3>⚙️ 页面设置</h3>'
       + '<p class="modal-note">管理工具都在这里，底部只留最常用的两项。点任意一项即可打开（关掉本窗口不会丢改动）。</p>'
+      + '<label class="ask-toggle" title="勾上后访客界面右下角不再出现「✨ 提问」浮钮；管理员自己仍然看得到，随时可以改回来">'
+      +   '<input type="checkbox" id="gpHideAsk"' + (hideAskNow ? ' checked' : '') + '>'
+      +   '<span>访客界面隐藏右下角「✨ 提问」按钮'
+      +     '<span class="ask-tip">勾一下立即生效（本机马上更新）；再点底部「☁️ 同步到 GitHub」，访客才会收到 —— 这条设置随内容一起上传。</span>'
+      +   '</span>'
+      + '</label>'
       + '<div class="set-grp"><div class="set-hd">本页布局</div>'
       + row([
         ['fixlayout', '🩺', '整理布局', '只重算「让位间距」，不改内容、不做美化排版'],
@@ -1699,7 +1709,21 @@ window.LMEditor = (function () {
       ]) + '</div>'
       + '<div class="set-grp"><div class="set-hd">账号</div>'
       + row([['password', '🔑', '修改密码', '改管理密码；忘记时仍可用团队密码登录']]) + '</div>'
-      + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>关闭</button></div>');
+      + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>关闭</button></div>',
+      /* ★ 修复160：勾一下就生效（不用先点「保存修改」），弹窗保持打开，随时可以改回来 */
+      function (root) {
+        const box = root.querySelector('#gpHideAsk');
+        if (!box) return;
+        box.addEventListener('change', function () {
+          const cur = LMApp.state.content;
+          cur.config = cur.config || {};
+          cur.config.ui = cur.config.ui || {};
+          cur.config.ui.hideAsk = !!box.checked;
+          LMApp.applyEdit(box.checked
+            ? '已隐藏访客的「提问」按钮（点「☁️ 同步到 GitHub」访客才会收到）'
+            : '访客又能看到「提问」按钮了');
+        });
+      });
   }
 
   /* ---------- ★ 修复145：小模型重训（网页内一键完成，替代命令行） ----------

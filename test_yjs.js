@@ -3610,10 +3610,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=159 · LM_ASSET_VER=159',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=160 · LM_ASSET_VER=160',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=158/g) || []).length === 0 && /\?v=159/.test(html)
-      && /LM_ASSET_VER = '159'/.test(appJs));
+      && (html.match(/\?v=159/g) || []).length === 0 && /\?v=160/.test(html)
+      && /LM_ASSET_VER = '160'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4514,10 +4514,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 159（?v=159 共 25 处 · v158 无残留 · LM_ASSET_VER=159）',
-    (html.match(/\?v=159/g) || []).length === 25 && (html.match(/\?v=158/g) || []).length === 0
-      && /LM_ASSET_VER = '159'/.test(appJs),
-    'v159=' + (html.match(/\?v=159/g) || []).length + ' v158=' + (html.match(/\?v=158/g) || []).length);
+  T('版本已升到 160（?v=160 共 25 处 · v159 无残留 · LM_ASSET_VER=160）',
+    (html.match(/\?v=160/g) || []).length === 25 && (html.match(/\?v=159/g) || []).length === 0
+      && /LM_ASSET_VER = '160'/.test(appJs),
+    'v160=' + (html.match(/\?v=160/g) || []).length + ' v159=' + (html.match(/\?v=159/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -5808,7 +5808,24 @@ console.log('【修复159】「页面管理」里的访客可见性开关：勾�
       && sto.indexOf('JSON.stringify(content, null, 2)') > 0);
 })();
 
+/* ---------- 修复160：开关也放进「⚙️ 页面设置」那一层（现场反馈：在那一屏找不到） ---------- */
+console.log('【修复160】「页面设置」面板顶部直接给访客可见性开关（勾一下立即生效）');
 
+(function () {
+  const edt = srcOf('js/editor.js');
+  const seg = edt.slice(edt.indexOf('function settingsModal'), edt.indexOf('function trainModal'));
+
+  T('修复160 · 源码：⚙️ 页面设置面板里有 #gpHideAsk 复选框（勾选态读 config.ui.hideAsk）',
+    seg.indexOf('id="gpHideAsk"') > 0
+      && seg.indexOf("(hideAskNow ? ' checked' : '')") > 0
+      && seg.indexOf('const hideAskNow = !!((((cSet.config || {}).ui) || {}).hideAsk);') > 0);
+
+  T('修复160 · 源码：勾一下立即生效 —— change 监听写回 config.ui.hideAsk 并 applyEdit（不用先点保存）',
+    seg.indexOf("box.addEventListener('change', function () {") > 0
+      && seg.indexOf('cur.config.ui.hideAsk = !!box.checked;') > 0
+      && seg.indexOf('已隐藏访客的「提问」按钮') > 0
+      && seg.indexOf('访客又能看到「提问」按钮了') > 0);
+})();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
 function finishAll() {
@@ -5816,4 +5833,3 @@ function finishAll() {
   process.exit(fail ? 1 : 0);
 }
 setTimeout(finishAll, 15000);   /* 兜底：万一某个 Promise 卡住，也要把结果打出来 */
-
