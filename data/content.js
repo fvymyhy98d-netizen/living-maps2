@@ -49,23 +49,23 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793587681501,
+      "syncTs": 1793611957702,
       "roster": {},
       "tokenVault": {
         "v": 1,
         "iters": 210000,
-        "salt": "yqLWFqqzza7isqR0iJPY4w==",
-        "iv": "Bye7WMujFJ7+nBME",
-        "ct": "j6DakV99jlSmx8AAuO1x5T+hmfxQ+p+MiDdS6dF1CvZSM5PFvIx0a1z7/lg799rA4OHTbh4osY1O8/8ad2n5QJdWuk0NKuU2quA9vxiMWmgXYXA4jCYFIAee3WomtotfeSbAqYACSVpqDD0P/BwkNxJbMoqSwX6A2NwT3z7y2LRXzaeE9ttjUQrwNMNhrHfQxyWg0lQWHJRY4dfJqmKZqqahrxnV+7AyCYPMPi4QeuXy0qK69OJ2UXSKa/Tli9/G7ikG0uGd+tr4t9kkcXq1Zuns25K6saNidUZcTDhI3B4eBaLjywLaTFdGVg=="
-      },
-      "tomb": {}
+        "salt": "SoWaQIjCAeI7bt3cz50x3g==",
+        "iv": "OcRqZ7JTbi+YUU/l",
+        "ct": "7wtJA1x316mci+gWwJCdQJdOpPocdO4peb0seYJWnfBUdkTX2aEul5vfi0azcpwc0GuPj14GgyuMVLoJ/1REUPgIW0e5InZmKq7xlDHcB3lzpjBAEDs36skuJRJ8lTdHZO0YZbaONayFNon9SUBuXw6pBM2kyXkj6cAsJyTqOsPNfwu6w0aWC24Y9XqsEHjXLIfdv88CdYhEQ0DAJEjNrTGYjL7BXIxLd7AUDh3xgzRxJ8jzb8SaiP9Z9EQQ1W2OW2n2"
+      }
     },
     "fbCloud": {
       "kind": "supabase",
       "url": "https://yrclasqlcatczjlingii.supabase.co/rest/v1/",
       "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyY2xhc3FsY2F0Y3pqbGluZ2lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0Mjc5NzUsImV4cCI6MjEwOTAwMzk3NX0.WKHIYCA-JlOAdZSbDPbv5LpElMLhwDfF4jKBdKGpXsc",
       "table": "lm_feedback"
-    }
+    },
+    "ui": {}
   },
   "pages": [
     {
@@ -106,13 +106,6 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "语言模型试图解决的核心问题是：**让机器根据上下文预测和生成自然语言。**\n一个典型任务是\"问答\"：用户提问 → 模型理解问题 → 生成回答 → 评估回答质量。"
-        },
-        {
-          "type": "callout",
-          "tone": "orange",
-          "title": "哈哈",
-          "text": "**厉害太厉害了**",
-          "_ts": 1793587681500
         },
         {
           "type": "heading",
@@ -559,22 +552,37 @@ window.SITE_CONTENT = {
           "text": "作业要求**每周至少检查一次地图**；没有值得纳入的新变化时，记录检查结果即可，不必为了更新而增加内容。"
         },
         {
+          "type": "callout",
+          "tone": "blue",
+          "title": "版本号规则（作业要求）",
+          "text": "版本号从 **v0.1** 起按时间**倒序**排列（新的在上面），**只追加、不覆盖历史记录**。每行写清：版本号、日期、更新对象、依据、修改内容与原因、尚存问题 / 下一步、检查结果（未做的写「待填写 / 待测试」，不要写成已完成）。"
+        },
+        {
           "type": "table",
           "title": "更新日志",
           "headers": [
+            "版本",
             "日期",
             "更新对象",
             "依据",
-            "修改内容与原因"
+            "修改内容与原因",
+            "尚存问题 / 下一步",
+            "检查结果"
           ],
           "rows": [
             [
+              "v0.1",
               "2026-10-26",
               "全部页面",
               "作业要求发布",
-              "建立网站与三张地图的初始框架（示例行，请替换）"
+              "建立网站与三张地图的初始框架（示例行，请替换）",
+              "待填写",
+              "待测试"
             ],
             [
+              "",
+              "",
+              "",
               "",
               "",
               "",
@@ -588,6 +596,10 @@ window.SITE_CONTENT = {
           "tone": "gray",
           "title": "待核实清单",
           "text": "- 培养方案中的课程关联（待对照最新培养方案）\n- 生态地图中的合作关系（待补充公开来源）"
+        },
+        {
+          "type": "paragraph",
+          "text": "**与反馈的双向关联**：某条反馈被采纳时，在该条反馈里注明「已纳入 vX.Y」；同时在上表对应版本行的「修改内容与原因」里写明反馈编号（如 `F-3KD9Q1`）。两边互相可查、可跳转 —— 未采纳的建议也要保留在原处并写明理由，不删除。"
         }
       ],
       "heroAlign": ""
