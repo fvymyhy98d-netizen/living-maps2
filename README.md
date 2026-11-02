@@ -2031,6 +2031,47 @@ A 再随便改一个字符又可能「突然」同步过去 —— 也就是「�
 
 **记一个真模型的脾气**：Qwen3-4B-Thinking 很爱长篇推理 —— 第一次我用 `max_tokens=300` 试，它光思考就吃了 504 字、**正文 0 字、连 `<｜end▁of▁thinking｜>` 都没吐出来**；给到 1600 仍然 1899 字全是思考。所以「回答长度上限」默认 3072 是对的，问长页面时建议 4096；真被思考吃光时，站点会明说「思考过程吃满了输出上限，把问题问短一点」，而不是丢一屏草稿给你。
 
+## 三·补33、「新版本自动刷新」从 v154 起就悄悄失效了 · 行尾混用（2026-11-02 / 修复158）
+
+### ① 症状
+
+- GitHub Desktop 对 `css/style.css` 报「这台机器上是 LF，提交后会变成 CRLF」，看着像要出问题；
+- 发新版（v154~v157）之后，手机上已经开着的老页面**十几分钟也不见自动换新**，只能手动硬刷新。
+
+### ② 根因（两件互不相干的事）
+
+- **行尾**：本机 `core.autocrlf=true`（仓库里存 LF、检出转 CRLF），但仓库一直没有 `.gitattributes`。
+  编辑工具往 CRLF 文件里插一段新样式时按 LF 写，于是同一个文件里
+  **1417 行 CRLF + 35 行 LF** —— `git ls-files --eol` 显示 `w/mixed`。
+  它不影响渲染，但以后每次 diff 都会脏，也容易让别的工具把文件改乱。
+- **探针**：`js/app.js` 顶部那句 `var LM_ASSET_VER` 是「新版本自动刷新」的比对基准 ——
+  页面运行中每 10 分钟用 `no-store` 拉一次最新 `app.js`，号码不同就整页刷新。
+  它比的是**正在跑的那份 app.js** 和**刚拉下来的那份 app.js**；
+  v154~v157 发版时只改了 `index.html` 的 `?v=`，这个号码一直停在 `'153'`
+  → 「自己 vs 自己」永远相等 → 老客户端永远不会刷新（微信内置浏览器这类缓存顽固的场景最明显）。
+
+### ③ 修法
+
+- 新增 `.gitattributes`：`* text=auto`（文本自动识别、二进制自动跳过）+
+  `data/* text eol=lf`（`data/content.js`、`data/sensitive-words.js`、`data/lm.json` 由 `store.js` /
+  `tools/pull-remote-data.js` 以 `\n` 写出，固定 LF 才不会每次生成都产生一行噪音 diff）。
+- `css/style.css` 那 35 行 LF 统一成 CRLF：**内容零改动** ——
+  归一后 `git hash-object --path=css/style.css` 与索引、`HEAD` 三者同为 `1a53bf6…`，
+  `git diff` 为空，只是索引里的 stat 缓存刷新了一次。
+- `LM_ASSET_VER` → `'158'`，并在原注释下补一条教训：**发版顺序固定为
+  ① 改这里 ② 全文替换 `index.html` 的 `?v=` ③ `node test_yjs.js` 必须全绿**。
+- `index.html` 25 处 `?v=158`。
+
+### ④ 回归
+
+- `test_yjs.js` **552/552**（0 失败）。这次修掉的 5 条并不是功能回退，而是**断言停在旧实现**上：
+  登录预检 `preLock`→`lockUntil`（拦截行为不变，提示为「系统繁忙，请 N 秒后再试（错误码 0x2F）」）、
+  反馈提交 `LMFB.cloudSave`→`LMFB.saveAny`（云服务优先 → 失败降级云存档，`Promise.all([cloudP, mqP])` 后分四种提示）、
+  打开反馈页 `cloudCfg()`→`listAny()`（云服务 + 云存档两条通道都拉一遍）、
+  以及两处版本断言（`?v=153`×22 → `?v=158`×25，`LM_ASSET_VER='158'`）。
+- `node --check` 覆盖 `js/*.js`、`lib/*.js`、`tools/*.js`、`test_yjs.js`、`data/content.js` 全部通过。
+
+
 ## 三·补32、手机弹窗挡住导航栏 · 「电脑改了五分钟，手机还是没同步」（三条丢包路径）（2026-11-02 / 修复153）
 
 ### ① 手机上那条黑弹窗的位置

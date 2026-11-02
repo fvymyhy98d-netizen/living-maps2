@@ -496,10 +496,10 @@ T('startBlockResize se 调 b.h（拖回取消）+ 渲染 v-mid/min-height + 贴�
 
 /* ---------- 9.23) 修复57：手机弹窗顶部对齐（键盘不再顶飞密码框）+ 登录框预检锁定 + enterkeyhint ---------- */
 console.log('【9.23】修复57：modal 顶部对齐避开软键盘 · 打开登录框先报锁定 · 软键盘 done 键');
-T('手机 modal-mask 顶部对齐 + 登录弹窗 preLock 预检 + 密码框 enterkeyhint=done',
+T('手机 modal-mask 顶部对齐 + 登录弹窗锁定预检 + 密码框 enterkeyhint=done',
   cssSrc.indexOf('body.mobile-view .modal-mask{align-items:flex-start;padding-top:14px}') > 0
-    && appSrc.indexOf('const preLock = +(sessionStorage.getItem(\'lm_lock_until\') || 0);') > 0
-    && appSrc.indexOf('+ preNote') > 0
+    && appSrc.indexOf('const lockUntil = +(sessionStorage.getItem(\'lm_lock_until\') || 0);') > 0
+    && appSrc.indexOf('系统繁忙，请 ') > 0
     && appSrc.indexOf('enterkeyhint="done"') > 0);
 
 T('⌨️ 把手 pointerdown+pointerup 双确认（触屏隐式捕获下「按下后滑开」不再误触发开合）',
@@ -3579,14 +3579,15 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
     imp1[0].dev === 'import' && fb.parseImport('内容\n' + 'a'.repeat(900))[0].text.length === 800);
 
   /* —— 接入守护：为什么它能保证「不开网页也收得到」 —— */
-  T('提交时「先写云存档、再发 MQTT」，两条都失败才给链接兜底（Promise.all 后分三种提示）',
-    appJs.indexOf('const cloudP = (window.LMFB && LMFB.cloudSave) ? LMFB.cloudSave(it) : Promise.resolve(false);') > 0
+  T('提交时「云服务优先 → 失败降级云存档」+ 同时发 MQTT，全部失败才给链接兜底（Promise.all 后分四种提示）',
+    appJs.indexOf('const cloudP = (window.LMFB && LMFB.saveAny) ? LMFB.saveAny(it) : Promise.resolve({ ok: false, via: \'\' });') > 0
       && appJs.indexOf('Promise.all([cloudP, mqP])') > 0
-      && appJs.indexOf('并已存进云存档：小组下次打开反馈页会自动收取（不受 6 小时补收窗口限制）') > 0);
+      && appJs.indexOf("const where = cr.via === 'wbcloud' ? '云服务' : (cr.via === 'archive' ? '云存档' : '');") > 0
+      && appJs.indexOf("并已存进' + where") > 0);
 
-  T('打开反馈页会拉云存档（管理员设备也拉：他可能没绑 Token 或换了浏览器）',
-    appJs.indexOf('if (LMFB.cloudCfg && LMFB.cloudCfg()) {') > 0
-      && appJs.indexOf('☁ 从云存档收到 ') > 0);
+  T('打开反馈页把「云服务 + 云存档」两条通道都拉一遍（合并按 id + 时间戳，谁新用谁）',
+    appJs.indexOf('if (LMFB.listAny) {') > 0
+      && appJs.indexOf('☁ 从云端收到 ') > 0);
 
   T('管理面板可配：类型 / URL / key / 表名 + 保存 + 测试拉取 + 表格粘贴导入',
     appJs.indexOf("id=\"fbCloudKind\"") > 0 && appJs.indexOf("id=\"fbCloudUrl\"") > 0
@@ -3609,10 +3610,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=153 · LM_ASSET_VER=153',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=158 · LM_ASSET_VER=158',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=152/g) || []).length === 0 && /\?v=153/.test(html)
-      && /LM_ASSET_VER = '153'/.test(appJs));
+      && (html.match(/\?v=157/g) || []).length === 0 && /\?v=158/.test(html)
+      && /LM_ASSET_VER = '158'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4513,10 +4514,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 153（?v=153 共 22 处 · v152 无残留 · LM_ASSET_VER=153）',
-    (html.match(/\?v=153/g) || []).length === 22 && (html.match(/\?v=152/g) || []).length === 0
-      && /LM_ASSET_VER = '153'/.test(appJs),
-    'v153=' + (html.match(/\?v=153/g) || []).length + ' v152=' + (html.match(/\?v=152/g) || []).length);
+  T('版本已升到 158（?v=158 共 25 处 · v157 无残留 · LM_ASSET_VER=158）',
+    (html.match(/\?v=158/g) || []).length === 25 && (html.match(/\?v=157/g) || []).length === 0
+      && /LM_ASSET_VER = '158'/.test(appJs),
+    'v158=' + (html.match(/\?v=158/g) || []).length + ' v157=' + (html.match(/\?v=157/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
