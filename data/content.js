@@ -31,7 +31,8 @@ window.SITE_CONTENT = {
         "title": "可更新",
         "desc": "每周检查，让地图随学习持续生长"
       }
-    ]
+    ],
+    "subStyle": {}
   },
   "config": {
     "admin": {
@@ -48,7 +49,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793582813688,
+      "syncTs": 1793583481618,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -379,7 +380,7 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "生态地图不是\"人物和机构名单\"，重点是讲清楚**具体关系**：谁依赖谁、谁资助谁、谁采用了谁的成果。哦吼吼吼",
-          "_ts": 1793582813687
+          "_ts": 1793583481618
         },
         {
           "type": "table",
