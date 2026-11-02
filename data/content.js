@@ -4,7 +4,7 @@
  * 手动编辑也可以：改 CONTENT-START 与 CONTENT-END 两个标记之间的 JSON 即可。
  * ========================================================= */
 /*CONTENT-START*/
-window.SITE_CONTENT = window.SITE_CONTENT = {
+window.SITE_CONTENT = {
   "site": {
     "title": "三张活地图",
     "subtitle": "人工智能前沿与创新 · 课程大作业",
@@ -49,7 +49,7 @@ window.SITE_CONTENT = window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793586543732,
+      "syncTs": 1793587602439,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -105,6 +105,12 @@ window.SITE_CONTENT = window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "语言模型试图解决的核心问题是：**让机器根据上下文预测和生成自然语言。**\n一个典型任务是\"问答\"：用户提问 → 模型理解问题 → 生成回答 → 评估回答质量。"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "heading",
@@ -758,5 +764,5 @@ window.SITE_CONTENT = window.SITE_CONTENT = {
     }
   ],
   "jumps": []
-};;
+};
 /*CONTENT-END*/
