@@ -1982,16 +1982,16 @@ T('editor.js：字号/字体的「取消/同款再点」也换成同一套可见
 /* ---------- 9.53) 修复88：在线协同提速（有人在线自动更快）+ 结构冲突可见化 ---------- */
 console.log('【9.53】修复88：有人在线时轮询/推送自动提速 · 回前台立刻补拉 · 结构冲突不再静默覆盖');
 const cs88 = srcOf('js/collab.js'), ys88 = srcOf('js/ycollab.js');
-T('节奏参数：有人在线 1.2s / 2s、独自 1.5s / 4s、隐藏 60s；推送 1.5s vs 4s；访客前台 8s（★ 修复142 收紧）',
-  cs88.indexOf('var HOT_PUSH_MIN = 1500, HOT_ACTIVE = 1200, HOT_IDLE = 2000, VISITOR_SHOWN = 8000;') > 0
-    && cs88.indexOf('var GH_PUSH_MIN = 4000, POLL_ACTIVE = 1500, POLL_IDLE = 4000, POLL_HIDDEN = 60000, POLL_VISITOR = 90000;') > 0
+T('节奏参数：有人在线 0.8s / 1s、独自 1s / 2s、隐藏 20s；推送 0.8s vs 2.5s；访客前台 4s（★ 修复150 再收紧一档）',
+  cs88.indexOf('var HOT_PUSH_MIN = 800, HOT_ACTIVE = 800, HOT_IDLE = 1000, VISITOR_SHOWN = 4000;') > 0
+    && cs88.indexOf('var GH_PUSH_MIN = 2500, POLL_ACTIVE = 1000, POLL_IDLE = 2000, POLL_HIDDEN = 20000, POLL_VISITOR = 45000;') > 0
     && cs88.indexOf('function pollGapNow(hidden, act, hot) {') > 0
     && cs88.indexOf('function visitorGapNow(hidden) { return hidden ? POLL_VISITOR : VISITOR_SHOWN; }') > 0
     && cs88.indexOf('function pushWaitMin(hot) { return hot ? HOT_PUSH_MIN : GH_PUSH_MIN; }') > 0);
-T('轮询节拍 2s→600ms（旧版定时器抖动下实际常 4 秒才拉一次），间隔走 pollGapNow',
+T('轮询节拍 2s→600ms→300ms（旧版定时器抖动下实际常 4 秒才拉一次），间隔走 pollGapNow',
   cs88.indexOf('const gap = pollGapNow(hidden, act, peersHot());') > 0
-    && cs88.indexOf('        }, 600);') > 0);
-T('访客只读轮询不再写死 90 秒：前台 8s（★ 142）/ 后台 90s，且同样走 gap 判定',
+    && cs88.indexOf('        }, 300);') > 0);
+T('访客只读轮询不再写死 90 秒：前台 4s（★ 150）/ 后台 45s，且同样走 gap 判定',
   cs88.indexOf("const gap = visitorGapNow(document.visibilityState === 'hidden');") > 0
     && cs88.indexOf('setInterval(ghPull, POLL_VISITOR)') < 0);
 T('切回前台 / 网络恢复立刻补拉 + 立刻重播 presence（手机「回来半天不动」的根因）',
@@ -2009,24 +2009,24 @@ T('diag 里能直接看到当前节奏（现场核对「有人在线是否真的
 /* 真跑 A：三个节奏纯函数 —— 直接验数字（含隐藏 / 活动 / 有人在线 三维组合） */
 (function () {
   const src = cs88.replace(/\r\n/g, '\n');
-  const a = src.indexOf('  /* GitHub 轮询间隔：隐藏 60s');
+  const a = src.indexOf('  /* GitHub 轮询间隔：隐藏 20s');
   const endMark = '  function pushWaitMin(hot) { return hot ? HOT_PUSH_MIN : GH_PUSH_MIN; }';
   const b = src.indexOf(endMark);
   const code = (a >= 0 && b > a) ? src.slice(a, b) + endMark : '';
   let ok = false, detail = '切片不可用';
   if (code) {
     try {
-      const consts = 'var GH_PUSH_MIN=4000,POLL_ACTIVE=1500,POLL_IDLE=4000,POLL_HIDDEN=60000,POLL_VISITOR=90000,'
-        + 'HOT_PUSH_MIN=1500,HOT_ACTIVE=1200,HOT_IDLE=2000,VISITOR_SHOWN=8000;\n';
+      const consts = 'var GH_PUSH_MIN=2500,POLL_ACTIVE=1000,POLL_IDLE=2000,POLL_HIDDEN=20000,POLL_VISITOR=45000,'
+        + 'HOT_PUSH_MIN=800,HOT_ACTIVE=800,HOT_IDLE=1000,VISITOR_SHOWN=4000;\n';
       const api = new Function(consts + code + '\nreturn { pollGapNow: pollGapNow, visitorGapNow: visitorGapNow, pushWaitMin: pushWaitMin };')();
-      ok = api.pollGapNow(true, false, false) === 60000
-        && api.pollGapNow(true, true, true) === 60000
-        && api.pollGapNow(false, true, true) === 1200
-        && api.pollGapNow(false, true, false) === 1500
-        && api.pollGapNow(false, false, true) === 2000
-        && api.pollGapNow(false, false, false) === 4000
-        && api.visitorGapNow(false) === 8000 && api.visitorGapNow(true) === 90000
-        && api.pushWaitMin(true) === 1500 && api.pushWaitMin(false) === 4000;
+      ok = api.pollGapNow(true, false, false) === 20000
+        && api.pollGapNow(true, true, true) === 20000
+        && api.pollGapNow(false, true, true) === 800
+        && api.pollGapNow(false, true, false) === 1000
+        && api.pollGapNow(false, false, true) === 1000
+        && api.pollGapNow(false, false, false) === 2000
+        && api.visitorGapNow(false) === 4000 && api.visitorGapNow(true) === 45000
+        && api.pushWaitMin(true) === 800 && api.pushWaitMin(false) === 2500;
       if (!ok) detail = JSON.stringify({
         hide: api.pollGapNow(true, true, true), hotAct: api.pollGapNow(false, true, true),
         soloAct: api.pollGapNow(false, true, false), hotIdle: api.pollGapNow(false, false, true),
@@ -2036,7 +2036,7 @@ T('diag 里能直接看到当前节奏（现场核对「有人在线是否真的
       });
     } catch (e) { ok = false; detail = '抛出 ' + e.message; }
   }
-  T('真跑节奏：隐藏恒 60s · 有人在线 1.2s/2s · 独自 1.5s/4s · 访客 8s/90s · 推送 1.5s/4s', ok, detail);
+  T('真跑节奏：隐藏恒 20s · 有人在线 0.8s/1s · 独自 1s/2s · 访客 4s/45s · 推送 0.8s/2.5s（★ 修复150）', ok, detail);
 })();
 
 /* 真跑 B：structConflictWarn —— 只有「块数不同 + 本机 _ts 更新」才提醒，且 15 秒去抖 */
@@ -4534,7 +4534,7 @@ console.log('【修复140】协同推送状态机：退出键入立刻发 · 两
       && col.indexOf("window.addEventListener('pagehide', function () { flushPush('关页面'); });") > 0
       && col.indexOf('flushPush: flushPush,') > 0
       && edt.indexOf("LMCollab.flushPush('切后台')") > 0
-      && col.indexOf('var FLUSH_HARD_MIN = 700;') > 0);
+      && col.indexOf('var FLUSH_HARD_MIN = 400;') > 0);
 
   /* 4) 脏标记落本机 → 关页面 / 崩溃后下次打开自动补推 */
   T('修复140 · 脏标记落 localStorage（lm_gh_dirty_v1）→ 下次打开自动补推，不必等用户再改一次',
@@ -5260,6 +5260,49 @@ console.log('【修复149】推送不再「冷启动盲推」：首包没落地 
         return true;
       } finally { Date.now = realNow; }
     })());
+})();
+
+/* ---------- 修复150：「能同步了，但很慢」—— 把链路每个等待段再砍一刀 ---------- */
+console.log('【修复150】节拍再收紧：退出键入 0.4s 硬底 · 推送 0.8s/2.5s · 轮询 0.8s/1s/2s · 节拍器 300ms');
+(function () {
+  const C = srcOf('js/collab.js').replace(/\r\n/g, '\n');
+  const E = srcOf('js/editor.js').replace(/\r\n/g, '\n');
+
+  /* 1) 链路每一段的数字上限（SLA 守护：谁把数字改回去，这条就红） */
+  const num = function (re) { const m = C.match(re); return m ? +m[1] : -1; };
+  const hotPush = num(/var HOT_PUSH_MIN = (\d+)/), soloPush = num(/GH_PUSH_MIN = (\d+)/);
+  const hotAct = num(/HOT_ACTIVE = (\d+)/), hotIdle = num(/HOT_IDLE = (\d+)/);
+  const soloAct = num(/POLL_ACTIVE = (\d+)/), soloIdle = num(/POLL_IDLE = (\d+)/);
+  const hidPoll = num(/POLL_HIDDEN = (\d+)/), visShown = num(/VISITOR_SHOWN = (\d+)/);
+  const flushMin = num(/var FLUSH_HARD_MIN = (\d+)/);
+  T('修复150 · 等待段上限：退出键入 400ms · 推送 0.8s/2.5s · 轮询 0.8s/1s/2s · 隐藏 20s · 访客 4s',
+    flushMin === 400 && hotPush === 800 && soloPush === 2500
+      && hotAct === 800 && hotIdle === 1000 && soloAct === 1000 && soloIdle === 2000
+      && hidPoll === 20000 && visShown === 4000,
+    JSON.stringify({ flushMin, hotPush, soloPush, hotAct, hotIdle, soloAct, soloIdle, hidPoll, visShown }));
+
+  /* 2) 真跑 flushWaitMin（退出键入那 400ms 硬底）：把函数从源码里切出来直接算 */
+  T('修复150 · 真跑 flushWaitMin：刚推过 100ms → 只等 300ms；推过 400ms / 从没推过 → 0（立刻发）', (function () {
+    const i0 = C.indexOf('  function flushWaitMin(now, lastPush) {');
+    const i1 = i0 >= 0 ? C.indexOf('\n', i0) : -1;
+    if (i0 < 0 || i1 <= i0) return false;
+    try {
+      const fn = new Function('var FLUSH_HARD_MIN = 400;\n' + C.slice(i0, i1) + '\nreturn flushWaitMin;')();
+      const t0 = 1793579000000;
+      return fn(t0, t0 - 100) === 300
+        && fn(t0, t0 - 400) === 0
+        && fn(t0, t0 - 9000) === 0
+        && fn(t0, 0) === 0
+        && fn(t0, t0 + 5000) >= 0;      /* 时钟倒退（lastPush 在未来）也只算出正等待，绝不出现负值 */
+    } catch (e) { return false; }
+  })());
+
+  /* 3) 「退出键入」这条路整条串起来：编辑器立刻落盘 → collab 立刻推（跳防抖，只守 400ms 硬底） */
+  T('修复150 · 退出键入全链：editor focusout 立刻 saveEdited（不等 1.2s）→ collab focusout → flushPushSoon → ghPush 走 flushWaitMin',
+    E.indexOf("document.addEventListener('focusout', function (e) {\n    saveEdited(e.target);\n    liveStopEdit();\n  });") > 0
+      && C.indexOf("flushPushSoon('退出键入')") > 0
+      && C.indexOf('waitMin: GH.flushAsap ? flushWaitMin(now, GH.lastPush) : pushWaitMin(peersHot())') > 0
+      && C.indexOf('if (gate.why !== \'busy\') kickPush(gate.wait);') > 0);   /* 被挡下也不丢：记账 + 补推 */
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */

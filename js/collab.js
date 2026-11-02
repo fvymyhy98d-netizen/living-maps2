@@ -23,21 +23,30 @@ window.LMCollab = (function () {
       ROSTER_KEY = 'lm_collab_roster_v1', CHIP_ID = 'collabChip', PANEL_ID = 'collabPanel', MASK_ID = 'banMask';
   var LOCK_TTL = 12000, LOCK_BEAT = 4000, PEER_TTL = 25000;
   var GONE_TTL = 120000; /* ★ 修复73：断线后宽限 2 分钟，还没回来就当它不会再回来，从在线名单移除 */
-  var GH_PUSH_MIN = 4000, POLL_ACTIVE = 1500, POLL_IDLE = 4000, POLL_HIDDEN = 60000, POLL_VISITOR = 90000;
-  /* ★ 修复88：**有人在线就提速** —— 除本机外还有设备在线时：推送防抖 4s→1.5s、活动轮询 1.5s→1.2s、
-     闲置轮询 4s→2s；只有自己一台时保持原节奏（省流量 / 省电 / 省 GitHub 写入）。
-     访客（只读）前台 8s（raw 请求带 ?t= 破缓存，拿到的就是最新版）。
+  var GH_PUSH_MIN = 2500, POLL_ACTIVE = 1000, POLL_IDLE = 2000, POLL_HIDDEN = 20000, POLL_VISITOR = 45000;
+  /* ★ 修复88：**有人在线就提速** —— 除本机外还有设备在线时：推送防抖 2.5s→0.8s、活动轮询 1s→0.8s、
+     闲置轮询 2s→1s；只有自己一台时保持稍慢的节奏（省流量 / 省电 / 省 GitHub 写入）。
+     访客（只读）前台 4s（raw 请求带 ?t= 破缓存，拿到的就是最新版）。
      这些数值都能在控制台 LMCollab.diag() 里直接看到，方便现场核对。
 
      ★ 修复142（「协同时内容还是不能及时同步」的**节拍**环节）：
      旧值（独自 6s 推 / 8s 拉、访客 25s）配合下面 peersHot() 的那个洞，等于**永远跑慢挡**：
      一次保存要 1.2s(编辑器停手) + ≤6s(推送防抖) + ≤8s(对端轮询) ≈ 15 秒才到对面。
-     现在：条件请求命中 304 **不耗** GitHub 额度（只有真变更才计费），所以拉取可以放开到
-     1.2–4 秒；推送只在本机内容真变时发生，最密也就 1.5s 一笔（≈2400 笔/小时，仍在 5000/小时之内）。 */
-  var HOT_PUSH_MIN = 1500, HOT_ACTIVE = 1200, HOT_IDLE = 2000, VISITOR_SHOWN = 8000;
+     条件请求命中 304 **不耗** GitHub 额度（只有真变更才计费），所以拉取可以放开。
+
+     ★ 修复150（「能同步了，但很慢」）：把这条链上剩下的每个等待段都砍一刀 ——
+       ① 编辑器「退出键入」本来就立刻 saveEdited（不等 1.2s 防抖），这一环不用动；
+       ② 推送闸门：独自 4s→2.5s、有人在线 1.5s→0.8s；退出键入的硬底 700ms→400ms；
+       ③ 对端轮询：独自闲置 4s→2s、活动 1.5s→1s；有人在线闲置 2s→1s、活动 1.2s→0.8s；
+          轮询节拍器 600ms→300ms（gap 判定误差从 ±600ms 收到 ±300ms）；
+       ④ 隐藏 60s→20s、访客前台 8s→4s（手机切走再切回来不必干等）。
+     结果：稳态 1.5～2.5 秒（旧 4～7 秒）。GitHub 作为传输通道的**物理下限**约 1～2 秒
+     （PUT/GET 各一次往返 + 一次轮询粒度），再快只能换长连接（node server.js 的 SSE /
+     同浏览器 BroadcastChannel）。 */
+  var HOT_PUSH_MIN = 800, HOT_ACTIVE = 800, HOT_IDLE = 1000, VISITOR_SHOWN = 4000;
   /* ★ 修复140：退出键入（focusout）/ 切后台 / 关页面 → 无视上面的防抖立刻发一次；
-     但留 700ms 硬底，连续点十个框也只发一笔，不会把 GitHub 写入额度打光 */
-  var FLUSH_HARD_MIN = 700;
+     但留 400ms 硬底，连续点十个框也只发一笔，不会把 GitHub 写入额度打光 */
+  var FLUSH_HARD_MIN = 400;
   var me = readDevice();
   var lastTs = +(localStorage.getItem(TS_KEY) || 0);
   var peers = {};    /* 设备id -> {name, fp, ts, page} */
@@ -748,17 +757,21 @@ window.LMCollab = (function () {
       });
     } catch (e) { return false; }
   }
-  /* GitHub 轮询间隔：隐藏 60s；前台且在活动（30 秒内动过）→ 2s / 有人在线 1.2s；
-     前台但闲置 → 8s / 有人在线 3.5s */
+  /* GitHub 轮询间隔：隐藏 20s；前台且在活动（30 秒内动过）→ 1s / 有人在线 0.8s；
+     前台但闲置 → 2s / 有人在线 1s（★ 修复150：整体再收紧一档） */
   function pollGapNow(hidden, act, hot) {
     if (hidden) return POLL_HIDDEN;
     if (act) return hot ? HOT_ACTIVE : POLL_ACTIVE;
     return hot ? HOT_IDLE : POLL_IDLE;
   }
-  /* 访客只读轮询间隔：前台 25s、后台仍是 90s */
+  /* 访客只读轮询间隔：前台 4s、后台 45s（★ 修复150） */
   function visitorGapNow(hidden) { return hidden ? POLL_VISITOR : VISITOR_SHOWN; }
-  /* 推送最小间隔：有人在线 2.6s（原来是 6s，这是跨网络协同「慢半拍」的最大单项） */
+  /* 推送最小间隔：有人在线 0.8s（★ 修复150，旧 1.5s）—— 这是跨网络协同「慢半拍」的最大单项 */
   function pushWaitMin(hot) { return hot ? HOT_PUSH_MIN : GH_PUSH_MIN; }
+  /* ★ 修复150：退出键入 / 切后台这类「立刻发」的等待 = 硬底 400ms − 距上次推送已过的时间（纯函数，可单测）。
+     刚推过 100ms 又退出键入 → 只等剩下的 300ms；早就推过 → 0（立刻发）。
+     「等」不等于「丢」：被挡下的这一笔由 wantPush() 记账 + kickPush() 补推接住。 */
+  function flushWaitMin(now, lastPush) { return Math.max(FLUSH_HARD_MIN - ((+now || 0) - (+lastPush || 0)), 0); }
   function yChannelLabel() {
     try {
       if (window.LMYCollab && window.LMYCollab.yjs && window.LMYCollab.channel) {
@@ -1466,7 +1479,7 @@ window.LMCollab = (function () {
        退出键入时跳过防抖，只守 700ms 硬底（连点十个框也只发一笔） */
     const gate = pushGate({
       now: now, lastPush: GH.lastPush, busy: GH.pushBusy, blockUntil: GH.blockUntil,
-      waitMin: GH.flushAsap ? Math.max(FLUSH_HARD_MIN - (now - GH.lastPush), 0) : pushWaitMin(peersHot()),
+      waitMin: GH.flushAsap ? flushWaitMin(now, GH.lastPush) : pushWaitMin(peersHot()),
       rateGap: GH.flushAsap ? 0 : rateGap()
     });
     if (!gate.go) {
@@ -1610,15 +1623,16 @@ window.LMCollab = (function () {
         GH._wired = 'admin';
         transports.push({ send: function (msg) { if (msg.type === 'commit' && msg.content) ghPush(msg.content); } });
         modeLabel = '本机+云端';
-        /* ★ 修复88：节拍 2s → 600ms。旧版「每 2 秒才检查一次、且要够 2 秒才拉」在定时器抖动下
-           实际常变成 4 秒一次（用户感受就是「在线协同更新很慢」）；现在按 gap 判定，误差 ≤600ms。
-           有人在线时 gap 自动切到 1.2s / 2s，没别人时 1.5s / 4s（★ 修复142：见文件顶部常量注释） */
+        /* ★ 修复88：节拍 2s → 600ms；★ 修复150：再收到 300ms（gap 判定误差 ≤300ms）。
+           旧版「每 2 秒才检查一次、且要够 2 秒才拉」在定时器抖动下实际常变成 4 秒一次
+           （用户感受就是「在线协同更新很慢」）；现在按 gap 判定，误差 ≤300ms。
+           有人在线时 gap 自动切到 0.8s / 1s，没别人时 1s / 2s（★ 修复142 / 150：见文件顶部常量注释） */
         setInterval(function () {
           const hidden = document.visibilityState === 'hidden';
           const act = Date.now() - (window._lmLastAct || 0) < 30000;
           const gap = pollGapNow(hidden, act, peersHot());
           if (!GH.timer || Date.now() - GH.timer >= gap) { GH.timer = Date.now(); ghPull(); }
-        }, 600);
+        }, 300);
       }
       ghPull();
       /* ★ 修复140：上次关页面 / 崩溃时还有一笔没推上去（脏标记落在本机）→ 这次一打开就补推，
@@ -1636,12 +1650,12 @@ window.LMCollab = (function () {
         GH._wired = 'visitor';
         GH.cfg = { owner: h.split('.')[0], repo: p.split('/')[1], branch: 'main', path: 'data/content.js' };
         modeLabel = '云端只读';
-        /* ★ 修复88 / 142：访客从前台 90 秒 → 25 秒 → 现在 8 秒（后台仍 90 秒）。raw 请求已带 ?t= 破缓存，
-           所以手机访客看别人改的内容不再「要等一分半」 */
+        /* ★ 修复88 / 142：访客从前台 90 秒 → 25 秒 → 8 秒；★ 修复150：再提到 4 秒（后台 45 秒）。
+           raw 请求已带 ?t= 破缓存，所以手机访客看别人改的内容不再「要等一分半」 */
         setInterval(function () {
           const gap = visitorGapNow(document.visibilityState === 'hidden');
           if (!GH.timer || Date.now() - GH.timer >= gap) { GH.timer = Date.now(); ghPull(); }
-        }, 1000);
+        }, 500);
       }
       ghPull();
     }
