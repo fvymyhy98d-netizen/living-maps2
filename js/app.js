@@ -6,7 +6,7 @@
 /* ★ 修复55：自动更新探针 —— 发版改这个版本号（与 index.html 的 ?v= 同步）。
    页面运行中每 10 分钟用 no-store 强拉一次最新 app.js，版本号变了就自动整页刷新：
    微信内置浏览器等缓存顽固的场景不再一直跑旧界面（内容数据本就每次 no-store 拉新，此探针管的是功能/样式代码） */
-var LM_ASSET_VER = '148';
+var LM_ASSET_VER = '149';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -3232,8 +3232,14 @@ window.LMApp = (function () {
     const json = JSON.stringify(r.payload);
     let p = Promise.resolve();
     /* 先把内容推上去：仓库里的 data/content.js 必须等于本机内容，
-       否则模型记的字数和线上内容对不上（命令行 --check、测试 小模型7 都会报「语料变了」） */
-    if (o.pushContent !== false) p = p.then(function () { return LMStore.saveGitHub(cfg, state.content); });
+       否则模型记的字数和线上内容对不上（命令行 --check、测试 小模型7 都会报「语料变了」）
+       ★ 修复149：本页落后于云端时拒绝（先让协同拉一包）—— 否则重训会把旧内容一起推回去 */
+    if (o.pushContent !== false) {
+      if (window.LMCollab && LMCollab.guardManualPush && LMCollab.guardManualPush()) {
+        return Promise.reject(new Error('云端有更新的内容（别的设备刚存过），已先拉取：等 1 秒后再点一次重训'));
+      }
+      p = p.then(function () { return LMStore.saveGitHub(cfg, state.content); });
+    }
     return p.then(function () {
       /* lm.json 写发布分支（必须和页面同源，Pages 才送得到）；会让 Pages 重新发布，几十秒 */
       return LMStore.saveFileToRepo(cfg, branch, 'data/lm.json', json,

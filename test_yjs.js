@@ -3589,10 +3589,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=148 · LM_ASSET_VER=148',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=149 · LM_ASSET_VER=149',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=147/g) || []).length === 0 && /\?v=148/.test(html)
-      && /LM_ASSET_VER = '148'/.test(appJs));
+      && (html.match(/\?v=148/g) || []).length === 0 && /\?v=149/.test(html)
+      && /LM_ASSET_VER = '149'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4493,10 +4493,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 148（?v=148 共 22 处 · v147 无残留 · LM_ASSET_VER=148）',
-    (html.match(/\?v=148/g) || []).length === 22 && (html.match(/\?v=147/g) || []).length === 0
-      && /LM_ASSET_VER = '148'/.test(appJs),
-    'v148=' + (html.match(/\?v=148/g) || []).length + ' v143=' + (html.match(/\?v=147/g) || []).length);
+  T('版本已升到 149（?v=149 共 22 处 · v148 无残留 · LM_ASSET_VER=149）',
+    (html.match(/\?v=149/g) || []).length === 22 && (html.match(/\?v=148/g) || []).length === 0
+      && /LM_ASSET_VER = '149'/.test(appJs),
+    'v149=' + (html.match(/\?v=149/g) || []).length + ' v143=' + (html.match(/\?v=148/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -5169,6 +5169,97 @@ console.log('【修复148】工具栏新增「🟦 提示框」：插入 callout
       && ['gray', 'blue', 'green', 'orange', 'pink'].every(function (t) {
         return CSSC.indexOf('.tone-' + t + '{background:') > 0;
       }));
+})();
+
+/* ---------- 修复149：多设备不同步的真根因 —— 旧标签页把云端推回旧版本 ---------- */
+console.log('【修复149】推送不再「冷启动盲推」：首包没落地 / 本机落后 → 先拉再推；弹窗不再无限挂起');
+
+(function () {
+  const C = srcOf('js/collab.js');
+  const A = srcOf('js/app.js');
+  const E = srcOf('js/editor.js');
+
+  T('修复149 · 真跑 pushColdGate：用 08:21:26 那笔真实倒退（内容还停在 00:43）验证必须被判成 behind',
+    (function () {
+      const i0 = C.indexOf('function pushColdGate(st) {');
+      if (i0 < 0) return false;
+      let d = 0, end = -1;
+      for (let j = C.indexOf('{', i0); j < C.length; j++) {
+        if (C[j] === '{') d++;
+        else if (C[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+      }
+      if (end < 0) return false;
+      const fn = new Function(C.slice(i0, end) + '; return pushColdGate;')();
+      return fn({ pulled: false, lastPullTs: 1793578891773, myTs: 1793578891773 }) === 'cold'
+        && fn({ pulled: true, lastPullTs: 1793578891773, myTs: 1793551011054 }) === 'behind'
+        && fn({ pulled: true, lastPullTs: 1793579154629, myTs: 1793579154630 }) === 'ok'
+        && fn({ pulled: true, lastPullTs: 0, myTs: 1793551011054 }) === 'ok'
+        && fn({}) === 'cold';
+    })());
+
+  T('修复149 · ghPush 用 pushColdGate 把关：cold 先记账+补推+拉，behind 也记账+补推（不再裸 return 丢一笔）',
+    C.indexOf('const cold = pushColdGate({ pulled: GH.pulledOnce, lastPullTs: GH.lastPullTs, myTs: myTs })') > 0
+      && C.indexOf("if (cold === 'cold') {") > 0
+      && C.indexOf('if (Date.now() - GH.coldAt < 15000) { wantPush(); kickPush(1200); ghPull(); return; }') > 0
+      && C.indexOf("if (cold === 'behind') {") > 0);
+
+  T('修复149 · pulledOnce 在「304 / 拿到内容」两条落地路径置真；换仓库/换 Token 时重置为假',
+    C.indexOf('pulledOnce: false,') > 0
+      && C.indexOf('if (r.status === 304) { GH.pulledOnce = true; return null; }') > 0
+      && C.indexOf('GH.pulledOnce = true;   /* ★ 修复149') > 0
+      && C.indexOf('GH.pulledOnce = false;   /* ★ 修复149') > 0);
+
+  T('修复149 · flushPush 再堵一层：内容不比云端新（ts <= 已拉到的云端戳）就不推，只结清脏标记',
+    C.indexOf('if (ts && GH.lastPullTs && ts <= GH.lastPullTs) { pushClean(); return false; }') > 0);
+
+  T('修复149 · 手动上传（☁ 同步 / 确认上传 / 网页重训小模型）都先过 guardManualPush',
+    C.indexOf('function guardManualPush() {') > 0
+      && C.indexOf('guardManualPush: guardManualPush,') > 0
+      && (E.match(/LMCollab\.guardManualPush\(\)/g) || []).length >= 2
+      && A.indexOf('LMCollab.guardManualPush()') > 0);
+
+  T('修复149 · 真跑 localBusy：页面设置这类弹窗只挡 12 秒；改块表单（#blockForm）一直让路',
+    (function () {
+      const i0 = C.indexOf('function localBusy() {');
+      if (i0 < 0) return false;
+      let d = 0, end = -1;
+      for (let j = C.indexOf('{', i0); j < C.length; j++) {
+        if (C[j] === '{') d++;
+        else if (C[j] === '}') { d--; if (!d) { end = j + 1; break; } }
+      }
+      if (end < 0) return false;
+      const body = C.slice(i0, end);
+      const mk = function (doc) {
+        return new Function('document', [
+          'var window = { LMApp: {} };',
+          'var BUSY_KEY_WIN = 1200, BUSY_PTR_MAX = 20000, BUSY_MODAL_WIN = 12000, _modalAt = 0;',
+          'var pointerDown = false, pointerAt = 0, lastKeyAt = 0;',
+          body,
+          'return localBusy;'
+        ].join('\n'))(doc);
+      };
+      const noMask = { querySelector: function () { return null; } };
+      const plainMask = { querySelector: function (s) { return s === '.modal-mask' ? { querySelector: function () { return null; } } : null; } };
+      const formMask = { querySelector: function (s) { return s === '.modal-mask' ? { querySelector: function () { return {}; } } : null; } };
+      const t0 = 1793579000000;
+      const realNow = Date.now;
+      const busyAt = function (fn, at) {
+        Date.now = function () { return at; };
+        try { return fn(); } finally { Date.now = realNow; }
+      };
+      try {
+        const a1 = mk(noMask);
+        if (busyAt(a1, t0) !== false) return false;            /* 没弹窗 → 不忙 */
+        const a2 = mk(plainMask);
+        if (busyAt(a2, t0) !== true) return false;              /* 刚打开 → 让路 */
+        if (busyAt(a2, t0 + 11000) !== true) return false;      /* 11 秒 → 仍在宽限内 */
+        if (busyAt(a2, t0 + 13000) !== false) return false;     /* 13 秒 → 不再挡（旧版会一直挡） */
+        const a3 = mk(formMask);
+        if (busyAt(a3, t0) !== true) return false;
+        if (busyAt(a3, t0 + 600000) !== true) return false;     /* 改块表单开 10 分钟也不吸远端 */
+        return true;
+      } finally { Date.now = realNow; }
+    })());
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */

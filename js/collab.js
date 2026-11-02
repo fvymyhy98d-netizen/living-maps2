@@ -164,9 +164,22 @@ window.LMCollab = (function () {
      所以按下时刻一并记下，超过 20 秒自动复位。 */
   var BUSY_KEY_WIN = 1200;   /* 按键后 1.2 秒内算「输入中」 */
   var BUSY_PTR_MAX = 20000;  /* 指针按下最多认 20 秒 */
+  /* ★ 修复149：弹窗不再「开多久就挡多久」。旧版只要 `.modal-mask` 存在就一直算忙，
+     「⚙ 页面设置」这种常驻面板一开，别人的修改就全部堆在 pending 里出不来 ——
+     现场表现正是「另一台设备改了，我这边一点动静都没有」。
+     现在：① 裁剪层 / 带 #blockForm 的表单（正在改某一块的字段，下标随时可能位移）→ 仍然一定让路；
+            ② 其它弹窗（页面设置、同步设置、条目树…）只让 12 秒 —— 够点选，之后照常吸收远端 */
+  var BUSY_MODAL_WIN = 12000;
+  var _modalAt = 0;
   function localBusy() {
     if (!window.LMApp) return true;
-    if (document.querySelector('.modal-mask,.crop-overlay')) return true;
+    if (document.querySelector('.crop-overlay')) return true;
+    const mask = document.querySelector('.modal-mask');
+    if (mask) {
+      if (mask.querySelector('#blockForm')) { _modalAt = 0; return true; }
+      if (!_modalAt) _modalAt = Date.now();
+      if (Date.now() - _modalAt < BUSY_MODAL_WIN) return true;
+    } else { _modalAt = 0; }
     if (pointerDown) {
       if (Date.now() - (pointerAt || 0) > BUSY_PTR_MAX) { pointerDown = false; pointerAt = 0; }
       else return true;
@@ -1038,6 +1051,9 @@ window.LMCollab = (function () {
                rateLeft: null,      /* ★ 修复90：X-RateLimit-Remaining 观测值 */
                lastText: '',        /* ★ 修复90：上次成功推送的文件文本，内容没变就不重复 PUT */
                mergedTs: 0,         /* ★ 修复105：已按块级合并过的云端版本戳（同一份不反复合并） */
+               pulledOnce: false,   /* ★ 修复149：本页会话里「至少成功跟云端对过一次话」（拉取落地/304）。
+                                       为 false 时一律不许推 —— 否则刚打开的旧标签页会把云端内容倒退 */
+               coldAt: 0,           /* ★ 修复149：冷启动起点（15 秒还拉不到就放行，别让用户永久推不上去） */
                /* ★ 修复140（「退出键入五分钟对方都没反应」的根因）：推送与轮询拉取原来共用 GH.inFlight
                   一把锁 —— 拉取（每 1.2–8 秒一次，且要等网络往返）期间到来的 commit 全被
                   `if (GH.inFlight) return;` **静默丢弃**：既不重试也不记账，于是「退出键入」那一笔
@@ -1169,12 +1185,13 @@ window.LMCollab = (function () {
     if (useApi && GH.etag) opt.headers['If-None-Match'] = GH.etag; /* 条件请求：没更新时返回 304，且不消耗 API 限额 */
     fetchT(url, opt, 15000).then(function (r) {
       noteRate(r);                                  /* ★ 修复90：记下剩余额度 */
-      if (r.status === 304) return null;             /* 云端没变化（且不耗额度） */
+      if (r.status === 304) { GH.pulledOnce = true; return null; } /* 云端没变化（且不耗额度）；★ 修复149：也算「对过话」 */
       /* ★ 修复90：访客只读。若数据分支还不存在（管理员尚未落库成功 / Token 无建分支权限），
          改读发布分支 —— 内容一定在那里；否则访客会永远停在首屏快照上看不到更新 */
       if (r.status === 404 && !useApi && !GH.useMain && ghDataRef() !== ghMainRef()) {
         GH.useMain = true; GH.etag = ''; GH.timer = 0;
         GH.inFlight = false;
+        GH.pulledOnce = false;   /* ★ 修复149：刚换分支，还没读到 main —— 40ms 后那一次拉取才算「对过话」 */
         setTimeout(ghPull, 40);
         return null;
       }
@@ -1186,6 +1203,7 @@ window.LMCollab = (function () {
       });
     }).then(function (c) {
       GH.inFlight = false;
+      GH.pulledOnce = true;   /* ★ 修复149：云端内容已到手（哪怕解析失败/是旧版）—— 现在允许推送了 */
       if (!validContent(c)) return;
       const ts = +(((c.config || {}).collab || {}).syncTs || 0) || 1;
       const stale = (ts <= lastTs || ts <= GH.lastPullTs);
@@ -1288,6 +1306,28 @@ window.LMCollab = (function () {
      处方：① 推送/拉取拆成两把锁；② 发不出去就记脏（GH.dirty）并挂补推定时器（kickPush）；
            ③ 退出键入 / 切后台 / 关页面走 flushPush，跳过防抖立刻发（仍守 700ms 硬底与限流退避）。 */
 
+  /* ★ 修复149（「多设备还是不能实时更新」的真根因）：**别让旧标签页把云端推回旧版本**。
+     现场证据（GitHub lm-data 分支的真实提交，syncTs 就是内容版本戳）：
+        25e486a  07:28:57  syncTs=1793551011054   ← 00:43 的旧内容，云端被倒退 6.7 小时
+        3ce16f7  08:21:26  syncTs=1793551011054   ← 又一次倒退 7.7 小时
+        e669357  08:21:31  syncTs=1793578891773   ← 5 秒后才回到新鲜版本
+      main 上的首屏快照同样被这锅旧内容写进去了（07:29:00 / 08:21:29 两次「内容快照」），
+      于是之后每个新打开的页面都从旧内容起跑 —— 越滚越旧。
+     成因：`document.focusout` 一响就 `flushPush`（修复140 为「退出键入立刻发」加的），
+     而刚打开 / 刚刷新 / 刚被唤回的标签页，手里还是**首屏那份 data/content.js**，
+     第一包云端内容还没拉回来（GH.lastPullTs 还是 0）→ 原来的 `GH.lastPullTs > myTs`
+     守卫形同虚设 → 旧内容被当成「本机最新」写上去。另一台设备随即拉到这份"新提交的旧内容"，
+     表现就是「内容不更新 / 改完又退回去 / 要等半分钟才跳一下」。
+     判据（纯函数，可单测）：
+       cold   —— 本页还没成功跟云端对过话：**先拉，别推**（不知道云端是哪一版，推了就可能倒退）
+       behind —— 云端版本戳比本机新：先拉再推（本机落后，直接推 = 覆盖别人的新内容）
+       ok     —— 可以推 */
+  function pushColdGate(st) {
+    st = st || {};
+    if (!st.pulled) return 'cold';
+    if ((+st.lastPullTs || 0) > (+st.myTs || 0)) return 'behind';
+    return 'ok';
+  }
   /* 纯函数（可单测）：这次 ghPush 该不该真的发 PUT？
      → { go, why, wait }，why = go / busy（上一笔还在飞）/ blocked（限流退避中）/ defer（防抖未到点）。
      ★ busy / blocked / defer 都**不是丢弃**，调用方必须 wantPush() 记账 + kickPush() 补推。 */
@@ -1360,6 +1400,11 @@ window.LMCollab = (function () {
     const ts = +(((c.config || {}).collab || {}).syncTs || 0);
     /* 这一版已经推上去了（内容没变就别做全量序列化，切来切去不花钱） */
     if (ts && ts === GH.lastPushTs) { pushClean(); return false; }
+    /* ★ 修复149：内容并不比云端新（本页只是把刚拉到的同一版又摆了一遍）→ 没东西可推。
+       这条同时挡住「旧标签页 focusout 就把云端写回旧版」的第二条路：
+       publish 的版本戳恒 > 已拉到的云端戳（_pubTs 在 notePulled 里被抬高），
+       所以 ts <= 云端戳 只可能是「本页自那次拉取之后一个字都没改」。 */
+    if (ts && GH.lastPullTs && ts <= GH.lastPullTs) { pushClean(); return false; }
     GH.flushAsap = true;
     try { ghPush(c); } finally { GH.flushAsap = false; }
     try { GH.flushWhy = why || ''; } catch (eF) { /* noop */ }
@@ -1373,12 +1418,39 @@ window.LMCollab = (function () {
     setTimeout(function () { try { flushPush(why); } catch (e2) { /* noop */ } }, 0);
     setTimeout(function () { try { flushPush(why); } catch (e3) { /* noop */ } }, 320);
   }
+  /* ★ 修复149：手动「☁ 同步到 GitHub」前的闸门 —— 手动同步同样是把本页手里的内容写进
+     数据分支 + main 快照，所以同样不能「本页还落后」时上传：旧标签页点一下，云端就倒退
+     几个小时（lm-data 上 07:28:57 与 08:21:26 两笔 syncTs 停在 00:43 就是这么写上去的）。
+     返回 true = 已拦下（调用方不要再传）；false = 可以传。 */
+  function guardManualPush() {
+    if (!GH.cfg || !GH.token) return false;          /* 没配置云端：调用方自己会报错 */
+    const c = latestContent();
+    const myTs = c ? +(((c.config || {}).collab || {}).syncTs || 0) : 0;
+    const why = pushColdGate({ pulled: GH.pulledOnce, lastPullTs: GH.lastPullTs, myTs: myTs });
+    if (why === 'ok') return false;
+    try { ghPull(); } catch (e0) { /* noop */ }
+    try {
+      LMApp.toast(why === 'cold'
+        ? '☁ 正在核对云端版本（本页还没拉到最新内容）—— 等 1 秒再点一次上传'
+        : '⚠ 云端已有更新的版本（别的设备刚存过），已先拉取 —— 合好后请再点一次上传');
+    } catch (e1) { /* noop */ }
+    return true;
+  }
   function ghPush(content) {
     if (!GH.cfg || !GH.token || !window.LMStore) return;
     /* 防旧覆盖新守卫：最近一次轮询看到的云端版本比本机内容新（其他设备刚推过）→
        本机不推送（避免旧内容盖掉别人的新内容），改为立即拉取应用 */
     const myTs = +(((content.config || {}).collab || {}).syncTs || 0);
-    if (GH.lastPullTs > myTs) {
+    /* ★ 修复149：先过「冷启动 / 落后」闸门（见 pushColdGate 注释里的真实提交证据） */
+    const cold = pushColdGate({ pulled: GH.pulledOnce, lastPullTs: GH.lastPullTs, myTs: myTs });
+    if (cold === 'cold') {
+      /* 本页还没跟云端对过话：这一笔先记账，立刻去拉，落地后再补推。
+         ★ 兜底：15 秒还拉不到（Token 只有写权限 / 网络黑洞）→ 放行，
+         宁可冒一次「内容可能更旧」的风险，也不能让用户改了半天一个字都上不去。 */
+      GH.coldAt = GH.coldAt || Date.now();
+      if (Date.now() - GH.coldAt < 15000) { wantPush(); kickPush(1200); ghPull(); return; }
+    } else { GH.coldAt = 0; }
+    if (cold === 'behind') {
       /* ★ 修复142（「内容还是不能及时同步」的第二个环节）：云端比我新 → 先拉，这一步本身没错；
          错在旧版这里**裸 return**，等于把这一笔静静扔掉：既不记账也不重试。
          只要对端时钟快一点点（手机/电脑时钟差几十秒很常见），本机每次保存出来的戳都比云端小，
@@ -1530,6 +1602,7 @@ window.LMCollab = (function () {
       GH.useMain = false; GH.etag = ''; GH.lastText = ''; GH.blockUntil = 0; GH.rateLeft = null;
       /* ★ 修复140：换仓库/换 Token → 上一套的推送状态一并清掉（否则会拿旧的脏标记/版本戳乱补推） */
       GH.lastPushTs = 0; GH.dirty = false; GH.dirtyAt = 0; GH.kickN = 0;
+      GH.pulledOnce = false;   /* ★ 修复149：换仓库了 → 必须重新拉一次才知道云端是哪一版，不许急着推 */
       Object.keys(shaOf).forEach(function (k) { delete shaOf[k]; });
     }
     if (GH.cfg && GH.cfg.owner && GH.cfg.repo && GH.token) {
@@ -1726,6 +1799,7 @@ window.LMCollab = (function () {
     publish: publish,
     flushPush: flushPush,          /* ★ 修复140：退出键入 / 切后台 / 关页面 → 跳过防抖立刻推（editor.js 也调） */
     flushPushSoon: flushPushSoon,
+    guardManualPush: guardManualPush,   /* ★ 修复149：手动上传前先核对云端版本（落后就先拉，别把云端推回旧版） */
     pushState: function () {       /* ★ 修复140：现场核对「这一笔到底发出去没有」 */
       return { 待推送: GH.dirty, 待推送秒: GH.dirtyAt ? Math.round((Date.now() - GH.dirtyAt) / 1000) : 0,
                推送中: GH.pushBusy, 退避剩秒: GH.blockUntil > Date.now() ? Math.round((GH.blockUntil - Date.now()) / 1000) : 0,
@@ -1798,7 +1872,9 @@ window.LMCollab = (function () {
           云端版本戳: GH.lastPullTs || 0,
           本机版本戳: (function () { try { return +((((LMApp || {}).state || {}).content || {}).config.collab.syncTs || 0); } catch (e) { return 0; } })(),
           已应用云端戳: GH.mergedTs || 0,
-          数据分支可用: GH.useMain ? '否（已回退 main）' : '是'
+          数据分支可用: GH.useMain ? '否（已回退 main）' : '是',
+          /* ★ 修复149：false = 本页还没跟云端对过话，此时**不会推送**（防止旧标签页把云端倒退） */
+          已核对云端版本: GH.pulledOnce ? '是（可以推送）' : '否（先拉再推）'
         },
         /* ★ 修复140：推送状态机 —— 「改了却没同步过去」时先看这几项（待推送=true 表示还有一笔没上云） */
         推送: {

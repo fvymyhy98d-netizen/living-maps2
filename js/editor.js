@@ -1073,6 +1073,11 @@ window.LMEditor = (function () {
           b.disabled = true; b.textContent = '正在上传…';
           const cfg2 = LMStore.getGhCfg();
           cfg2.token = cfg2.token || LMStore.ghToken();
+          /* ★ 修复149：先核对云端版本 —— 本页落后就先拉，别把云端推回旧内容 */
+          if (window.LMCollab && LMCollab.guardManualPush && LMCollab.guardManualPush()) {
+            b.disabled = false; b.textContent = '☁️ 确认上传';
+            return;
+          }
           LMStore.saveGitHub(cfg2, LMApp.state.content).then(function () {
             /* ★ 修复90：手动写完后清掉 sha 缓存，避免下一笔自动推送拿着旧 sha 必撞 409 */
             try { if (window.LMCollab && LMCollab.dropGhSha) LMCollab.dropGhSha(); } catch (eDS) { /* noop */ }
@@ -1155,6 +1160,11 @@ window.LMEditor = (function () {
         vaultize(c).catch(function (eV2) { LMApp.toast('团队保险箱加密失败：' + (eV2 && eV2.message ? eV2.message : eV2)); });
         const btn = form.querySelector('button[type=submit]');
         btn.disabled = true; btn.textContent = '正在同步…';
+        /* ★ 修复149：本页落在云端后面时先拉再传（否则手动同步会把云端推回旧版，另一台设备反而"倒退"） */
+        if (window.LMCollab && LMCollab.guardManualPush && LMCollab.guardManualPush()) {
+          btn.disabled = false; btn.textContent = '保存并同步到 GitHub';
+          return;
+        }
         LMStore.saveGitHub(c, LMApp.state.content).then(function () {
           /* ★ 修复90：手动写完后清掉 sha 缓存，避免下一笔自动推送拿着旧 sha 必撞 409 */
           try { if (window.LMCollab && LMCollab.dropGhSha) LMCollab.dropGhSha(); } catch (eDS) { /* noop */ }
