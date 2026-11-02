@@ -397,6 +397,20 @@ window.LMCollab = (function () {
         cfg.collab = cfg.collab || {};
         cfg.collab.tomb = tomb;
       } catch (eT) { /* 写不进去也不影响下面的合并 */ }
+      /* ★ 修复159：界面开关（config.ui，例如 hideAsk）不能被「另一台设备的老内容包」整包顶掉。
+         开关只存在 config.ui 里，而远端包一旦带着自己的 config 回来就会整块覆盖它 ——
+         对方没升级过、或它本地那份内容还是「加开关之前」的，管理员刚勾上的开关就会莫名失效。
+         规则：本机有的键先保底，远端**明确写了**的键以远端为准（取消勾选会显式写 false，
+         所以「把开关关掉」这件事照样传得过来）。 */
+      try {
+        const cfgU = c.config = c.config || {};
+        const lu = (((base || {}).config || {}).ui) || {};
+        const ru = (cfgU.ui && typeof cfgU.ui === 'object') ? cfgU.ui : {};
+        const nu = {};
+        Object.keys(lu).forEach(function (k) { nu[k] = lu[k]; });
+        Object.keys(ru).forEach(function (k) { nu[k] = ru[k]; });
+        cfgU.ui = nu;
+      } catch (eU) { /* noop */ }
       /* ② 远端每一页：与本机同 id 的那一页做块级 / 字段级合并 */
       const localById = {};
       base.pages.forEach(function (p) { if (p && p.id) localById[p.id] = p; });

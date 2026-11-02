@@ -11,3 +11,7 @@ Thumbs.db
 
 # tools/pull-remote-data.js 覆盖前的备份（data/content.js.prev 等）
 *.prev
+
+# 手工备份 / WorkBuddy 运行时产物（不属于站点内容）
+*.bak
+.wbapp_*.genie

@@ -9,7 +9,7 @@
    ★ 修复158（教训）：v154~v157 发版时只改了 index.html 的 ?v=，忘了改这里 —— 探针比的是「正在跑的
      这份 app.js」和「刚拉下来的 app.js」，两边都停在旧号码 → 永远相等 → 老客户端一直不刷新。
      发版顺序固定为：① 改这里 ② 全文替换 index.html 的 ?v= ③ node test_yjs.js 必须全绿。 */
-var LM_ASSET_VER = '158';
+var LM_ASSET_VER = '159';
 (function () {
   setInterval(function () {
     if (document.hidden) return; /* 后台标签不折腾 */
@@ -1237,14 +1237,23 @@ window.LMApp = (function () {
     }
     queueTbOffset();
   }
+  /* ★ 修复155：访客是否能看到右下角「提问」浮钮 —— 管理条「页面管理」里的开关，
+     随内容同步给所有访客；管理员自己始终可见（否则没法判断开关有没有生效）。
+     ★ 修复159：抽成函数并「内容一变就重挂一次」——
+     ① 以前只在 render() 里设置，而远端内容到达时（applyRemoteContent）只要页面结构没变就
+        只重绘变化的块、根本不走 render()，于是「管理员勾上开关并同步」这件事到不了
+        正开着页面的访客那里（配置已更新、body 上的类没加，浮钮照旧显示）；
+     ② 以后再加别的「界面开关」也只改这一处。 */
+  function applyUiFlags() {
+    const ui = (state.content && state.content.config && state.content.config.ui) || {};
+    document.body.classList.toggle('hide-ask', !!ui.hideAsk);
+  }
   function render(skipAnim) {
     if (skipAnim) document.body.classList.add('no-anim');
     state.pageId = currentId();
     navTrack(state.pageId); /* ★ 修复80：记一次浏览历史（顶部「‹ 返回」用它退回上一屏） */
     document.body.classList.toggle('admin', !!state.admin);
-    /* ★ 修复155：访客是否能看到右下角「提问」浮钮 —— 管理条「页面管理」里的开关，
-       随内容同步给所有访客；管理员自己始终可见（否则没法判断开关有没有生效） */
-    document.body.classList.toggle('hide-ask', !!(state.content.config && state.content.config.ui && state.content.config.ui.hideAsk));
+    applyUiFlags();
     renderNav();
     renderFooter();
     const p = state.content.pages.find(function (x) { return x.id === state.pageId; });
@@ -1351,6 +1360,11 @@ window.LMApp = (function () {
   function applyRemoteContent(nc) {
     const before = state.content;
     state.content = nc;
+    /* ★ 修复159：远端内容整包换掉后，先把「界面开关」重挂一次（body 上的 hide-ask 等）。
+       下面「结构一致 → 只局部重绘块」的快速路径不会调用 render()，
+       漏了这一步就会出现「配置已经同步过来、界面却还是老样子」（管理员关掉提问键，
+       正开着页面的访客仍然看到浮钮）。 */
+    try { applyUiFlags(); } catch (eUF) { /* noop */ }
     try {
       const pg0 = before.pages.find(function (x) { return x.id === state.pageId; });
       const pg1 = nc.pages.find(function (x) { return x.id === state.pageId; });

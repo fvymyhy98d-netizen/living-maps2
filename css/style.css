@@ -1438,15 +1438,21 @@ body.hide-ask:not(.admin) .lm-ai-fab{display:none!important}
 .gp-gear:active{transform:scale(.95)}
 .gp-gear:focus-visible{outline:2px solid rgba(0,0,0,.2);outline-offset:2px}
 
-/* 「页面管理」里的访客可见性开关 */
-.ask-toggle{display:flex;align-items:flex-start;gap:8px;margin:10px 0 14px;padding:10px 12px;
-  border-radius:10px;background:rgba(0,0,0,.03);border:1px solid rgba(0,0,0,.06);
-  font-size:13px;line-height:1.55;cursor:pointer}
-.ask-toggle input{margin-top:2px;flex:none}
+/* 「页面管理」里的访客可见性开关（★ 修复159：提到弹窗顶部，配色也标出来） */
+.ask-toggle{display:flex;align-items:flex-start;gap:8px;margin:0 0 14px;padding:10px 12px;
+  border-radius:10px;background:rgba(0,113,227,.05);border:1px solid rgba(0,113,227,.20);
+  font-size:13px;line-height:1.55;cursor:pointer;
+  transition:background .15s ease,border-color .15s ease}
+.ask-toggle:hover{background:rgba(0,113,227,.09)}
+.ask-toggle input{margin-top:2px;flex:none;cursor:pointer}
 .ask-tip{display:block;color:var(--text2);font-size:12px;margin-top:2px}
+/* 勾上时整条变蓝 —— 一眼看出「访客现在是看不到提问键的」（:has 不支持就只是少了这点高亮） */
+.ask-toggle:has(input:checked){background:rgba(0,113,227,.12);border-color:rgba(0,113,227,.38)}
 
 @media (prefers-color-scheme:dark){
   .gp-gear{border-color:rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:rgba(255,255,255,.42)}
   .gp-gear:hover{background:rgba(255,255,255,.12);color:rgba(255,255,255,.75)}
-  .ask-toggle{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.10)}
+  .ask-toggle{background:rgba(10,132,255,.10);border-color:rgba(10,132,255,.28)}
+  .ask-toggle:hover{background:rgba(10,132,255,.16)}
+  .ask-toggle:has(input:checked){background:rgba(10,132,255,.20);border-color:rgba(10,132,255,.46)}
 }

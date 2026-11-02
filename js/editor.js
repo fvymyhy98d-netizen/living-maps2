@@ -1326,12 +1326,15 @@ window.LMEditor = (function () {
     }).join('');
     modal('<h3>页面管理</h3>'
       + '<p class="modal-note">修改导航名称、页面标题与说明（<b>留空的行页面上不会显示</b>）；点「图标」框弹出图标面板，<b>点选一个即替换</b>，<b>再点一下图标框就收起</b>，也可以直接键入 emoji。新增页面：点最下面的虚线框，会多出一个空白模板行，填好后点「保存修改」。</p>'
-      + '<div class="page-rows">' + rows + '</div>'
-      /* ★ 修复155：访客可见性开关（存在 config.ui 里，随内容同步，不用改代码） */
-      + '<label class="ask-toggle" title="关掉后访客界面右下角不再出现「提问」浮钮；管理员自己仍能看到，方便确认效果">'
+      /* ★ 修复155 / 159：访客可见性开关 —— 提到「页面行」上面（以前埋在整列页面的最底下，
+         页面一多就得滚到底才看得见，等于藏起来了） */
+      + '<label class="ask-toggle" title="勾上后访客界面右下角不再出现「✨ 提问」浮钮；管理员自己仍然看得到，随时可以改回来">'
       +   '<input type="checkbox" id="pgHideAsk"' + (((c.config || {}).ui || {}).hideAsk ? ' checked' : '') + '>'
-      +   '<span>访客不显示右下角「提问」按钮<span class="ask-tip">（管理员自己仍可见，随时可改回来）</span></span>'
+      +   '<span>访客界面隐藏右下角「✨ 提问」按钮'
+      +     '<span class="ask-tip">勾上 → 访客看不到（管理员自己仍可见，方便核对效果）。点「保存修改」本机立即生效；再点顶部「☁️ 同步到 GitHub」，访客才会收到 —— 这条设置随内容一起上传。</span>'
+      +   '</span>'
       + '</label>'
+      + '<div class="page-rows">' + rows + '</div>'
       + '<button type="button" class="page-row new-page" id="npAdd" title="点击添加一个空白页面模板，填好后点「保存修改」">＋ 点击新增空白页面模板</button>'
       + '<div class="form-actions"><button type="button" class="btn btn-ghost" data-close>取消</button>'
       + '<button type="button" class="btn btn-primary" id="pagesSave">保存修改</button></div>', function (root) {
@@ -1367,13 +1370,15 @@ window.LMEditor = (function () {
             blocks: []
           });
         });
-        /* ★ 修复155：访客是否可见「提问」浮钮 */
+        /* ★ 修复155：访客是否可见「提问」浮钮（★ 修复159：回执里直接说清结果 + 还差一步同步） */
         const askBox = root.querySelector('#pgHideAsk');
         c.config = c.config || {};
         c.config.ui = c.config.ui || {};
         c.config.ui.hideAsk = !!(askBox && askBox.checked);
         closeModal();
-        LMApp.applyEdit('页面设置已保存');
+        LMApp.applyEdit(c.config.ui.hideAsk
+          ? '页面设置已保存 · 访客已看不到「提问」按钮（点「☁️ 同步到 GitHub」访客才会收到）'
+          : '页面设置已保存 · 访客可以看到「提问」按钮');
       });
       root.querySelector('#npAdd').addEventListener('click', function () {
         /* 点虚线框 → 多出一个空白页面模板行（点几次加几个；填好点「保存修改」生效） */

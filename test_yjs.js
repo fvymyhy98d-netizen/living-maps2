@@ -3610,10 +3610,10 @@ console.log('【9.61】修复96：云存档——提交即落库 / 自动拉回 
       && cspMeta.indexOf('https://qyapi.weixin.qq.com') > 0
       && cspMeta.indexOf('connect-src') >= 0 && !/connect-src[^;]*\shttps:;/.test(cspMeta));
 
-  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=158 · LM_ASSET_VER=158',
+  T('样式与版本：.fb-cloud 折叠面板 · 全部资源 ?v=159 · LM_ASSET_VER=159',
     css.indexOf('.fb-cloud') > 0 && css.indexOf('.fb-imp') > 0 && css.indexOf('.lm-ai-mode') > 0 && css.indexOf('.lm-ai-cite') > 0
-      && (html.match(/\?v=157/g) || []).length === 0 && /\?v=158/.test(html)
-      && /LM_ASSET_VER = '158'/.test(appJs));
+      && (html.match(/\?v=158/g) || []).length === 0 && /\?v=159/.test(html)
+      && /LM_ASSET_VER = '159'/.test(appJs));
 
   /* —— ★ 修复97：错误信息要「看得懂、能照着改」（以前只有 HTTP 404，根本不知道改哪儿） —— */
   const _why = fb.cloudWhy || function () { return ''; };
@@ -4514,10 +4514,10 @@ console.log('【9.62】修复100：讨论区云存档——访客的帖也能跨
         && a.indexOf('粘回这里保存进对话') < 0;
     })());
 
-  T('版本已升到 158（?v=158 共 25 处 · v157 无残留 · LM_ASSET_VER=158）',
-    (html.match(/\?v=158/g) || []).length === 25 && (html.match(/\?v=157/g) || []).length === 0
-      && /LM_ASSET_VER = '158'/.test(appJs),
-    'v158=' + (html.match(/\?v=158/g) || []).length + ' v157=' + (html.match(/\?v=157/g) || []).length);
+  T('版本已升到 159（?v=159 共 25 处 · v158 无残留 · LM_ASSET_VER=159）',
+    (html.match(/\?v=159/g) || []).length === 25 && (html.match(/\?v=158/g) || []).length === 0
+      && /LM_ASSET_VER = '159'/.test(appJs),
+    'v159=' + (html.match(/\?v=159/g) || []).length + ' v158=' + (html.match(/\?v=158/g) || []).length);
 
   globalThis.fetch = prevFetch;   /* 还原上一节的 fetch 桩 */
 })();
@@ -5749,6 +5749,66 @@ console.log('\n【修复153】手机弹窗贴到「协作中」胶囊右侧（�
       && C.indexOf('mergeBlocks(JSON.parse(JSON.stringify(c)), true)') > 0
       && C.indexOf('mergeBlocks(c, true)') > 0);
 })();
+/* ---------- 修复159：访客界面开关「隐藏提问键」整条链路（管理员勾选 → 存进内容 → 同步到 GitHub → 访客看不到） ---------- */
+console.log('【修复159】「页面管理」里的访客可见性开关：勾上 → 访客看不到右下角提问键');
+
+(function () {
+  const edt = srcOf('js/editor.js');
+  const appJs = srcOf('js/app.js');
+  const col = srcOf('js/collab.js');
+  const css = srcOf('css/style.css');
+  const sto = srcOf('js/store.js');
+
+  /* ① 开关在「页面管理」里，而且排在页面行**上面**（以前埋在整列页面最底下，等于藏起来了） */
+  T('修复159 · 源码：页面管理里有 #pgHideAsk 复选框，且排在 .page-rows 之前（不再埋在最底下）',
+    edt.indexOf('id="pgHideAsk"') > 0
+      && edt.indexOf('访客界面隐藏右下角「✨ 提问」按钮') > 0
+      && edt.indexOf('id="pgHideAsk"') < edt.indexOf("'<div class=\"page-rows\">' + rows + '</div>'"));
+
+  /* ② 勾选态回读 + 保存时写回 config.ui.hideAsk（两级兜底都不许少：内容里可能还没有 ui 这一层） */
+  T('修复159 · 源码：勾选态读 config.ui.hideAsk · 保存时写回（c.config / c.config.ui 两级兜底）',
+    edt.indexOf("(((c.config || {}).ui || {}).hideAsk ? ' checked' : '')") > 0
+      && edt.indexOf("const askBox = root.querySelector('#pgHideAsk');") > 0
+      && edt.indexOf('c.config = c.config || {};') > 0
+      && edt.indexOf('c.config.ui = c.config.ui || {};') > 0
+      && edt.indexOf('c.config.ui.hideAsk = !!(askBox && askBox.checked);') > 0);
+
+  /* ③ 保存后的回执要说清「本机已生效 / 还要同步」—— 否则用户以为已经发到访客手里了 */
+  T('修复159 · 源码：保存回执分两种（已隐藏 → 提示还要点「同步到 GitHub」；已显示 → 明说可见）',
+    edt.indexOf('页面设置已保存 · 访客已看不到「提问」按钮') > 0
+      && edt.indexOf('页面设置已保存 · 访客可以看到「提问」按钮') > 0);
+
+  /* ④ 界面开关抽成 applyUiFlags()，render 与 applyRemoteContent 都必须调：
+     远端内容结构没变时只局部重绘块、不走 render()，漏一处就是「配置到了、界面还是老样子」 */
+  T('修复159 · 源码：applyUiFlags() 抽出 · render 调用 · applyRemoteContent 也调用（远端到达立刻生效）',
+    appJs.indexOf('function applyUiFlags() {') > 0
+      && appJs.indexOf("document.body.classList.toggle('hide-ask', !!ui.hideAsk);") > 0
+      && appJs.indexOf('    applyUiFlags();') > 0
+      && appJs.indexOf('try { applyUiFlags(); } catch (eUF) { /* noop */ }') > 0);
+
+  /* ⑤ config.ui 参与合并：不能被别的设备推来的「加开关之前的老内容」整包顶掉 */
+  T('修复159 · 源码：mergeBlocks 合并 config.ui（本机键兜底、远端明确写了的键以远端为准）',
+    col.indexOf('const lu = (((base || {}).config || {}).ui) || {};') > 0
+      && col.indexOf("const ru = (cfgU.ui && typeof cfgU.ui === 'object') ? cfgU.ui : {};") > 0
+      && col.indexOf('cfgU.ui = nu;') > 0);
+
+  /* ⑥ CSS：只隐藏访客那一侧，管理员自己始终看得到（否则没法核对开关到底有没有生效） */
+  T('修复159 · 源码：body.hide-ask:not(.admin) .lm-ai-fab{display:none!important}（管理员不受影响）',
+    css.indexOf('body.hide-ask:not(.admin) .lm-ai-fab{display:none!important}') > 0);
+
+  /* ⑦ 开关本身的样式：蓝底 + 勾上变深（含深色模式） */
+  T('修复159 · 源码：.ask-toggle 蓝底高亮 · :has(input:checked) 勾上变深 · 深色模式同样有对应规则',
+    css.indexOf('.ask-toggle:has(input:checked)') > 0
+      && css.indexOf('rgba(0,113,227,.05)') > 0
+      && css.indexOf('.ask-toggle:has(input:checked){background:rgba(10,132,255,.20)') > 0);
+
+  /* ⑧ 「随 GitHub 上传而保存」：开关在 content.config 里 → ensureConfig 兜底 → 整包序列化进文件 */
+  T('修复159 · 源码：ensureConfig 保证 config.ui 存在 · buildFileText 序列化整包（开关随内容上传）',
+    appJs.indexOf("if (!c.config.ui || typeof c.config.ui !== 'object') c.config.ui = {};") > 0
+      && sto.indexOf('JSON.stringify(content, null, 2)') > 0);
+})();
+
+
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
 function finishAll() {
