@@ -48,7 +48,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793579053482,
+      "syncTs": 1793579138653,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -398,7 +398,7 @@ window.SITE_CONTENT = {
             ],
             [
               "Meta",
-              "企业哈哈",
+              "企业",
               "LLaMA 开源模型",
               "让研究者能低成本获得基座模型"
             ],
@@ -415,7 +415,7 @@ window.SITE_CONTENT = {
               "提出新方法，企业再工程化"
             ]
           ],
-          "_ts": 1793579053481
+          "_ts": 1793579138652
         },
         {
           "type": "chart",
