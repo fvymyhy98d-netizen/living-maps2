@@ -5239,13 +5239,11 @@ window.SITE_CONTENT = {
           "items": [
             {
               "label": "DeepSeek-AI：《DeepSeek-V3技术报告》v1，第1节及表1（2024-12-27）",
-              "url": "https://arxiv.org/abs/2309.06180",
-              "id": "r1"
+              "url": "https://arxiv.org/html/2412.19437v1#S1"
             },
             {
               "label": "《人工智能前沿与创新》课程大作业要求：认知地图与资料规范",
-              "url": "https://llmbook-zh.github.io/",
-              "id": "r2"
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
             }
           ],
           "_ts": 1794217834542
