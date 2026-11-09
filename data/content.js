@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794212707606,
+      "syncTs": 1794212704517,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -425,6 +425,49 @@ window.SITE_CONTENT = {
       "heroAlign": ""
     },
     {
+      "id": "feedback",
+      "kind": "page",
+      "icon": "💬",
+      "label": "反馈与建议",
+      "title": "反馈与建议",
+      "description": "对我们的工作有疑问、发现错误或有改进建议？在下方留言（可匿名）。留言与处理记录对所有人公开。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "size": "lead",
+          "text": "如果你对我们的**选题、页面、资料或分工**有疑问、发现错误，或者有改进建议，欢迎在下方留言——**可以匿名**。留言和我们的处理记录（怎样核实 → 改了什么 → 为什么这样处理）**对所有人公开**，既方便互相参考，也便于课程检查。"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "我们会怎么处理（作业要求）",
+          "text": "**每组应获得至少 3 名非本组同学的独立反馈**，且每条都要回应：记录「同学提出了什么 → 我们怎样核实 → 修改了什么 → 为什么调整或保留原判断」；**不采纳也会写明理由**。提问题时建议说清楚：针对哪个页面或哪项工作、遇到了什么问题、期望是什么。"
+        }
+      ],
+      "heroAlign": "",
+      "descStyle": {
+        "hl": "#fff3b0"
+      }
+    },
+    {
+      "id": "node-p1zy0",
+      "kind": "page",
+      "icon": "📄",
+      "label": "测试",
+      "title": "",
+      "description": "哈哈哈哈哈哈哈",
+      "heroAlign": "",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "size": "normal",
+          "text": "",
+          "style": {}
+        }
+      ],
+      "parent": "domain"
+    },
+    {
       "id": "cognition",
       "kind": "map",
       "icon": "🧭",
@@ -491,49 +534,6 @@ window.SITE_CONTENT = {
           "text": "- 先问问题再选工具；区分**事实**与**推断**；\n- 从任务困难反查知识缺口，连接到领域地图的课程路径；\n- 做小规模尝试并保留输入输出；每周检查一次地图并留下记录。"
         }
       ]
-    },
-    {
-      "id": "node-p1zy0",
-      "kind": "page",
-      "icon": "📄",
-      "label": "测试",
-      "title": "",
-      "description": "哈哈哈哈哈哈哈",
-      "heroAlign": "",
-      "blocks": [
-        {
-          "type": "paragraph",
-          "size": "normal",
-          "text": "",
-          "style": {}
-        }
-      ],
-      "parent": "domain"
-    },
-    {
-      "id": "feedback",
-      "kind": "page",
-      "icon": "💬",
-      "label": "反馈与建议",
-      "title": "反馈与建议",
-      "description": "对我们的工作有疑问、发现错误或有改进建议？在下方留言（可匿名）。留言与处理记录对所有人公开。",
-      "blocks": [
-        {
-          "type": "paragraph",
-          "size": "lead",
-          "text": "如果你对我们的**选题、页面、资料或分工**有疑问、发现错误，或者有改进建议，欢迎在下方留言——**可以匿名**。留言和我们的处理记录（怎样核实 → 改了什么 → 为什么这样处理）**对所有人公开**，既方便互相参考，也便于课程检查。"
-        },
-        {
-          "type": "callout",
-          "tone": "blue",
-          "title": "我们会怎么处理（作业要求）",
-          "text": "**每组应获得至少 3 名非本组同学的独立反馈**，且每条都要回应：记录「同学提出了什么 → 我们怎样核实 → 修改了什么 → 为什么调整或保留原判断」；**不采纳也会写明理由**。提问题时建议说清楚：针对哪个页面或哪项工作、遇到了什么问题、期望是什么。"
-        }
-      ],
-      "heroAlign": "",
-      "descStyle": {
-        "hl": "#fff3b0"
-      }
     },
     {
       "id": "discuss",
