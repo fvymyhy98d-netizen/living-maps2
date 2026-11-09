@@ -21,6 +21,14 @@
       codes.push('<code>' + c + '</code>');
       return '\u0001' + (codes.length - 1) + '\u0001';
     });
+    /* 图片必须排在链接前面：先吃掉 ![alt](src)，否则链接规则会把 [alt](src) 抢走，留下一个孤零零的 "!" */
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, function (_, alt, u) {
+      /* 相对路径（images/x.png、figs/a.svg、../b.png）一律放行；带协议的只放行 http(s) 与 data:image */
+      const hasScheme = /^[a-z][a-z0-9+.\-]*:/i.test(u);
+      const okScheme = /^(https?:|data:image\/)/i.test(u);
+      if (hasScheme && !okScheme) return alt;
+      return '<img class="md-img" src="' + u + '" alt="' + alt + '" loading="lazy">';
+    });
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, function (_, t, u) {
       const safe = /^(https?:|mailto:|#|\.?\/|images\/|files\/)/i.test(u) ? u : '#';
       return '<a href="' + safe + '" target="_blank" rel="noopener noreferrer">' + t + '</a>';
@@ -104,6 +112,122 @@
     return /^\s*\|?\s*:?-{2,}[-:|\s]*\|?\s*$/.test(String(l)) && (String(l).match(/-/g) || []).length >= 2;
   }
   const SPECIAL = /^\s*(#{1,4}\s|>|\s*[-*+]\s|\s*\d+[.)]\s|```)/;
+
+  /* ============ 极简语法着色（零依赖、纯本地、CSP 友好） ============
+     为什么要自己写：站点的 CSP 是 script-src 'self'，引不了 CDN 上的
+     highlight.js / Prism；把 3MB 的库塞进 lib/ 又太重。这里只做「词法切分」，
+     够把 Python 的注释、字符串、关键字、内置函数、数字、装饰器、运算符分色，
+     不做语法树解析（那才是真正的编辑器工作）。不认识的语言原样输出，
+     所以旧内容零风险：没有语言标记的代码块 = 和以前一样。
+     切分顺序很关键：注释 → 字符串（含 r/b/f 前缀）→ 数字 → 标识符 → 运算符。
+     顺序错了会把字符串里的 # 当注释、把注释里的引号当字符串开头。 */
+  const SET = function (s) { const o = Object.create(null); s.split(' ').forEach(function (w) { if (w) o[w] = 1; }); return o; };
+  const PY_KW = SET('False None True and as assert async await break case class continue def del elif else except finally for from global if import in is lambda match nonlocal not or pass raise return try while with yield');
+  const PY_BI = SET('abs all any ascii bin bool breakpoint bytearray bytes callable chr classmethod compile complex delattr dict dir divmod enumerate eval exec filter float format frozenset getattr globals hasattr hash help hex id input int isinstance issubclass iter len list locals map max memoryview min next object oct open ord pow print property range repr reversed round set setattr slice sorted staticmethod str sum super tuple type vars zip self cls __name__ __init__');
+  const JS_KW = SET('as async await break case catch class const continue debugger default delete do else export extends finally for from function if import in instanceof let new of return static super switch this throw try typeof var void while with yield null true false undefined NaN');
+  const JS_BI = SET('Array Boolean Date Error JSON Map Math Number Object Promise RegExp Set String Symbol console document window parseInt parseFloat isNaN require module exports');
+  const LANG = {
+    py: { kw: PY_KW, bi: PY_BI, hash: 1, py: 1 },
+    js: { kw: JS_KW, bi: JS_BI, slash: 1 },
+    sh: { kw: SET('if then else elif fi for while do done case esac function return export local echo cd exit'), bi: SET('ls cat grep sed awk curl git npm node python pip sudo'), hash: 1 }
+  };
+  function pickLang(raw) {
+    const l = String(raw || '').toLowerCase().replace(/^language-/, '');
+    if (/^(py|py3|python|python3)$/.test(l)) return 'py';
+    if (/^(js|jsx|ts|tsx|javascript|typescript|json|jsonc|node)$/.test(l)) return 'js';
+    if (/^(sh|bash|shell|zsh|console|cmd|powershell|ps1)$/.test(l)) return 'sh';
+    return '';
+  }
+  function highlight(code, lang) {
+    const cfg = LANG[lang];
+    if (!cfg) return esc(code);
+    const src = String(code), n = src.length;
+    let out = '', i = 0, lastWord = '', buf = '';
+    const flush = function () { if (buf) { out += esc(buf); buf = ''; } };
+    const put = function (cls, s) { flush(); out += cls ? '<span class="tk-' + cls + '">' + esc(s) + '</span>' : esc(s); };
+    while (i < n) {
+      const c = src.charAt(i);
+      if (c === '\n') { out += '\n'; i++; continue; }
+      if (c === ' ' || c === '\t' || c === '\r') { buf += c; i++; continue; }
+      /* 注释：Python/shell 的 #，JS 的 // 与块注释 */
+      if (cfg.hash && c === '#') {
+        let j = src.indexOf('\n', i); if (j < 0) j = n;
+        put('c', src.slice(i, j)); i = j; continue;
+      }
+      if (cfg.slash && c === '/' && src.charAt(i + 1) === '/') {
+        let j = src.indexOf('\n', i); if (j < 0) j = n;
+        put('c', src.slice(i, j)); i = j; continue;
+      }
+      if (cfg.slash && c === '/' && src.charAt(i + 1) === '*') {
+        let j = src.indexOf('*/', i + 2); j = j < 0 ? n : j + 2;
+        put('c', src.slice(i, j)); i = j; continue;
+      }
+      /* 字符串：支持 Python 的 r/b/f/u 前缀与三引号 */
+      let quote = '', pre = '';
+      if (c === '"' || c === "'") quote = c;
+      else if (cfg.py && /[rRbBuUfF]/.test(c)) {
+        for (let k = 1; k <= 2; k++) {
+          const ch = src.charAt(i + k);
+          if (ch === '"' || ch === "'") { pre = src.slice(i, i + k); quote = ch; break; }
+          if (!/[rRbBuUfF]/.test(ch)) break;
+        }
+      }
+      if (quote) {
+        const qp = i + pre.length;
+        const triple = src.substr(qp, 3) === quote + quote + quote;
+        const delim = triple ? quote + quote + quote : quote;
+        let j = qp + delim.length, closed = 0;
+        while (j < n) {
+          const ch = src.charAt(j);
+          if (ch === '\\') { j += 2; continue; }
+          if (src.substr(j, delim.length) === delim) { j += delim.length; closed = 1; break; }
+          if (!triple && ch === '\n') break;   /* 单引号串不许跨行 */
+          j++;
+        }
+        if (j > n) j = n;
+        put('s', src.slice(i, j));
+        i = j;
+        if (!closed) { /* 未闭合，原样收尾，不吞掉后面的代码 */ }
+        lastWord = ''; continue;
+      }
+      /* 数字 */
+      if (/[0-9]/.test(c)) {
+        const m = /^(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|[0-9][0-9_]*(?:\.[0-9_]*)?(?:[eE][+-]?[0-9]+)?j?)/.exec(src.slice(i));
+        if (m) { put('n', m[0]); i += m[0].length; lastWord = ''; continue; }
+      }
+      /* 装饰器 @xxx（只在行首/缩进处才算装饰器；句中 a @ b 是矩阵乘，不能染色） */
+      if (cfg.py && c === '@' && /[A-Za-z_]/.test(src.charAt(i + 1))) {
+        let k = i - 1;
+        while (k >= 0 && (src.charAt(k) === ' ' || src.charAt(k) === '\t')) k--;
+        if (k < 0 || src.charAt(k) === '\n') {
+          const m = /^@[A-Za-z_][\w.]*/.exec(src.slice(i));
+          put('d', m[0]); i += m[0].length; lastWord = ''; continue;
+        }
+      }
+      /* 标识符 */
+      if (/[A-Za-z_\u4e00-\u9fa5]/.test(c)) {
+        const m = /^[A-Za-z_\u4e00-\u9fa5][\w\u4e00-\u9fa5]*/.exec(src.slice(i));
+        const w = m[0];
+        let cls = '';
+        /* 紧跟在 def / class / function 后面的名字，是「你起的名字」，单独上色 */
+        if (lastWord === 'def' || lastWord === 'class' || lastWord === 'function') cls = 'f';
+        else if (cfg.kw[w]) cls = 'k';
+        else if (cfg.bi[w]) cls = 'b';
+        else if (!cfg.py && /^[A-Z]/.test(w)) cls = 'f';   /* JS 里的构造函数约定 */
+        put(cls, w);
+        lastWord = w;
+        i += w.length;
+        continue;
+      }
+      /* 运算符与括号 */
+      const om = /^(?:\*\*|\/\/|==|!=|<=|>=|->|:=|\+=|-=|\*=|\/=|%=|&=|\|=|\^=|<<|>>|\.\.\.|[-+*/%<>=!&|^~])/.exec(src.slice(i));
+      if (om) { put('o', om[0]); i += om[0].length; lastWord = ''; continue; }
+      if ('()[]{},:;.'.indexOf(c) >= 0) { put('p', c); i++; lastWord = ''; continue; }
+      buf += c; i++; lastWord = '';
+    }
+    flush();
+    return out;
+  }
   /* 整段 Markdown → HTML */
   function mdToHtml(src) {
     const lines = String(src == null ? '' : src).replace(/\r\n?/g, '\n').split('\n');
@@ -118,7 +242,11 @@
         const buf = [];
         while (i < lines.length && !/^\s*```/.test(lines[i])) { buf.push(lines[i]); i++; }
         i++;
-        out.push('<pre class="md-code"' + (lang ? ' data-lang="' + esc(lang) + '"' : '') + '><code>' + esc(buf.join('\n')) + '</code></pre>');
+        const langRaw = lang.split(/[\s{,]/)[0];
+        const lk = pickLang(langRaw);
+        const label = lk === 'py' ? 'Python' : lk === 'js' ? 'JavaScript' : lk === 'sh' ? 'Shell' : langRaw;
+        out.push('<pre class="md-code"' + (label ? ' data-lang="' + esc(label) + '"' : '') + '><code>'
+          + highlight(buf.join('\n'), lk) + '</code></pre>');
         continue;
       }
       /* 标题 # ~ #### */

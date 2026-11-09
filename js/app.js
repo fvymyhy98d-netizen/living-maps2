@@ -676,12 +676,23 @@ window.LMApp = (function () {
     let crumb = '';
     if (p.parent) {
       const kidN = childPages(p.id).length;
+      /* ★ 修复 B：从「相关条目」跳过来时，路径里补一段来路。
+         以前面包屑只按 parent 链生成（母项 › 本条），于是"从哪儿点进来的"这个信息只在左上角的
+         返回键里，路径本身看不出上一步是哪个兄弟条目。现在把上一屏接在路径尾部：
+         「领域地图 › 词表设计 ← 从「结构与计算」来」，点它能原路回去。
+         三种情况不加：上一屏就是母项（路径里已经有）、上一屏在本条祖先链上、没有上一屏。 */
+      const prevId = navHist.length > 1 ? navHist[navHist.length - 2] : '';
+      const prevOnTrail = trail.some(function (a1) { return a1.id === prevId; });
+      const prevPg = (prevId && prevId !== p.id && !prevOnTrail) ? pageById(prevId) : null;
+      const fromSeg = prevPg
+        ? '<a class="crumb-from" href="#/p/' + esc(prevPg.id) + '" title="回到上一屏「' + esc(pageTitle(prevPg)) + '」">← 从「' + esc(pageTitle(prevPg)) + '」来</a>'
+        : '';
       crumb = '<nav class="crumb reveal">' + trail.map(function (a1, ai) {
         const last = ai === trail.length - 1;
         const nm = esc((a1.icon ? a1.icon + ' ' : '') + (pageTitle(a1) || ''));
         return last ? '<span class="crumb-cur">' + nm + '</span>'
           : '<a href="#/p/' + esc(a1.id) + '">' + nm + '</a><span class="crumb-sep">›</span>';
-      }).join('') + (kidN ? '<span class="crumb-kids">共 ' + kidN + ' 个下级条目</span>' : '') + '</nav>';
+      }).join('') + fromSeg + (kidN ? '<span class="crumb-kids">共 ' + kidN + ' 个下级条目</span>' : '') + '</nav>';
     }
     /* 标题区工具条：与内容块统一（管理模式悬停显示；隐藏后常显"找回"按钮） */
     const heroTools = state.admin
@@ -1259,6 +1270,7 @@ window.LMApp = (function () {
   }
   function render(skipAnim) {
     if (skipAnim) document.body.classList.add('no-anim');
+    const prevPageId = state.pageId;   /* ★ 修复：记下换页前的页面，用来判断"这是不是一次真正的翻页" */
     state.pageId = currentId();
     navTrack(state.pageId); /* ★ 修复80：记一次浏览历史（顶部「‹ 返回」用它退回上一屏） */
     document.body.classList.toggle('admin', !!state.admin);
@@ -1267,6 +1279,25 @@ window.LMApp = (function () {
     renderFooter();
     const p = state.content.pages.find(function (x) { return x.id === state.pageId; });
     app.innerHTML = state.pageId === 'home' ? renderHome() : renderPage(p);
+    /* ★ 修复 A：翻页必须回到顶部。
+       整站是 hash 路由，换页只换了 #app 里的内容，浏览器不会自己滚回顶部——
+       于是在页脚附近点「相关条目」，新页面渲染出来后视口还停在原来的 scrollY 上，
+       如果新页面比较短就被夹到底部，看起来像"打开就停在最下面"。
+       只在新旧页面不同时回顶：编辑保存 / 协同回灌 / 撤销重做都是同一页，不能动用户的阅读位置
+       （撤销那条路径 render 之后还会自己 scrollTo 回原位）。 */
+    if (prevPageId !== state.pageId) {
+      /* 注意 html{scroll-behavior:smooth}：直接 scrollTo(0,0) 会变成"从页脚滑回顶部"的动画，
+         长页面要滑一秒多，中途还会被下一步渲染打断、停在半路。翻页应该是瞬移，所以临时关掉平滑 */
+      const de = document.documentElement;
+      const prevBeh = de.style.scrollBehavior;
+      de.style.scrollBehavior = 'auto';
+      window.scrollTo(0, 0);
+      /* 移动端浏览器的地址栏会在滚动后展开/收起，立即再校一次，避免落在半路 */
+      requestAnimationFrame(function () {
+        if (window.scrollY) window.scrollTo(0, 0);
+        de.style.scrollBehavior = prevBeh;
+      });
+    }
     /* 反馈与建议页：挂载访客留言框（管理员登录后同页出现处理通道） */
     if (p && p.id === 'feedback') {
       app.insertAdjacentHTML('beforeend', '<div id="fbMount"></div>');

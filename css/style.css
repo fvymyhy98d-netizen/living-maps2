@@ -689,8 +689,34 @@ input[type=checkbox],input[type=radio],input[type=range]{accent-color:var(--blue
 .md-body blockquote{margin:.7em 0;padding:8px 14px;border-left:3px solid var(--blue);background:rgba(0,113,227,.06);
   border-radius:0 10px 10px 0;color:var(--text2)}
 .md-body code{font-family:"SF Mono",Consolas,monospace;font-size:.9em;background:rgba(0,0,0,.06);border-radius:5px;padding:1px 5px}
-.md-code{background:#1d1d1f;color:#f5f5f7;border-radius:10px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.6;margin:.7em 0}
-.md-code code{background:none;color:inherit;padding:0}
+/* 正文插图：限宽、圆角、细描边，点击可放大由浏览器原生行为接管 */
+.md-img{max-width:100%;height:auto;border-radius:10px;border:1px solid rgba(0,0,0,.08);margin:.6em 0;background:#fff}
+
+/* ★ 代码块（修复：原来只有「黑底白字」一种颜色，像是渲染失败；现在按词法分色）
+   背景保持深色是故意的：正文是白底，代码块换成深色才能一眼分出「这是代码」；
+   真正让代码可读的是里面的颜色层次 —— 关键字、字符串、注释、数字各一色。 */
+.md-code{position:relative;background:#17181c;color:#e6edf3;border-radius:12px;padding:26px 16px 14px;
+  overflow:auto;font-size:12.5px;line-height:1.72;margin:.85em 0;
+  font-family:"SF Mono",ui-monospace,Menlo,Consolas,"Cascadia Code",monospace;
+  border:1px solid rgba(255,255,255,.08);box-shadow:0 1px 2px rgba(0,0,0,.18)}
+.md-code code{background:none;color:inherit;padding:0;font-family:inherit;white-space:pre;tab-size:4}
+/* 右上角语言标签：让读者知道这段是什么语言（Python / JavaScript / Shell） */
+.md-code[data-lang]::before{content:attr(data-lang);position:absolute;top:7px;right:11px;
+  font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:rgba(230,237,243,.42);
+  font-family:var(--font);font-weight:600;pointer-events:none}
+/* 左侧一条细高亮，收束视觉边界 */
+.md-code::after{content:"";position:absolute;left:0;top:10px;bottom:10px;width:3px;border-radius:0 3px 3px 0;
+  background:linear-gradient(180deg,#4c8dff,#a371f7)}
+/* ---- 词法着色（.tk-* 由 js/md.js 生成） ---- */
+.md-code .tk-c{color:#8b949e;font-style:italic}          /* 注释 */
+.md-code .tk-s{color:#a5d6a7}                             /* 字符串 */
+.md-code .tk-k{color:#ff7b9c}                             /* 关键字 def/for/if… */
+.md-code .tk-b{color:#79c0ff}                             /* 内置函数 print/len… */
+.md-code .tk-n{color:#ffab70}                             /* 数字 */
+.md-code .tk-f{color:#e3b341}                             /* 函数名/类名 */
+.md-code .tk-d{color:#d2a8ff}                             /* 装饰器 @ */
+.md-code .tk-o{color:#9aa4b2}                             /* 运算符 */
+.md-code .tk-p{color:#c9d1d9}                             /* 括号与标点 */
 .md-tblwrap{overflow-x:auto;margin:.7em 0}
 .md-body table{border-collapse:collapse;width:100%;font-size:.95em}
 .md-body th,.md-body td{border:1px solid rgba(0,0,0,.14);padding:7px 10px;text-align:left}
@@ -1060,6 +1086,12 @@ td.jump-flash,th.jump-flash{animation:jumpGlow 1.7s ease}
 .crumb-sep{color:var(--line)}
 .crumb-cur{color:var(--text);font-weight:600;padding:3px 9px;border-radius:9px;background:rgba(0,0,0,.05)}
 .crumb-kids{margin-left:auto;font-size:12px;color:var(--text2)}
+/* ★ 修复 B：来路标签（从「上一个子条目」来）—— 与祖先链接区分开：浅灰底、虚线边、字号小半号，
+   看上去像"备注"而不是路径的一环，避免被误读成"当前条目的上级" */
+.crumb a.crumb-from{margin-left:4px;font-size:12px;color:var(--text2);padding:2px 8px;border-radius:9px;
+  border:1px dashed var(--line);background:transparent;white-space:nowrap}
+.crumb a.crumb-from:hover{color:var(--text);border-color:#b9b9c0;background:rgba(0,0,0,.04)}
+@media (max-width:640px){.crumb-from{font-size:11px;max-width:100%;overflow:hidden;text-overflow:ellipsis}}
 
 /* 条目块：卡片网格 / 单列列表（与首页 map-card 同一套视觉语言） */
 .entry-grid{display:grid;gap:14px;grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -1163,7 +1195,8 @@ body.mobile-view .nav-back-t{display:none}
 body.mobile-view .nav-inner.nav-has-back .brand{opacity:0;pointer-events:none}
 
 /* ★ 修复80：跨母项的「关联条目」块 —— 复用条目块的卡片/列表视觉，只多一个「来自「某母项」」小标签 */
-.rel-from{display:inline-block;font-size:11px;line-height:1.5;color:var(--text2);
+.rel-from{display:inline-block;align-self:flex-start;   /* ★ 卡片是 flex 列，不写这句会被拉成整行灰条 */
+  font-size:11px;line-height:1.5;color:var(--text2);
   background:rgba(0,0,0,.05);border-radius:980px;padding:2px 8px;white-space:nowrap;
   max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .rel-card .entry-go{margin-top:auto}
