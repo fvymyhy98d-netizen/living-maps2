@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231620497,
+      "syncTs": 1794231682601,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -570,6 +570,12 @@ window.SITE_CONTENT = {
               "Datawhale 系列、Karpathy 课程、CS336、d2l"
             ]
           ]
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "sources",
