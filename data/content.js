@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232886750,
+      "syncTs": 1794232889474,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1509,8 +1509,9 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "normal",
-          "text": "",
-          "style": {}
+          "text": "典型任务落点：这一档只覆盖到\"把原始文本转成训练要的 jsonl 格式\"，没有工业级的去重、质量过滤与污染清洗流水线。所以这一段我们只讲方法、不下结论——26M 这一档用不到，也不该假装做过。",
+          "style": {},
+          "_ts": 1794232889472
         },
         {
           "type": "callout",
