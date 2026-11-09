@@ -5144,7 +5144,8 @@ window.SITE_CONTENT = {
             "c-misconception",
             "c-method"
           ],
-          "note": ""
+          "note": "",
+          "_ts": 0
         },
         {
           "type": "sources",
@@ -5288,7 +5289,8 @@ window.SITE_CONTENT = {
             "c-open",
             "c-method"
           ],
-          "note": ""
+          "note": "",
+          "_ts": 0
         },
         {
           "type": "sources",
