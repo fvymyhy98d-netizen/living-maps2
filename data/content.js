@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794212898177,
+      "syncTs": 1794212907466,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -177,11 +177,6 @@ window.SITE_CONTENT = {
             "n-eval",
             "n-deploy"
           ]
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "核心概念"
         },
         {
           "type": "table",
