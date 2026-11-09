@@ -628,20 +628,20 @@ window.SITE_CONTENT = {
               "url": "https://commoncrawl.org/get-started/"
             },
             {
-              "name": "European Commission · AI Act ｜https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework\u0002ai/",
-              "url": "#"
+              "name": "European Commission · AI Act",
+              "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework\u0002ai/"
             },
             {
-              "name": "Llama 3.1 Community License（2024-07-23） ｜https://github.com/meta-llama/llama\u0002models/blob/main/models/llama3_1/LICENSE",
-              "url": "#"
+              "name": "Llama 3.1 Community License（2024-07-23）",
+              "url": "https://github.com/meta-llama/llama\u0002models/blob/main/models/llama3_1/LICENSE/"
             },
             {
-              "name": "DeepSeek-V3 模型许可（LICENSE-MODEL） ｜https://github.com/deepseek-ai/DeepSeek\u0002V3/blob/main/LICENSE-MODEL",
-              "url": "#"
+              "name": "DeepSeek-V3 模型许可（LICENSE-MODEL）",
+              "url": "https://github.com/deepseek-ai/DeepSeek\u0002V3/blob/main/LICENSE-MODEL/"
             },
             {
-              "name": "Hugging Face Transformers（Apache-2.0） ｜https://github.com/huggingface/transformers",
-              "url": "#"
+              "name": "Hugging Face Transformers（Apache-2.0）",
+              "url": "https://github.com/huggingface/transformers/"
             }
           ]
         }
