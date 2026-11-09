@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232684873,
+      "syncTs": 1794232799797,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1104,6 +1104,12 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "2022 年 DeepMind 的 Chinchilla 论文算出一件事：**固定算力下，参数量和训练 token 数要按大约 1:20 配**。模型做大而数据不跟上，等于买了更大的桶却没多打水。\n按这个比例，26M 参数对应约 5 亿 token——中文语料大概几 GB 就够。而 GPT-3 的 1750 亿参数只配了 3000 亿 token，比例是 1:1.7，属于典型的\"营养不良\"，后来 LLaMA 系列就是靠把比例拉到 1:20 以上反超的。"
+        },
+        {
+          "type": "paragraph",
+          "size": "normal",
+          "text": "",
+          "style": {}
         },
         {
           "type": "callout",
