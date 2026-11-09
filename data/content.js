@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222591480,
+      "syncTs": 1794222598294,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -568,7 +568,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "这张图记录的不是结论，是**判断的依据**：为什么相信这个、什么时候改的、改成了什么、还有哪里不敢下结论。"
+          "text": "这张地图记录判断的依据：问题怎么拆，资料怎么核对，结果能说明什么，还有什么不知道。",
+          "_ts": 1794222598292
         },
         {
           "type": "heading",
