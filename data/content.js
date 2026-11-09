@@ -1194,7 +1194,7 @@ window.SITE_CONTENT = {
           "free": {
             "x": 0,
             "y": 154,
-            "w": 45.9,
+            "w": 94.4,
             "gw": null,
             "ride": 0
           }
