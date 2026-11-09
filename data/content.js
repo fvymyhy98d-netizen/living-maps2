@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232826849,
+      "syncTs": 1794232848469,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1322,6 +1322,12 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "按 Chinchilla 的 1:20，26M 参数配约 5 亿 token；实际小模型训练时，为了让它\"见多识广\"，往往会**远超**这个比例（重复训练多轮），代价是过拟合风险上升。判断依据在[预训练](#/p/n-pretrain)那页讲：看验证集 loss 什么时候开始回升。"
+        },
+        {
+          "type": "paragraph",
+          "size": "normal",
+          "text": "",
+          "style": {}
         },
         {
           "type": "callout",
