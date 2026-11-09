@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232250651,
+      "syncTs": 1794232288374,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1567,7 +1567,14 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "用现成分词器对同一段中文数过 token；没自己训过分词器"
+          "text": "用现成分词器对同一段中文数过 token；没自己训过分词器",
+          "free": {
+            "x": 0,
+            "y": 154,
+            "w": 48.8,
+            "gw": null,
+            "ride": 0
+          }
         },
         {
           "type": "callout",
