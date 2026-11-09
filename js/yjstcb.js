@@ -60,10 +60,26 @@
        mqs.push(mq)，此时 mqs 还是 undefined → 「Cannot read properties of undefined
        (reading 'push')」→ 协同初始化失败降级。电脑端靠旧缓存一直没暴露，手机无痕首载必现 */
     var mqs = [], mqUp = 0; /* 多 broker 全连：同时连池内所有公共 broker */
+    var mqAwareOn = false;  /* ★ 修复163：MQTT 的 aware 主题是否已订阅（订阅成功才敢说「状态有兜底通道」） */
     var api = {
       awareness: awareness,
       getPeerPCs: function () { return Object.keys(conns).map(function (k) { return conns[k].pc; }); },
-      destroy: function () { destroyed = true; try { cleanupAll(); } catch (e0) { /* noop */ } }
+      /* ★ 修复163：MQTT 侧看到几台设备在同一个房间里（不代表已建好数据通道）——
+         直连打不通时，这是唯一还能证明「对面有人」的证据，面板与自检都用它 */
+      mqttPeers: function () { return Object.keys(presStates).length; },
+      /* 当前 awareness 走的通道：p2p+mqtt（两条都有）/ p2p / mqtt（只有中继）/ none */
+      awarePath: function () {
+        var dcOpen = Object.keys(conns).some(function (k) { return conns[k] && conns[k].dc && conns[k].dc.readyState === 'open'; });
+        if (dcOpen) return mqAwareOn ? 'p2p+mqtt' : 'p2p';
+        return mqAwareOn ? 'mqtt' : 'none';
+      },
+      destroy: function () {
+        destroyed = true;
+        /* ★ 修复163：退出时先把自己的 awareness 置空（会广播一条 removed 帧），
+           MQTT 中继那边也不会把「离线的人」继续挂在名单上 */
+        try { awareness.setLocalState(null); } catch (eA0) { /* noop */ }
+        try { cleanupAll(); } catch (e0) { /* noop */ }
+      }
     };
     if (!awareness) { status('error', 'y-protocols 未加载'); return api; }
 
@@ -95,9 +111,43 @@
       } catch (e) { /* 坏帧忽略 */ }
     }
 
-    /* ---------- Awareness 广播（本地变化 → 所有对端；新连接 → 全量） ---------- */
+    /* ---------- Awareness 广播（本地变化 → 所有对端；新连接 → 全量） ----------
+       ★ 修复163：awareness 原本只走 WebRTC DataChannel。DataChannel 建不起来时（校园网/宿舍对称 NAT、
+       UDP 被拦、TURN 已停服），对方在「云端」能看到内容，却在「信令」这边永远看不见人 ——
+       因为状态根本没有第二条通道可走。现在同一条 awareness 帧**同时**发一份到 MQTT 的 aware 主题：
+       ▸ 只装「谁在线 / 在哪一页 / 正在改哪一块 / 颜色」这几个字段，**不含任何正文内容**；
+       ▸ 主题名与 presence 同源（房间名 + 口令哈希），不知道口令订阅不到；
+       ▸ 收到后走 applyAwarenessUpdate（origin=api），不会被再次转发，不会回环；
+       ▸ y-protocols 自带 30 秒过期清理，设备掉线不刷新也不会永远挂在名单上。
+       内容本身仍然只走 GitHub / P2P，这条通道绝不承载正文，写坏内容的可能性为零。 */
+    function b64enc(u8) {
+      var s = '';
+      for (var i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+      try { return btoa(s); } catch (e) { return ''; }
+    }
+    function b64dec(str) {
+      try {
+        var bin = atob(str), u8 = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+        return u8;
+      } catch (e) { return null; }
+    }
+    function publishAware(bytes) { /* 三路 broker 各发一份（对端按 clock 幂等，重复无害） */
+      if (!bytes || !mqUp) return;
+      var payload = b64enc(bytes);
+      if (!payload) return;
+      mqs.forEach(function (m) { try { if (m.connected) m.publish(awareTopic(), payload, { qos: 0 }); } catch (e) { /* noop */ } });
+    }
+    function publishAwareState(clients) { /* clients 省略 = 本机当前状态全量 */
+      try {
+        var ids = clients || Array.from(awareness.getStates().keys());
+        if (!ids.length) return;
+        publishAware(NS.encodeAwarenessUpdate(awareness, ids));
+      } catch (e) { /* noop */ }
+    }
     function broadcastAwareness(clients) {
       try { broadcastFrame(MSG_AWARE, NS.encodeAwarenessUpdate(awareness, clients)); } catch (e) { /* noop */ }
+      publishAwareState(clients); /* ★ 修复163：P2P 之外的保底通道 */
     }
     awareness.on('update', function (chg, origin) {
       if (origin === api) return; /* 远端来的不再转发（防回环） */
@@ -109,6 +159,7 @@
     function cleanupPeer(pid) {
       var c = conns[pid]; if (!c) return;
       delete conns[pid];
+      try { if (c._wd) clearTimeout(c._wd); } catch (eW0) { /* noop */ }
       try { if (c.dc) c.dc.close(); } catch (e1) { /* noop */ }
       try { c.pc.close(); } catch (e2) { /* noop */ }
     }
@@ -123,6 +174,8 @@
       dc.binaryType = 'arraybuffer';
       dc.onmessage = function (ev) { handleFrame(ev); };
       dc.onopen = function () {
+        try { var c0 = conns[peerId]; if (c0 && c0._wd) { clearTimeout(c0._wd); c0._wd = null; } } catch (eW1) { /* noop */ }
+        tries[peerId] = 0;   /* 通了就清零退避 */
         try { sendFrame(dc, MSG_DOC, window.Yjs.encodeStateAsUpdate(doc)); } catch (e1) { /* noop */ }
         try {
           var all = Array.from(awareness.getStates().keys());
@@ -132,26 +185,63 @@
       };
       dc.onclose = function () { if (conns[peerId] && conns[peerId].dc === dc) { cleanupPeer(peerId); maybeOffer(); } };
     }
+    var tries = {};            /* peerId → 连续失败次数（退避用，成功一次即清零） */
+    function retryLater(peerId) {
+      var n = (tries[peerId] || 0) + 1; tries[peerId] = n;
+      var wait = Math.min(60000, 4000 * n);   /* 4s → 8 → 12 … 封顶 60s，避免一直重试耗电 */
+      setTimeout(function () { if (!destroyed && !conns[peerId]) maybeOffer(); }, wait);
+    }
+    var p2pOff = false;   /* ★ 修复163：环境完全没有 WebRTC（企业策略/老浏览器）时置位，只走 MQTT 状态通道 */
     function makePC(peerId, initiator) {
-      var pc = new RTCPeerConnection({ iceServers: opts.iceServers || [] });
+      var pc;
+      try {
+        pc = new RTCPeerConnection({ iceServers: opts.iceServers || [] });
+      } catch (ePC) {
+        /* 不能把异常抛到 MQTT 消息回调里 —— 那会连带把「谁在线」的更新一起打断 */
+        p2pOff = true;
+        statusSafely('signaling-on', '本机不支持 WebRTC：内容走云端，在线状态走 MQTT');
+        return null;
+      }
       conns[peerId] = { pc: pc, dc: null, initiator: !!initiator };
       pc.onicecandidate = function (ev) {
         if (ev.candidate) sig({ k: 'ice', from: myPeer, to: peerId, candidate: ev.candidate.toJSON ? ev.candidate.toJSON() : ev.candidate });
       };
       pc.ondatachannel = function (ev) { conns[peerId].dc = ev.channel; wireDc(ev.channel, peerId); };
       pc.onconnectionstatechange = function () {
-        if (pc.connectionState === 'failed') { /* 直连+TURN 都失败：清理后延迟重新协商 */
+        if (pc.connectionState === 'failed') {
           cleanupPeer(peerId);
-          if (initiator) setTimeout(function () { if (!destroyed && !conns[peerId]) maybeOffer(); }, 2500);
+          if (initiator) retryLater(peerId);
+          return;
+        }
+        /* ★ 修复163：校园网/宿舍网络常常不是「failed」，而是永远停在 connecting / disconnected ——
+           旧代码只认 failed，于是像卡死一样永远「等待连接」，只有刷新才恢复。这里补超时兜底 */
+        if (pc.connectionState === 'disconnected' && initiator) {
+          setTimeout(function () {
+            if (!destroyed && conns[peerId] && conns[peerId].pc === pc && pc.connectionState === 'disconnected') {
+              cleanupPeer(peerId); retryLater(peerId);
+            }
+          }, 8000);
         }
       };
+      if (initiator) {
+        /* 12 秒还没 open（握手发出去了但对端收不到 / ICE 打不通）→ 拆掉重来，别干等 */
+        conns[peerId]._wd = setTimeout(function () {
+          var c1 = conns[peerId];
+          if (destroyed || !c1 || c1.pc !== pc) return;
+          if (c1.dc && c1.dc.readyState === 'open') return;
+          cleanupPeer(peerId);
+          retryLater(peerId);
+        }, 12000);
+      }
       return pc;
     }
     function maybeOffer() { /* 我对字典序更小的 peer 主动发 offer（消除 glare 冲突） */
       if (destroyed || !sigReady) return;
+      if (p2pOff) return;
       Object.keys(presStates).forEach(function (pid) {
         if (pid === myPeer || conns[pid] || myPeer > pid) return;
         var pc = makePC(pid, true);
+        if (!pc) return;
         var dc = pc.createDataChannel('lm', { ordered: true });
         conns[pid].dc = dc; wireDc(dc, pid);
         pc.createOffer().then(function (offer) { return pc.setLocalDescription(offer); }).then(function () {
@@ -171,6 +261,7 @@
     /* MQTT topic 派生：房间基座 = lm/<口令哈希>（不知道口令就撞不出 topic）；presence 广播 + 定向握手 */
     function baseTopic() { return 'lm/' + shortHash((opts.channel || 'living-maps') + '|' + (opts.password || '')); }
     function presTopic() { return baseTopic() + '/presence'; }
+    function awareTopic() { return baseTopic() + '/aware'; }   /* ★ 修复163：awareness 中继主题（只装状态，不装正文） */
     function selfTopic() { return baseTopic() + '/to/' + myPeer; }
     function peerTopic(pid) { return baseTopic() + '/to/' + pid; }
     function onSignal(p) {
@@ -183,6 +274,7 @@
       if (p.k === 'offer' && (!p.to || p.to === myPeer)) {
         var pc = conns[p.from] && conns[p.from].pc;
         if (!pc) pc = makePC(p.from, false);
+        if (!pc) return;   /* 本机没有 WebRTC：静默跳过，状态仍可经 MQTT 收到 */
         pc.setRemoteDescription(p.sdp).then(function () { return pc.createAnswer(); }).then(function (ans) {
           return pc.setLocalDescription(ans);
         }).then(function () {
@@ -231,6 +323,12 @@
           mq.__wasUp = true; mqUp++;
           sigReady = true; lastOff = '';
           try { mq.subscribe(presTopic()); mq.subscribe(selfTopic()); } catch (e0) { /* noop */ }
+          /* ★ 修复163：订阅 awareness 中继主题，并立刻把自己的状态播一次，
+             这样对面不用等 15 秒心跳就能看见「我在这一页」 */
+          try {
+            mq.subscribe(awareTopic(), { qos: 0 }, function (err) { if (!err) mqAwareOn = true; });
+            publishAwareState([awareness.clientID]);   /* 只播自己，不替别人重播 */
+          } catch (e0b) { /* noop */ }
           statusSafely('signaling-on', topic + '（' + mqUp + '/' + mqs.length + ' 路信令）');
           mqPublish(presTopic(), { peer: myPeer, t: nowSec() });
           if (mqPing) clearInterval(mqPing);
@@ -238,6 +336,11 @@
         });
         mq.on('message', function (t, payload) {
           if (destroyed) return;
+          if (t === awareTopic()) { /* ★ 修复163：对面经 MQTT 中继过来的「谁在线 / 正在改哪块」 */
+            var u8 = b64dec(payload.toString());
+            if (u8) { try { NS.applyAwarenessUpdate(awareness, u8, api); } catch (eA1) { /* 坏帧忽略 */ } }
+            return;
+          }
           var p = null;
           try { p = JSON.parse(payload.toString()); } catch (eP) { return; }
           if (!p) return;
@@ -258,7 +361,7 @@
         Object.keys(presStates).forEach(function (pid) {
           if (!presStates[pid] || (now - (presStates[pid].t || 0)) > 45) gone.push(pid);
         });
-        gone.forEach(function (pid) { delete presStates[pid]; cleanupPeer(pid); });
+        gone.forEach(function (pid) { delete presStates[pid]; delete tries[pid]; cleanupPeer(pid); });
         if (gone.length) scanPresence();
       }, 20000);
     }
@@ -274,7 +377,7 @@
     function onMqPresence(p) {
       if (!p || !p.peer || p.peer === myPeer) return;
       if (p.leave) {
-        if (presStates[p.peer]) { delete presStates[p.peer]; cleanupPeer(p.peer); scanPresence(); }
+        if (presStates[p.peer]) { delete presStates[p.peer]; delete tries[p.peer]; cleanupPeer(p.peer); scanPresence(); }
         return;
       }
       var isNew = !presStates[p.peer];

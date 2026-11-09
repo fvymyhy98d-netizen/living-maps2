@@ -21,6 +21,8 @@
       peerCount: function () { return 0; },
       channel: function () { return ''; },
       presence: function () { return []; },
+      mqttPeers: function () { return 0; },
+      awarePath: function () { return 'none'; },
       pushLocal: function () { /* 未启用 */ }
     };
     /* 降级必须留痕：Console 记录完整信息（含堆栈），方便远程排查「协同初始化失败」类问题 */
@@ -32,6 +34,8 @@
     peerCount: function () { return 0; },
     channel: function () { return ''; },
     presence: function () { return []; },
+    mqttPeers: function () { return 0; },
+    awarePath: function () { return 'none'; },
     pushLocal: function () { /* 启动中 */ }
   };
   if (CFG.enabled === false) { stub(); return; }
@@ -237,7 +241,10 @@
       if (typeof provider.getPeerPCs === 'function') conns = provider.getPeerPCs() || [];
     } catch (e) { /* noop */ }
     var nPeers = 0; try { nPeers = window.LMYCollab.peerCount(); } catch (e2) { /* noop */ }
-    if (!conns.length) { setChannel(nPeers > 0 ? '等待连接' : '离线（本地可用）'); return; }
+    var mqN = 0; try { mqN = (provider.mqttPeers ? provider.mqttPeers() : 0); } catch (e3) { /* noop */ }
+    /* ★ 修复163：直连没建起来但 MQTT 里有人 → 说明「人在、状态也看得见，只是内容走云端」，
+       不该再显示「等待连接」让人以为彻底没连上 */
+    if (!conns.length) { setChannel((nPeers > 0 || mqN > 0) ? '在线 · 状态经云端' : '离线（本地可用）'); return; }
     var pend = conns.length, pairs = [];
     function check() { if (pend > 0) return; setChannel(classifyChannel(pairs)); }
     conns.forEach(function (pc) {
@@ -323,6 +330,9 @@
         failed: false, yjs: true,
         peerCount: function () { try { return Math.max(0, aw.getStates().size - 1); } catch (e5) { return 0; } },
         channel: function () { return lastChannel; },
+        /* ★ 修复163：诊断用 —— MQTT 房间里看到几台设备、状态走的是哪条通道 */
+        mqttPeers: function () { try { return (provider && provider.mqttPeers) ? provider.mqttPeers() : 0; } catch (e6) { return 0; } },
+        awarePath: function () { try { return (provider && provider.awarePath) ? provider.awarePath() : 'none'; } catch (e7) { return 'none'; } },
         presence: function () {
           var out = [], m0 = me();
           try { aw.getStates().forEach(function (st) { if (st.lm) out.push({ id: st.lm.id, name: st.lm.name, page: st.lm.page || '', editing: (st.lm.editing == null ? null : st.lm.editing), color: st.lm.color, self: st.lm.id === m0.id }); }); } catch (e6) { /* noop */ }

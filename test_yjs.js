@@ -6047,6 +6047,51 @@ console.log('【修复161】并排换位按「整行」· 手动上传闸门有�
   T('★ 修复162 · 真跑 mergeBlocks：同长度各改一块 → 两边的字都保住（a-mine,b-theirs）', ok3);
 })();
 
+/* ---------- 5·补2) ★ 修复163：awareness 走 MQTT 中继（直连打不通也能看见人在改） ---------- */
+(function () {
+  const Y = srcOf('js/yjstcb.js');
+  const C = srcOf('js/ycollab.js');
+  const K = srcOf('js/collab.js');
+
+  T('修复163 · 源码：aware 主题与 presence 同源派生（房间名 + 口令哈希，陌生人订阅不到）',
+    Y.indexOf("function awareTopic() { return baseTopic() + '/aware'; }") > 0);
+
+  T('修复163 · 源码：连上 broker 就订阅 aware 主题，并立刻播自己的状态（不等 15 秒心跳）',
+    Y.indexOf('mq.subscribe(awareTopic()') > 0 && Y.indexOf('publishAwareState([awareness.clientID])') > 0);
+
+  T('修复163 · 源码：收到中继帧用 applyAwarenessUpdate(awareness, u8, api) 落地 —— origin=api，不会回环重播',
+    Y.indexOf('t === awareTopic()') > 0
+      && Y.indexOf('NS.applyAwarenessUpdate(awareness, u8, api)') > 0);
+
+  T('修复163 · 安全：MQTT 中继只发 awareness 帧，绝不发正文（publishAware 的入参只有 encodeAwarenessUpdate 结果）',
+    Y.indexOf('function publishAware(bytes)') > 0
+      && Y.indexOf('publishAware(NS.encodeAwarenessUpdate(awareness, ids))') > 0
+      /* aware 主题分支里不得出现 content / page: / meta 等正文键 */
+      && (function () {
+        const i = Y.indexOf('t === awareTopic()');
+        const seg = Y.slice(i, i + 320);
+        return seg.indexOf('content') < 0 && seg.indexOf('page:') < 0 && seg.indexOf('meta') < 0;
+      })());
+
+  T('修复163 · 源码：退出时把 awareness 置空 —— 名单上不留「已离线的人」',
+    Y.indexOf('try { awareness.setLocalState(null); }') > 0);
+
+  T('修复163 · 源码：ICE 卡在 connecting / disconnected 有超时兜底（旧版只认 failed，会一直「等待连接」）',
+    Y.indexOf("pc.connectionState === 'disconnected'") > 0
+      && Y.indexOf('_wd = setTimeout(function ()') > 0
+      && Y.indexOf('}, 12000);') > 0
+      && Y.indexOf('function retryLater(peerId)') > 0);
+
+  T('修复163 · 源码：诊断接口补齐（mqttPeers / awarePath，LMCollab.diag() 能直接看出走哪条通道）',
+    C.indexOf('mqttPeers: function ()') > 0
+      && C.indexOf('awarePath: function ()') > 0
+      && K.indexOf('MQTT在场设备:') > 0
+      && K.indexOf('状态通道:') > 0);
+
+  T('修复163 · 源码：直连没建成但信令里有人时不再显示「等待连接」（改成「在线 · 状态经云端」）',
+    C.indexOf("'在线 · 状态经云端'") > 0);
+})();
+
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
 function finishAll() {
   console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');

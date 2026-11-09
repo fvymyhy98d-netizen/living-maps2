@@ -2343,9 +2343,13 @@ window.LMCollab = (function () {
         距上次按键毫秒: lastKeyAt ? Date.now() - lastKeyAt : -1,
         指针按住: pointerDown,
         挂起的包: pending ? (pending.by || '未知') : '',
-        正在编辑块: myEditing,
+        正在编辑块: (typeof myEditing === 'undefined' ? null : myEditing), /* ★ 修复163：myEditing 在 ycollab 作用域里，直接取值会抛 ReferenceError，把整个 diag 打断 */
         Yjs就绪: !!(window.LMYCollab && window.LMYCollab.yjs),
         Yjs同伴: (window.LMYCollab && window.LMYCollab.peerCount) ? window.LMYCollab.peerCount() : 0,
+        /* ★ 修复163：直连打不通时，看这两项判断「对面到底在不在」——
+           MQTT在场设备 > 0 表示信令层看得见人；状态通道 mqtt 表示「谁在改哪块」已走中继，不再依赖 P2P */
+        MQTT在场设备: (window.LMYCollab && window.LMYCollab.mqttPeers) ? window.LMYCollab.mqttPeers() : '未知',
+        状态通道: (window.LMYCollab && window.LMYCollab.awarePath) ? window.LMYCollab.awarePath() : '未知',
         在线设备: liveCount(),
         通道: modeLabel,
         内容分支: (function () { try { return ghBranch() + (GH.useMain ? '（已回退 main）' : '') + (ghBranch() !== ghMainRef() ? '（不触发 Pages 构建）' : ''); } catch (e) { return '?'; } })(),
