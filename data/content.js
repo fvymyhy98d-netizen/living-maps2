@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217528344,
+      "syncTs": 1794217533520,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5165,7 +5165,7 @@ window.SITE_CONTENT = {
           "headers": [
             "问题",
             "要写清什么",
-            "不合格的样子"
+            "本次案例中的对应内容"
           ],
           "rows": [
             [
@@ -5189,7 +5189,7 @@ window.SITE_CONTENT = {
               "什么都懂，没有任何边界"
             ]
           ],
-          "_ts": 1794217528342
+          "_ts": 1794217533518
         },
         {
           "type": "heading",
