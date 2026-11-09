@@ -8,8 +8,8 @@ window.SITE_CONTENT = {
   "site": {
     "title": "三张活地图",
     "subtitle": "人工智能前沿与创新 · 课程大作业",
-    "topic": "示例主题：大语言模型（LLM）—— 上线前请改成你们小组的选题",
-    "description": "围绕所选领域，建立「领域 · 生态 · 认知」三张相互关联、持续更新的活地图，作为伴随大学四年的思考外脑。",
+    "topic": "大语言模型的构建",
+    "description": "我们围绕大语言模型构建的全过程，建立在领域 · 生态 · 认知方面三张相互关联、持续更新的活地图",
     "homeFeatures": [
       {
         "icon": "🖐️",
@@ -32,7 +32,11 @@ window.SITE_CONTENT = {
         "desc": "每周检查，让地图随学习持续生长"
       }
     ],
-    "subStyle": {}
+    "subStyle": {},
+    "homeSection1": "三张地图，一个外脑。",
+    "heroStyle": {},
+    "topicStyle": {},
+    "descStyle": {}
   },
   "config": {
     "admin": {
@@ -49,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1793611957702,
+      "syncTs": 1794209442711,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -57,7 +61,8 @@ window.SITE_CONTENT = {
         "salt": "SoWaQIjCAeI7bt3cz50x3g==",
         "iv": "OcRqZ7JTbi+YUU/l",
         "ct": "7wtJA1x316mci+gWwJCdQJdOpPocdO4peb0seYJWnfBUdkTX2aEul5vfi0azcpwc0GuPj14GgyuMVLoJ/1REUPgIW0e5InZmKq7xlDHcB3lzpjBAEDs36skuJRJ8lTdHZO0YZbaONayFNon9SUBuXw6pBM2kyXkj6cAsJyTqOsPNfwu6w0aWC24Y9XqsEHjXLIfdv88CdYhEQ0DAJEjNrTGYjL7BXIxLd7AUDh3xgzRxJ8jzb8SaiP9Z9EQQ1W2OW2n2"
-      }
+      },
+      "tomb": {}
     },
     "fbCloud": {
       "kind": "supabase",
@@ -65,7 +70,9 @@ window.SITE_CONTENT = {
       "key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlyY2xhc3FsY2F0Y3pqbGluZ2lpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0Mjc5NzUsImV4cCI6MjEwOTAwMzk3NX0.WKHIYCA-JlOAdZSbDPbv5LpElMLhwDfF4jKBdKGpXsc",
       "table": "lm_feedback"
     },
-    "ui": {}
+    "ui": {
+      "hideAsk": false
+    }
   },
   "pages": [
     {
@@ -342,7 +349,8 @@ window.SITE_CONTENT = {
               "url": "https://www.anthropic.com/news/contextual-retrieval",
               "id": "r2"
             }
-          ]
+          ],
+          "seq": 0
         },
         {
           "type": "files",
@@ -572,12 +580,21 @@ window.SITE_CONTENT = {
           "rows": [
             [
               "v0.1",
-              "2026-10-26",
-              "全部页面",
-              "作业要求发布",
-              "建立网站与三张地图的初始框架（示例行，请替换）",
-              "待填写",
-              "待测试"
+              "2026-10-20",
+              "网页的初步构建",
+              "作业要求",
+              "建立网站与三张地图的初始框架，上线github",
+              "排版bug，小组协作困难",
+              "很多问题。。"
+            ],
+            [
+              "v0.2",
+              "2026-10-24",
+              "网页排版修复，上线协作功能并持续迭代。进一步搭建框架",
+              "合作的方便性、作业要求",
+              "添加反馈与建议（作业要求），上线workbuddy（看错要求了呜呜）",
+              "内容不充实",
+              "步入正轨"
             ],
             [
               "",
@@ -589,7 +606,16 @@ window.SITE_CONTENT = {
               ""
             ]
           ],
-          "_ts": 1793376062281
+          "_ts": 1794208297718,
+          "colW": [
+            14.285714285714286,
+            14.285714285714286,
+            14.285714285714286,
+            14.285714285714286,
+            15.788446526151446,
+            12.782982045277127,
+            14.285714285714286
+          ]
         },
         {
           "type": "callout",
@@ -610,7 +636,7 @@ window.SITE_CONTENT = {
       "icon": "💬",
       "label": "反馈与建议",
       "title": "反馈与建议",
-      "description": "对我们的工作有疑问、发现错误或有改进建议？在下方留言（可匿名）。留言与处理记录对所有人公开，我们会逐条回应。",
+      "description": "对我们的工作有疑问、发现错误或有改进建议？在下方留言（可匿名）。留言与处理记录对所有人公开。",
       "blocks": [
         {
           "type": "paragraph",
@@ -674,24 +700,31 @@ window.SITE_CONTENT = {
           ],
           "rows": [
             [
-              "成员 A",
+              "李秋石",
+              "组长",
+              "",
+              ""
+            ],
+            [
+              "汪子洋",
+              "",
+              "",
+              ""
+            ],
+            [
+              "陈攀宇",
               "内容 + 网站开发",
               "搭建与部署本网站",
-              "（示例行，请修改）"
-            ],
-            [
-              "成员 B",
-              "资料核查",
-              "为领域地图补充来源",
               ""
             ],
             [
-              "成员 C",
-              "生态调研",
-              "整理参与者关系",
+              "殷启涵",
+              "",
+              "",
               ""
             ]
-          ]
+          ],
+          "_ts": 1794209442710
         },
         {
           "type": "callout",
