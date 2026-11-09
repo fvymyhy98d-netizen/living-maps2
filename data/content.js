@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232878983,
+      "syncTs": 1794232886750,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1505,6 +1505,12 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "如果你用 MMLU、C-Eval 这类公开题做评测，而训练语料里恰好有这些题的原文和答案，模型就是**背过答案去考试**，分数毫无意义。\n检测方法不复杂：把评测题按 13-gram 切开，去训练语料里查有没有连续 13 个词完全命中。命中率超过某个阈值就说明这条题被污染了。这不是学术洁癖，**很多\"某某模型刷榜\"的争议就出在这里。**"
+        },
+        {
+          "type": "paragraph",
+          "size": "normal",
+          "text": "",
+          "style": {}
         },
         {
           "type": "callout",
