@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217533520,
+      "syncTs": 1794217539003,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5170,7 +5170,7 @@ window.SITE_CONTENT = {
           "rows": [
             [
               "是什么",
-              "用术语解释术语",
+              "想检验的具体问题",
               "\"注意力机制是一种注意力机制\""
             ],
             [
@@ -5189,7 +5189,7 @@ window.SITE_CONTENT = {
               "什么都懂，没有任何边界"
             ]
           ],
-          "_ts": 1794217533518
+          "_ts": 1794217539001
         },
         {
           "type": "heading",
