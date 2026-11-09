@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218872218,
+      "syncTs": 1794218876208,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4860,7 +4860,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "三个等级：**跑过**（自己实现并观察到结果）、**读懂**（能解释原理、能读代码）、**听过**（知道是什么，说不清细节）。\n任何一条知识，先标等级再写结论。"
+          "text": "区分本人参与、AI辅助执行和没有开展的事，比统一标“跑过”更准确。",
+          "_ts": 1794218876206
         },
         {
           "type": "heading",
