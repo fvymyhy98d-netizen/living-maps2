@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217902629,
+      "syncTs": 1794217968446,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5259,11 +5259,11 @@ window.SITE_CONTENT = {
               "url": "#/p/demo-rag"
             },
             {
-              "name": "Happy-LLM（每章都有\"小结 + 延伸\"，结构类似）",
+              "name": "能力边界：本人参与、AI辅助与未开展的工作",
               "url": "https://github.com/datawhalechina/happy-llm"
             }
           ],
-          "_ts": 1794217902627
+          "_ts": 1794217968444
         },
         {
           "type": "callout",
