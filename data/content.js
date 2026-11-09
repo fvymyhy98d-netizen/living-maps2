@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231728455,
+      "syncTs": 1794231735599,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -990,14 +990,6 @@ window.SITE_CONTENT = {
           "tone": "orange",
           "title": "已初步理解",
           "text": "了解初步通过显存量进行参数量的计算方法，运算训练时间成本的公式",
-          "free": {
-            "x": 69.2,
-            "y": 154,
-            "w": 28,
-            "gw": null,
-            "ride": 0,
-            "h": 182
-          },
           "_ts": 0
         },
         {
