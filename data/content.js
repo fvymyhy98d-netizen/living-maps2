@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218758449,
+      "syncTs": 1794218770621,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4373,7 +4373,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "对照原始论文",
+          "title": "查看方法与边界",
           "items": [
             {
               "name": "Chinchilla 论文（配比结论的出处）",
@@ -4383,7 +4383,8 @@ window.SITE_CONTENT = {
               "name": "去重论文（数据质量影响的实证）",
               "url": "https://arxiv.org/abs/2107.06499"
             }
-          ]
+          ],
+          "_ts": 1794218770618
         },
         {
           "type": "callout",
