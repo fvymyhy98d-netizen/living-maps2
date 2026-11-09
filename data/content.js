@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217607205,
+      "syncTs": 1794217617574,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5195,7 +5195,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "一个合格的例子"
+          "text": "第一轮比较：不附原文与附原文",
+          "_ts": 1794217617572
         },
         {
           "type": "paragraph",
