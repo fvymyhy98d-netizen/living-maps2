@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222513744,
+      "syncTs": 1794222518064,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5012,7 +5012,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "算一算",
+          "title": "继续阅读",
           "items": [
             {
               "name": "Transformer Math 101（显存与算力的公式推导）",
@@ -5022,7 +5022,8 @@ window.SITE_CONTENT = {
               "name": "Chinchilla 论文（最优配比的原始推导）",
               "url": "https://arxiv.org/abs/2203.15556"
             }
-          ]
+          ],
+          "_ts": 1794222518062
         },
         {
           "type": "callout",
