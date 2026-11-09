@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794226667430,
+      "syncTs": 1794226676692,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -912,7 +912,7 @@ window.SITE_CONTENT = {
           "rows": [
             [
               "李秋石",
-              "组长",
+              "组长+内容",
               "分工 内容修改与填充",
               ""
             ],
@@ -935,7 +935,7 @@ window.SITE_CONTENT = {
               ""
             ]
           ],
-          "_ts": 1794226670485
+          "_ts": 1794226676687
         },
         {
           "type": "callout",
