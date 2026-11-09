@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794230151133,
+      "syncTs": 1794230161223,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -89,7 +89,7 @@ window.SITE_CONTENT = {
       "icon": "🗺️",
       "label": "领域地图",
       "title": "领域地图：chuang造一个语言模型要经过哪些环节",
-      "description": "从一张显卡到别人能用上，十二个环节排成一条线。点任意关键词进入条目页。",
+      "description": "从一张显卡到别人能用上，十二个环节排成一条线。点任意关键词即可进入条目页。",
       "heroAlign": "",
       "blocks": [
         {
