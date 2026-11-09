@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218788412,
+      "syncTs": 1794218815956,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4294,8 +4294,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "修正一：起点：我原来怎样想",
-          "_ts": 1794218599777
+          "text": "起点：我原来怎样想",
+          "_ts": 1794218815953
         },
         {
           "type": "paragraph",
