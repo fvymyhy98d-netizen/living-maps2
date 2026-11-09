@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218207086,
+      "syncTs": 1794218512571,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4273,7 +4273,7 @@ window.SITE_CONTENT = {
       "kind": "page",
       "icon": "🔄",
       "label": "三次认知修正",
-      "title": "我们改过的三个判断",
+      "title": "我的判断怎样推进：不强行凑三次反转",
       "description": "参数越大越好 → 配比才是关键；清洗是杂活 → 清洗是核心；loss 低就好 → loss 只是信号。",
       "heroAlign": "",
       "parent": "cognition",
@@ -4389,7 +4389,8 @@ window.SITE_CONTENT = {
           "title": "诚实说明",
           "text": "- 上面的数字（80 万行 → 23 万行、几十个百分点）来自我们自己这套推演里的记录，不是公开论文的数值，**不能当引用依据**。\n- 三次修正的先后顺序在真实项目里往往是交织的，这里为了讲清楚做了线性化处理。"
         }
-      ]
+      ],
+      "heroStyle": {}
     },
     {
       "id": "c-misconception",
