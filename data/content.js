@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794213006330,
+      "syncTs": 1794213026802,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -122,10 +122,6 @@ window.SITE_CONTENT = {
           "type": "heading",
           "level": 2,
           "text": "课程与学习路径"
-        },
-        {
-          "type": "paragraph",
-          "text": "**前置基础：**高等数学（概率与矩阵）→ **核心覆盖：**人工智能导论、机器学习 → **实践应用：**本课程大作业 → **自主拓展：**经典论文与开源项目。\n\n以上为示例，请对照你们专业的培养方案逐条核实，无法确认的先标\"待核实\"。"
         },
         {
           "type": "files",
