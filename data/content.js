@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217547144,
+      "syncTs": 1794217552148,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5175,7 +5175,7 @@ window.SITE_CONTENT = {
             ],
             [
               "怎么做",
-              "只有结论没有过程",
+              "材料、比较条件、操作步骤，以及谁执行",
               "\"通过训练模型实现\""
             ],
             [
@@ -5189,7 +5189,7 @@ window.SITE_CONTENT = {
               "什么都懂，没有任何边界"
             ]
           ],
-          "_ts": 1794217547142
+          "_ts": 1794217552145
         },
         {
           "type": "heading",
