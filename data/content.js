@@ -647,9 +647,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "「待核实」",
+          "text": "① 各许可证的具体条款（商用限制、再分发、输出归属）我们只读了标题与开头，未逐条核对；② Arena 类人评平台的具\n体方法（题目怎么来、如何防刷）未核实；③ 电力与集群成本没有公开数据。"
         },
         {
           "type": "callout",
