@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219032314,
+      "syncTs": 1794219034478,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5002,8 +5002,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "区分两类未知：**\"我不知****但****道有人知道\"**（去查）和**\"没人知道\"**（可以做）。这张图只记后者。",
-          "_ts": 1794219032312
+          "text": "把“本次没测、暂时没查到、尚未学会”和“整个领域没有定论”分开。个人学习缺口也值得记录。",
+          "_ts": 1794219034477
         },
         {
           "type": "heading",
