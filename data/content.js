@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222329618,
+      "syncTs": 1794222333798,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4906,7 +4906,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "三者关系是 `C ≈ 6ND`。算力固定时，N（参数）和 D（数据）此消彼长；而显存又会单独卡死 N 的上限。**所以真正的约束有三个，不是两个。**"
+          "text": "能给出一个数，不等于这个数有依据。不同任务可以接受不同程度的不确定性，但要把性质说清楚。",
+          "_ts": 1794222333797
         },
         {
           "type": "heading",
