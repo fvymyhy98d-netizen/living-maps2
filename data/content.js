@@ -3053,7 +3053,7 @@ window.SITE_CONTENT = {
           "free": {
             "x": 0,
             "y": 91,
-            "w": 94.4,
+            "w": 50.7,
             "gw": null,
             "ride": 0
           }
