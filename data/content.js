@@ -616,7 +616,7 @@ window.SITE_CONTENT = {
               "url": "https://arxiv.org/abs/2412.15115"
             },
             {
-              "name": "OLMo 2（2025） ｜https://arxiv.org/abs/2501.00656",
+              "name": "OLMo 2（2025） ｜https://arxiv.org/abs/2501.00656/",
               "url": "#"
             },
             {
