@@ -2300,9 +2300,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "读过规模定律与 base model 的特点；没跑过"
         },
         {
           "type": "callout",
