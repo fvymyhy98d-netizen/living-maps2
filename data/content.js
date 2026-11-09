@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232645505,
+      "syncTs": 1794232664556,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -3044,6 +3044,12 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "模型能生成，和\"别人打开网页能用\"，中间隔着一整个工程问题。**推理慢，绝大多数时候不是算力不够，是显存带宽不够。**"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
