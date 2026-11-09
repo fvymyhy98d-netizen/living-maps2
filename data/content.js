@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794213118673,
+      "syncTs": 1794213148746,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -289,6 +289,13 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "认知地图聚焦**思考方法、分析案例与成长习惯**：我们怎样理解一个问题，依据什么判断，遇到新证据后怎样调整。"
+        },
+        {
+          "type": "entries",
+          "mode": "card",
+          "cols": 3,
+          "note": "",
+          "title": "下级条目"
         },
         {
           "type": "heading",
