@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232451083,
+      "syncTs": 1794232473796,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2297,6 +2297,12 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "预训练是整条链路里最贵的一步，也是唯一一步\"不需要人工标注\"的——因为**文本本身就是标签**，下一个词就是答案。"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
