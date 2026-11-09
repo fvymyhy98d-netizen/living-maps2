@@ -1565,9 +1565,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "用现成分词器对同一段中文数过 token；没自己训过分词器"
         },
         {
           "type": "callout",
