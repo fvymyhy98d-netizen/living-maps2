@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232333336,
+      "syncTs": 1794232336860,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1739,7 +1739,14 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "读过各组件的职责与参数分布；没改过结构做对比"
+          "text": "读过各组件的职责与参数分布；没改过结构做对比",
+          "free": {
+            "x": 0,
+            "y": 154,
+            "w": 49.4,
+            "gw": null,
+            "ride": 0
+          }
         },
         {
           "type": "callout",
