@@ -96,7 +96,7 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "这张图回答一个问题：**如果要把一个大语言模型从零做出来，中间到底经过哪些环节？**\n十二个关键词分成四段，点任意一个进入条目页——那里有一句话解释、具体做法、真实数字和来源。",
-          "_ts": 1794227782175
+          "_ts": 1794230187530
         },
         {
           "type": "callout",
@@ -360,6 +360,54 @@ window.SITE_CONTENT = {
           "text": "这个生态有个特点：**几乎每一个环节都有成熟的开源工具**。所以\"我要造模型\"这件事，八成不是从零写代码，而是选用哪些零件、怎么拼。"
         },
         {
+          "type": "table",
+          "title": "「六段链路对应的供给方」",
+          "headers": [
+            "环节",
+            "主要供给方",
+            "提供什么",
+            "关系类型"
+          ],
+          "rows": [
+            [
+              "算力",
+              "NVIDIA、云厂商、数据中心",
+              "GPU、集群、电力",
+              "供给 / 瓶颈"
+            ],
+            [
+              "数据",
+              "Common Crawl、Hugging Face、各机构自建",
+              "原始网页、清洗语料、工具链",
+              "公共品 / 许可"
+            ],
+            [
+              "工具链",
+              "PyTorch、Megatron-LM、DeepSpeed、HF Transformers、vLLM",
+              "训练与推理解法",
+              "依赖（被复用）"
+            ],
+            [
+              "模型",
+              "OpenAI / Anthropic / Google（闭源）；Meta / DeepSeek / 阿里 / AllenAI（开放）",
+              "API、开放权重、全开放配方",
+              "竞争 / 采用"
+            ],
+            [
+              "评测",
+              "学术界、HELM、Arena 类平台",
+              "基准、分数、排名",
+              "话语权"
+            ],
+            [
+              "规则",
+              "欧盟等监管机构",
+              "合规义务、披露模板",
+              "改变成本"
+            ]
+          ]
+        },
+        {
           "type": "heading",
           "level": 2,
           "text": "关键词（点进去展开）"
@@ -397,7 +445,13 @@ window.SITE_CONTENT = {
               "推理服务 + 评测 + 论文",
               "跑得快、扛得住、拿得出证据"
             ]
-          ]
+          ],
+          "colW": [
+            33.333333333333336,
+            33.333333333333336,
+            33.333333333333336
+          ],
+          "_ts": 0
         },
         {
           "type": "entries",
@@ -554,6 +608,46 @@ window.SITE_CONTENT = {
             {
               "name": "Papers with Code（论文 + 代码 + 榜单）",
               "url": "https://paperswithcode.com/"
+            },
+            {
+              "name": "Grattafiori 等. The Llama 3 Herd of Models（2024）",
+              "url": "https://arxiv.org/abs/2407.21783/"
+            },
+            {
+              "name": "DeepSeek-AI. DeepSeek-V3 Technical Report（2024）",
+              "url": "https://arxiv.org/abs/2412.19437/"
+            },
+            {
+              "name": "Qwen Team. Qwen2.5 Technical Report（2024）",
+              "url": "https://arxiv.org/abs/2412.15115/"
+            },
+            {
+              "name": "OLMo 2（2025）",
+              "url": "https://arxiv.org/abs/2501.00656/"
+            },
+            {
+              "name": "Lambert 等. Tulu 3（2024）",
+              "url": "https://arxiv.org/abs/2411.15124/"
+            },
+            {
+              "name": "Common Crawl · Get Started",
+              "url": "https://commoncrawl.org/get-started/"
+            },
+            {
+              "name": "European Commission · AI Act",
+              "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework\u0002ai/"
+            },
+            {
+              "name": "Llama 3.1 Community License（2024-07-23）",
+              "url": "https://github.com/meta-llama/llama\u0002models/blob/main/models/llama3_1/LICENSE/"
+            },
+            {
+              "name": "DeepSeek-V3 模型许可（LICENSE-MODEL）",
+              "url": "https://github.com/deepseek-ai/DeepSeek\u0002V3/blob/main/LICENSE-MODEL/"
+            },
+            {
+              "name": "Hugging Face Transformers（Apache-2.0）",
+              "url": "https://github.com/huggingface/transformers/"
             }
           ]
         }
@@ -754,15 +848,14 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "title": "版本号规则（作业要求）",
-          "_ts": 1794227553403,
           "tone": "blue",
-          "text": "版本号从 **v0.1** 起按时间**倒序**排列（新的在上面），**只追加、不覆盖历史记录**。每行写清：版本号、日期、更新对象、依据、修改内容与原因、尚存问题 / 下一步、检查结果（未做的写「待填写 / 待测试」，不要写成已完成）。"
+          "title": "版本号规则（作业要求）",
+          "text": "版本号从 **v0.1** 起按时间**倒序**排列（新的在上面），**只追加、不覆盖历史记录**。每行写清：版本号、日期、更新对象、依据、修改内容与原因、尚存问题 / 下一步、检查结果（未做的写「待填写 / 待测试」，不要写成已完成）。",
+          "_ts": 1794227553403
         },
         {
           "type": "table",
           "title": "更新日志",
-          "_ts": 1794229043437,
           "headers": [
             "版本",
             "日期",
@@ -819,6 +912,7 @@ window.SITE_CONTENT = {
               "很多问题。。"
             ]
           ],
+          "_ts": 1794229043437,
           "colW": [
             14.285714285714286,
             14.285714285714286,
