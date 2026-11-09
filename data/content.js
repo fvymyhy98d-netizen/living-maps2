@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232533904,
+      "syncTs": 1794232540308,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2467,7 +2467,13 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "知道 SFT 的数据格式与只算回答部分的规则；没跑过"
+          "text": "知道 SFT 的数据格式与只算回答部分的规则；没跑过",
+          "free": {
+            "x": 0,
+            "y": 91,
+            "w": 94.4,
+            "gw": null
+          }
         },
         {
           "type": "callout",
