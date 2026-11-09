@@ -5015,12 +5015,12 @@ window.SITE_CONTENT = {
           "title": "继续阅读",
           "items": [
             {
-              "name": "Transformer Math 101（显存与算力的公式推导）",
-              "url": "https://blog.eleuther.ai/transformer-math/"
+              "name": "能力边界：本人参与、AI辅助与未开展的工作",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-boundary"
             },
             {
-              "name": "Chinchilla 论文（最优配比的原始推导）",
-              "url": "https://arxiv.org/abs/2203.15556"
+              "name": "未解问题：本次还没弄清什么",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-open"
             }
           ],
           "_ts": 1794222518062
