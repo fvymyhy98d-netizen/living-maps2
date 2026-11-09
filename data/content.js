@@ -1938,8 +1938,8 @@ window.SITE_CONTENT = {
         {
           "type": "callout",
           "tone": "blue",
-          "title": "",
-          "text": ""
+          "title": "已初步理解",
+          "text": "知道下一个 token 的交叉熵怎么算、困惑度怎么换算；没手算过"
         },
         {
           "type": "heading",
