@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222433766,
+      "syncTs": 1794222438043,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4961,7 +4961,8 @@ window.SITE_CONTENT = {
         },
         {
           "type": "paragraph",
-          "text": "（三条柱子的算力相同，差别在怎么花：第一种参数多、token 少；第三种参数少、token 多。图示只表达\"总量相同\"，不代表效果高低。）"
+          "text": "这是虚构“青岚-Q7”材料中的算术结果，不是实际项目账单。\n\n400美元只包含表格算力费用和数据整理费，人工费用仍未记录，因此不能当作完整项目成本。",
+          "_ts": 1794222438040
         },
         {
           "type": "heading",
