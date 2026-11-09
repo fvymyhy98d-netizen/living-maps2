@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217435981,
+      "syncTs": 1794217453409,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5151,7 +5151,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "每条知识回答四问：**是什么（一句话说清）、怎么做（具体步骤）、凭什么（来源 + 日期）、还没弄清（边界）**。第四问答不出来，说明理解还停在表面。"
+          "text": "是什么、怎么做、凭什么、还没弄清——四问帮助整理证据，不是填完就证明掌握。",
+          "_ts": 1794217453408
         },
         {
           "type": "heading",
