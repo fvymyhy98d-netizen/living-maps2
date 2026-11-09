@@ -9,7 +9,7 @@ window.SITE_CONTENT = {
     "title": "三张活地图",
     "subtitle": "人工智能前沿与创新 · 课程大作业",
     "topic": "大语言模型的构建",
-    "description": "我们围绕大语言模型构建的全过程，建立在领域 · 生态 · 认知方面三张相互关联、持续更新的活地图。欢迎大家到反馈yu",
+    "description": "我们围绕大语言模型构建的全过程，建立在领域 · 生态 · 认知方面三张相互关联、持续更新的活地图。欢迎大家到反馈与建议liu'yan",
     "homeFeatures": [
       {
         "icon": "🖐️",
@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794227288975,
+      "syncTs": 1794227292474,
       "roster": {},
       "tokenVault": {
         "v": 1,
