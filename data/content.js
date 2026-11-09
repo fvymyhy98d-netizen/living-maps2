@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231514695,
+      "syncTs": 1794231522069,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -995,7 +995,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话解释",
-          "text": "**显存决定上限，算力决定时长，数据量决定这个规模值不值。** 三个约束里最硬的是显存——它不跟你商量，超了就报错。"
+          "text": "",
+          "_ts": 1794231522068
         },
         {
           "type": "heading",
