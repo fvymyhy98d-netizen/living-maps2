@@ -608,7 +608,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "entries",
-          "title": "① 怎么理解这条链路",
+          "title": "① 怎么理解",
           "mode": "card",
           "cols": 2,
           "note": "",
