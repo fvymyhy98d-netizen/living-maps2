@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219258323,
+      "syncTs": 1794219296066,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4680,7 +4680,7 @@ window.SITE_CONTENT = {
       "kind": "page",
       "icon": "🔧",
       "label": "排障方法",
-      "title": "卡住的时候怎么查：症状到原因",
+      "title": "答案不完整时，先查哪里？",
       "description": "把\"模型不行\"拆成可验证的假设。八种典型症状，对应八条排查路径。",
       "heroAlign": "",
       "parent": "cognition",
@@ -4819,7 +4819,8 @@ window.SITE_CONTENT = {
           "title": "待核实",
           "text": "- \"loss 卡在 ln(V)\"这条经验在高词表（10 万以上）模型上是否同样适用，我们没验证。\n- 不同框架的混合精度实现差异较大，溢出行为不完全一致。"
         }
-      ]
+      ],
+      "heroStyle": {}
     },
     {
       "id": "c-boundary",
