@@ -624,7 +624,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "entries",
-          "title": "② 我们改过什么",
+          "title": "② 判断怎样推进",
           "mode": "card",
           "cols": 2,
           "note": "",
