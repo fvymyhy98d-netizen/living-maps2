@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794230571681,
+      "syncTs": 1794230642958,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -358,6 +358,39 @@ window.SITE_CONTENT = {
           "tone": "blue",
           "title": "一句话",
           "text": "这个生态有个特点：**几乎每一个环节都有成熟的开源工具**。所以\"我要造模型\"这件事，八成不是从零写代码，而是选用哪些零件、怎么拼。"
+        },
+        {
+          "type": "table",
+          "title": "",
+          "headers": [
+            "列1"
+          ],
+          "rows": [
+            [
+              ""
+            ],
+            [
+              ""
+            ],
+            [
+              ""
+            ],
+            [
+              ""
+            ],
+            [
+              ""
+            ],
+            [
+              ""
+            ],
+            [
+              ""
+            ],
+            [
+              ""
+            ]
+          ]
         },
         {
           "type": "heading",
