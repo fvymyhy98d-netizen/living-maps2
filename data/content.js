@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232974923,
+      "syncTs": 1794232980370,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1592,19 +1592,6 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "orange",
-          "title": "已初步理解",
-          "text": "用现成分词器对同一段中文数过 token；没自己训过分词器",
-          "free": {
-            "x": 0,
-            "y": 169,
-            "w": 48.8,
-            "gw": null,
-            "ride": 0
-          }
-        },
-        {
-          "type": "callout",
           "tone": "blue",
           "title": "一句话解释",
           "text": "BPE（Byte Pair Encoding，字节对编码）做的事只有一件：**反复把语料里最常相邻出现的两个单位合并成一个新单位**，重复几万次，剩下的合并规则就是词表。"
@@ -1679,14 +1666,14 @@ window.SITE_CONTENT = {
         },
         {
           "type": "paragraph",
+          "text": "这组数字解释了一个很实际的问题：**中文用英文-centric 的分词器，同样内容要多付两三倍的钱**，能吃下的上下文也少了两三倍。这不是玄学，是词表覆盖率的直接后果。"
+        },
+        {
+          "type": "paragraph",
           "size": "normal",
           "text": "----典型任务落点：对应仓库里的分词器训练脚本，输入是清洗后的语料，产出是 tokenizer.json 和一个词表统计。判断做对没有，用它对同一段中文编码，看 token 数是否明显少于 GPT-2 的分词器——这直接决定后面训练要花多少算力。",
           "style": {},
           "_ts": 1794232977218
-        },
-        {
-          "type": "paragraph",
-          "text": "这组数字解释了一个很实际的问题：**中文用英文-centric 的分词器，同样内容要多付两三倍的钱**，能吃下的上下文也少了两三倍。这不是玄学，是词表覆盖率的直接后果。"
         },
         {
           "type": "callout",
@@ -1750,6 +1737,19 @@ window.SITE_CONTENT = {
           "tone": "orange",
           "title": "还没弄清",
           "text": "- 词表大小的最优值没有定论，它与模型规模、语言种类、训练 token 数都相关，目前主要靠经验。\n- \"中文一个 token 平均几个字\"这个指标在不同语料上差别很大，我们只测了小样本，不能当结论。"
+        },
+        {
+          "type": "callout",
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "用现成分词器对同一段中文数过 token；没自己训过分词器",
+          "free": {
+            "x": 0,
+            "y": 169,
+            "w": 48.8,
+            "gw": null,
+            "ride": 0
+          }
         }
       ]
     },
