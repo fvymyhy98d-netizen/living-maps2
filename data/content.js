@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232544898,
+      "syncTs": 1794232561275,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2622,6 +2622,12 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "SFT 之后模型会答了，但答得不一定好：太长、太敷衍、该拒绝的不拒绝。**问题是\"好\"这个标准，人说不清，更写不进数据里。**"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
