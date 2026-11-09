@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222787242,
+      "syncTs": 1794222791934,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -707,7 +707,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "对照阅读",
+          "title": "继续阅读",
           "items": [
             {
               "name": "斯坦福 CS336 课程主页（看它怎么组织\"从零到系统\"的认知顺序）",
@@ -717,7 +717,8 @@ window.SITE_CONTENT = {
               "name": "Happy-LLM 第 1 章（中文的发展脉络梳理）",
               "url": "https://github.com/datawhalechina/happy-llm"
             }
-          ]
+          ],
+          "_ts": 1794222791932
         }
       ],
       "heroStyle": {},
