@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794212716469,
+      "syncTs": 1794213156230,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -95,7 +95,8 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "lead",
-          "text": "领域地图回答三个问题：**这个领域有什么知识、方法和工具？它们怎样关联？以后在哪里学？**本页是示例，进入管理模式后点任意内容即可修改。"
+          "text": "领域地图回答三个问题：**这个领域有什么知识、方法和工具？它们怎样关联？以后在哪里学？**",
+          "_ts": 1794213006326
         },
         {
           "type": "callout",
@@ -118,34 +119,25 @@ window.SITE_CONTENT = {
           "text": "语言模型试图解决的核心问题是：**让机器根据上下文预测和生成自然语言。**\n一个典型任务是\"问答\"：用户提问 → 模型理解问题 → 生成回答 → 评估回答质量。"
         },
         {
-          "type": "heading",
-          "level": 2,
-          "text": "方法与技术路线（示例图表）"
-        },
-        {
-          "type": "chart",
-          "chartType": "bar",
-          "title": "三条技术路线的课堂关注热度（示意数据）",
-          "labels": [
-            "提示工程",
-            "检索增强 RAG",
-            "模型微调"
-          ],
-          "data": [
-            86,
-            72,
-            54
-          ],
-          "unit": "票"
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "课程与学习路径"
-        },
-        {
-          "type": "paragraph",
-          "text": "**前置基础：**高等数学（概率与矩阵）→ **核心覆盖：**人工智能导论、机器学习 → **实践应用：**本课程大作业 → **自主拓展：**经典论文与开源项目。\n\n以上为示例，请对照你们专业的培养方案逐条核实，无法确认的先标\"待核实\"。"
+          "type": "entries",
+          "title": "下级条目",
+          "mode": "card",
+          "cols": 3,
+          "note": "",
+          "only": [
+            "n-scale",
+            "n-data",
+            "n-clean",
+            "n-token",
+            "n-arch",
+            "n-loss",
+            "n-train",
+            "n-pretrain",
+            "n-sft",
+            "n-align",
+            "n-eval",
+            "n-deploy"
+          ]
         },
         {
           "type": "files",
@@ -160,73 +152,6 @@ window.SITE_CONTENT = {
               "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
             }
           ]
-        },
-        {
-          "type": "sources",
-          "title": "本页来源",
-          "items": [
-            {
-              "label": "Vaswani 等, Attention Is All You Need (2017)",
-              "url": "https://arxiv.org/abs/1706.03762",
-              "id": "r1"
-            },
-            {
-              "label": "示例来源：请替换为你们实际查阅的资料",
-              "url": "#",
-              "id": "r2"
-            }
-          ],
-          "seq": 2
-        },
-        {
-          "type": "entries",
-          "title": "下级条目",
-          "mode": "card",
-          "cols": 3,
-          "note": ""
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "核心概念"
-        },
-        {
-          "type": "table",
-          "title": "核心概念速览（示例）",
-          "headers": [
-            "概念",
-            "一句话解释",
-            "相关工具 / 模型"
-          ],
-          "rows": [
-            [
-              "Token / 分词",
-              "把文字切成模型能处理的最小单位",
-              "tiktoken、SentencePiece"
-            ],
-            [
-              "Transformer",
-              "目前主流的模型结构，核心是注意力机制",
-              "GPT 系列、LLaMA 系列"
-            ],
-            [
-              "预训练",
-              "先在海量文本上学习\"下一个词\"的规律",
-              "各类基座模型"
-            ],
-            [
-              "微调 / RAG",
-              "用少量数据或外部知识让模型适配具体任务",
-              "LoRA、向量数据库"
-            ]
-          ],
-          "free": {
-            "x": 1.7,
-            "y": 1177,
-            "w": 94.4,
-            "ride": 0
-          },
-          "_ts": 1793415612554
         }
       ]
     },
@@ -244,6 +169,25 @@ window.SITE_CONTENT = {
           "size": "lead",
           "text": "生态地图不是\"人物和机构名单\"，重点是讲清楚**具体关系**：谁依赖谁、谁资助谁、谁采用了谁的成果。",
           "_ts": 1794210681820
+        },
+        {
+          "type": "entries",
+          "mode": "card",
+          "cols": 3,
+          "note": "",
+          "title": "下级条目",
+          "only": [
+            "e-open-course",
+            "e-models",
+            "e-train-fw",
+            "e-data-tools",
+            "e-tokenizer",
+            "e-posttrain",
+            "e-infer",
+            "e-eval",
+            "e-papers",
+            "e-community"
+          ]
         },
         {
           "type": "table",
@@ -345,6 +289,23 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "认知地图聚焦**思考方法、分析案例与成长习惯**：我们怎样理解一个问题，依据什么判断，遇到新证据后怎样调整。"
+        },
+        {
+          "type": "entries",
+          "mode": "card",
+          "cols": 3,
+          "note": "",
+          "title": "下级条目",
+          "only": [
+            "c-causal",
+            "c-revise",
+            "c-misconception",
+            "c-tradeoff",
+            "c-debug",
+            "c-boundary",
+            "c-open",
+            "c-method"
+          ]
         },
         {
           "type": "heading",
