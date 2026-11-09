@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218613804,
+      "syncTs": 1794218619638,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4316,7 +4316,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "修正三：从\"loss 低就是好\"到\"loss 只是信号\""
+          "text": "修正三：第二轮：我怎样评价未知",
+          "_ts": 1794218619633
         },
         {
           "type": "paragraph",
