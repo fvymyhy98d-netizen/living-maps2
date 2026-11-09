@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217633303,
+      "syncTs": 1794217672839,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5206,7 +5206,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "这个模板怎么用在网站上"
+          "text": "第二轮比较：简略资料与完整资料",
+          "_ts": 1794217672837
         },
         {
           "type": "paragraph",
