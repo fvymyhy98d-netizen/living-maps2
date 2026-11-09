@@ -4376,12 +4376,12 @@ window.SITE_CONTENT = {
           "title": "查看方法与边界",
           "items": [
             {
-              "name": "Chinchilla 论文（配比结论的出处）",
-              "url": "https://arxiv.org/abs/2203.15556"
+              "name": "四问模板：两轮比较的完整记录",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-method"
             },
             {
-              "name": "去重论文（数据质量影响的实证）",
-              "url": "https://arxiv.org/abs/2107.06499"
+              "name": "能力边界：本人参与、AI辅助与未开展的工作",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-boundary"
             }
           ],
           "_ts": 1794218770618
