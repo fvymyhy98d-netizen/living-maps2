@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218980830,
+      "syncTs": 1794218991533,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4959,7 +4959,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "补上\"读懂\"的部分",
+          "title": "相关记录",
           "items": [
             {
               "name": "Hugging Face TRL（DPO / PPO 的可运行实现）",
@@ -4969,7 +4969,8 @@ window.SITE_CONTENT = {
               "name": "DeepSpeed（分布式训练的入门配置）",
               "url": "https://github.com/microsoft/DeepSpeed"
             }
-          ]
+          ],
+          "_ts": 1794218991531
         },
         {
           "type": "callout",
