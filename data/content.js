@@ -175,7 +175,19 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "note": "",
-          "title": "下级条目"
+          "title": "下级条目",
+          "only": [
+            "e-open-course",
+            "e-models",
+            "e-train-fw",
+            "e-data-tools",
+            "e-tokenizer",
+            "e-posttrain",
+            "e-infer",
+            "e-eval",
+            "e-papers",
+            "e-community"
+          ]
         },
         {
           "type": "table",
