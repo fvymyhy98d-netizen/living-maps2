@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219301977,
+      "syncTs": 1794219314959,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4701,7 +4701,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "八种症状与排查顺序"
+          "text": "四种现象与检查路径",
+          "_ts": 1794219314957
         },
         {
           "type": "table",
