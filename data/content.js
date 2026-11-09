@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219375749,
+      "syncTs": 1794219381669,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4786,7 +4786,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "工具",
+          "title": "实际工具与记录",
           "items": [
             {
               "name": "PyTorch 性能与调试指南",
@@ -4796,7 +4796,8 @@ window.SITE_CONTENT = {
               "name": "Weights & Biases（记录 loss 曲线与超参对比）",
               "url": "https://wandb.ai/site"
             }
-          ]
+          ],
+          "_ts": 1794219381667
         },
         {
           "type": "callout",
