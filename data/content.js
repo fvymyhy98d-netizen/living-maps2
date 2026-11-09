@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232486334,
+      "syncTs": 1794232491971,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2302,7 +2302,13 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "读过规模定律与 base model 的特点；没跑过"
+          "text": "读过规模定律与 base model 的特点；没跑过",
+          "free": {
+            "x": 0,
+            "y": 91,
+            "w": 94.4,
+            "gw": null
+          }
         },
         {
           "type": "callout",
