@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222569881,
+      "syncTs": 1794222575667,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -561,7 +561,8 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "lead",
-          "text": "前两张图讲\"世界是什么样\"，这张图讲**\"我们怎么理解它、哪里理解错了、还差多远\"**。\n它是三张图里唯一会随着学习不断被推翻重写的一张。"
+          "text": "不是知识清单，而是判断依据：问题怎么拆，资料怎么核对，结果能说明什么，还有什么不知道。",
+          "_ts": 1794222575665
         },
         {
           "type": "callout",
