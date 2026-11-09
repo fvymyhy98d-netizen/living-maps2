@@ -4362,19 +4362,12 @@ window.SITE_CONTENT = {
           "seq": 3,
           "items": [
             {
-              "label": "Hoffmann 等, Chinchilla（2022，arXiv:2203.15556）",
-              "url": "https://arxiv.org/abs/2203.15556",
-              "id": "r1"
+              "label": "DeepSeek-AI：《DeepSeek-V3技术报告》v1（2024-12-27）",
+              "url": "https://arxiv.org/html/2412.19437v1#S1"
             },
             {
-              "label": "Kaplan 等, Scaling Laws（2020，arXiv:2001.08361）",
-              "url": "https://arxiv.org/abs/2001.08361",
-              "id": "r2"
-            },
-            {
-              "label": "Lee 等, Deduplicating Training Data Makes Language Models Better（2021，arXiv:2107.06499）",
-              "url": "https://arxiv.org/abs/2107.06499",
-              "id": "r3"
+              "label": "《人工智能前沿与创新》课程大作业要求：认知地图与资料规范",
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
             }
           ]
         },
