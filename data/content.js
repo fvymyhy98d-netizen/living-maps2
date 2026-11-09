@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794224081935,
+      "syncTs": 1794224097042,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5211,7 +5211,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "我们的实际分布"
+          "text": "本次实际参与程度",
+          "_ts": 1794224097040
         },
         {
           "type": "table",
