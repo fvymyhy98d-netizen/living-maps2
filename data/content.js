@@ -710,12 +710,12 @@ window.SITE_CONTENT = {
           "title": "继续阅读",
           "items": [
             {
-              "name": "斯坦福 CS336 课程主页（看它怎么组织\"从零到系统\"的认知顺序）",
-              "url": "https://stanford-cs336.github.io/spring2025/"
+              "name": "四问模板：两轮比较的完整记录",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-method"
             },
             {
-              "name": "Happy-LLM 第 1 章（中文的发展脉络梳理）",
-              "url": "https://github.com/datawhalechina/happy-llm"
+              "name": "判断与复盘：我的判断怎样推进",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise"
             }
           ],
           "_ts": 1794222791932
