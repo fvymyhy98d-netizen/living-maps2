@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794224018153,
+      "syncTs": 1794224074468,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4585,9 +4585,9 @@ window.SITE_CONTENT = {
         {
           "type": "callout",
           "tone": "orange",
-          "title": "这条链路的真实形状",
+          "title": "发现缺口之后",
           "text": "问题→取得信息→核对依据→形成判断→发现缺口→再查证，是一个可以回访的过程。\n\n发现缺口后，可以返回前面的环节补资料或改问题，不是固定十二步必须反复从头训练。本次没有验证“所有模型项目都不能跳过某一步”的命题。",
-          "_ts": 1794222190887
+          "_ts": 1794224074466
         },
         {
           "type": "related",
