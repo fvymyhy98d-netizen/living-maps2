@@ -640,7 +640,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "entries",
-          "title": "③ 边界在哪",
+          "title": "③ 边界在哪里",
           "mode": "card",
           "cols": 2,
           "note": "",
