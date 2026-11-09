@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218512571,
+      "syncTs": 1794218561631,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4287,7 +4287,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "认知修正的标志不是\"知道了新知识\"，而是**\"原来的判断在某个具体场景下失效了，而且我能说清为什么\"**。"
+          "text": "记录实际判断过程，不要求每次都证明“我原来错了”。保留原预期，也要说清当前证据够不够。",
+          "_ts": 1794218561629
         },
         {
           "type": "heading",
