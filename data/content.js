@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218946363,
+      "syncTs": 1794218969871,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4976,8 +4976,9 @@ window.SITE_CONTENT = {
         {
           "type": "callout",
           "tone": "orange",
-          "title": "这张表会变",
-          "text": "随着继续做，等级会往上走。**这张表的价值不在现在，在于每次更新时你能看到自己挪了多远。**"
+          "title": "这份边界记录会更新",
+          "text": "随着继续做，等级会往上走。**这张表的价值不在现在，在于每次更新时你能看到自己挪了多远。**",
+          "_ts": 1794218969868
         }
       ],
       "heroStyle": {}
