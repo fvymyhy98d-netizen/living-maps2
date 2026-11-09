@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232104069,
+      "syncTs": 1794232109714,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1194,7 +1194,7 @@ window.SITE_CONTENT = {
           "free": {
             "x": 2.8,
             "y": 154,
-            "w": 39.9,
+            "w": 52.8,
             "gw": null,
             "ride": 0
           }
