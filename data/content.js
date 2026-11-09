@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222795998,
+      "syncTs": 1794222831891,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -691,21 +691,6 @@ window.SITE_CONTENT = {
           ]
         },
         {
-          "type": "sources",
-          "title": "本页来源",
-          "seq": 2,
-          "items": [
-            {
-              "label": "DeepSeek-AI：《DeepSeek-V3技术报告》v1（2024-12-27）",
-              "url": "https://arxiv.org/html/2412.19437v1#S1"
-            },
-            {
-              "label": "《人工智能前沿与创新》课程大作业要求：认知地图与资料规范",
-              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
-            }
-          ]
-        },
-        {
           "type": "files",
           "title": "继续阅读",
           "items": [
@@ -719,6 +704,21 @@ window.SITE_CONTENT = {
             }
           ],
           "_ts": 1794222791932
+        },
+        {
+          "type": "sources",
+          "title": "本页来源",
+          "seq": 2,
+          "items": [
+            {
+              "label": "DeepSeek-AI：《DeepSeek-V3技术报告》v1（2024-12-27）",
+              "url": "https://arxiv.org/html/2412.19437v1#S1"
+            },
+            {
+              "label": "《人工智能前沿与创新》课程大作业要求：认知地图与资料规范",
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
+            }
+          ]
         }
       ],
       "heroStyle": {},
