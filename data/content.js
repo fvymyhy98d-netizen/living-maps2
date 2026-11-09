@@ -4886,7 +4886,7 @@ window.SITE_CONTENT = {
             },
             {
               "name": "判断与复盘：我的判断怎样推进",
-              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise4"
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise"
             }
           ],
           "_ts": 1794219247300
