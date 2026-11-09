@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794212852353,
+      "syncTs": 1794212854615,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -116,11 +116,6 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "语言模型试图解决的核心问题是：**让机器根据上下文预测和生成自然语言。**\n一个典型任务是\"问答\"：用户提问 → 模型理解问题 → 生成回答 → 评估回答质量。"
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "方法与技术路线（示例图表）"
         },
         {
           "type": "heading",
