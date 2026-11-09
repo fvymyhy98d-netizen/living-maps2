@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232970432,
+      "syncTs": 1794232974923,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1680,8 +1680,9 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "normal",
-          "text": "",
-          "style": {}
+          "text": "典型任务落点：对应仓库里的分词器训练脚本，输入是清洗后的语料，产出是 tokenizer.json 和一个词表统计。判断做对没有，用它对同一段中文编码，看 token 数是否明显少于 GPT-2 的分词器——这直接决定后面训练要花多少算力。",
+          "style": {},
+          "_ts": 1794232974921
         },
         {
           "type": "paragraph",
