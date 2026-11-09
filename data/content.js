@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794227796957,
+      "syncTs": 1794228094112,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -914,7 +914,7 @@ window.SITE_CONTENT = {
           "rows": [
             [
               "李秋石",
-              "组长",
+              "组长+nei'ron",
               "",
               ""
             ],
@@ -937,7 +937,7 @@ window.SITE_CONTENT = {
               ""
             ]
           ],
-          "_ts": 1794226736199
+          "_ts": 1794228094107
         },
         {
           "type": "callout",
