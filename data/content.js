@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222228588,
+      "syncTs": 1794222234791,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4602,7 +4602,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "看别人怎么排这条链",
+          "title": "继续查证",
           "items": [
             {
               "name": "Happy-LLM 目录（八章的顺序就是这条链）",
@@ -4612,7 +4612,8 @@ window.SITE_CONTENT = {
               "name": "CS336 课程安排（从 tokenizer 到 scaling 到 alignment）",
               "url": "https://stanford-cs336.github.io/spring2025/"
             }
-          ]
+          ],
+          "_ts": 1794222234789
         },
         {
           "type": "callout",
