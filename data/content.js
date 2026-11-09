@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217834544,
+      "syncTs": 1794217872318,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5252,7 +5252,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "参考写法",
+          "title": "继续阅读",
           "items": [
             {
               "name": "本站「示例 · RAG」页（四问模板的原始打样）",
@@ -5262,7 +5262,8 @@ window.SITE_CONTENT = {
               "name": "Happy-LLM（每章都有\"小结 + 延伸\"，结构类似）",
               "url": "https://github.com/datawhalechina/happy-llm"
             }
-          ]
+          ],
+          "_ts": 1794217872315
         },
         {
           "type": "callout",
