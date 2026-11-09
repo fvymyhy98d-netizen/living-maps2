@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794209614999,
+      "syncTs": 1794210681822,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -87,7 +87,7 @@ window.SITE_CONTENT = {
       "icon": "🗺️",
       "label": "领域地图",
       "title": "领域地图",
-      "description": "这个领域有什么知识、方法和工具？它们怎样关联？以后在哪里学？（当前为示例内容，登录管理员后即可修改为你们的选题）",
+      "description": "这个领域有什么知识、方法和工具？它们怎样关联？以后在哪里学？",
       "blocks": [
         {
           "type": "paragraph",
@@ -226,7 +226,8 @@ window.SITE_CONTENT = {
           "_ts": 1793415612554
         }
       ],
-      "heroAlign": ""
+      "heroAlign": "",
+      "descStyle": {}
     },
     {
       "id": "demo-rag",
@@ -388,8 +389,8 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "lead",
-          "text": "生态地图不是\"人物和机构名单\"，重点是讲清楚**具体关系**：谁依赖谁、谁资助谁、谁采用了谁的成果。哦吼吼吼",
-          "_ts": 1793583481618
+          "text": "生态地图不是\"人物和机构名单\"，重点是讲清楚**具体关系**：谁依赖谁、谁资助谁、谁采用了谁的成果。",
+          "_ts": 1794210681820
         },
         {
           "type": "table",
