@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794223878136,
+      "syncTs": 1794224018153,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4927,7 +4927,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "三种典型取舍"
+          "text": "三种任务下的取舍",
+          "_ts": 1794224018151
         },
         {
           "type": "table",
