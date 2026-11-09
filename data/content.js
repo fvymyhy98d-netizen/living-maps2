@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794212985280,
+      "syncTs": 1794213006330,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -95,7 +95,8 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "lead",
-          "text": "领域地图回答三个问题：**这个领域有什么知识、方法和工具？它们怎样关联？以后在哪里学？**本页是示例，进入管理模式后点任意内容即可修改。"
+          "text": "领域地图回答三个问题：**这个领域有什么知识、方法和工具？它们怎样关联？以后在哪里学？**",
+          "_ts": 1794213006326
         },
         {
           "type": "callout",
