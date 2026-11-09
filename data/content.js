@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218604167,
+      "syncTs": 1794218610636,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4305,7 +4305,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "修正二：从\"清洗是杂活\"到\"清洗是核心工序\""
+          "text": "修正二：首轮结果：我提出样本不足",
+          "_ts": 1794218610633
         },
         {
           "type": "paragraph",
