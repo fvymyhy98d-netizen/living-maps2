@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794228570876,
+      "syncTs": 1794228572902,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -800,7 +800,7 @@ window.SITE_CONTENT = {
               "步入正轨"
             ],
             [
-              "",
+              "v0.1",
               "",
               "",
               "",
@@ -809,7 +809,7 @@ window.SITE_CONTENT = {
               ""
             ]
           ],
-          "_ts": 1794228570870,
+          "_ts": 1794228572897,
           "colW": [
             14.285714285714286,
             14.285714285714286,
