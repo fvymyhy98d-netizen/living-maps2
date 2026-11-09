@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232591186,
+      "syncTs": 1794232589890,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2627,14 +2627,7 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "待深入学习",
-          "text": "只读到 RLHF 三阶段与 DPO 的区别，没跑过任何对齐",
-          "free": {
-            "x": 0,
-            "y": 91,
-            "w": 63.1,
-            "gw": null,
-            "ride": 0
-          }
+          "text": "只读到 RLHF 三阶段与 DPO 的区别，没跑过任何对齐"
         },
         {
           "type": "callout",
