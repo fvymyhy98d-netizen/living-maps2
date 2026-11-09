@@ -4512,7 +4512,7 @@ window.SITE_CONTENT = {
       "icon": "🔗",
       "label": "因果链",
       "title": "从问题到判断：信息如何影响回答",
-      "description": "每一步都在补上一步留下的具体缺陷。理解了\"洞\"和\"补丁\"，才算理解这条链路。",
+      "description": "从问题到判断，信息经过哪些环节；回答正确不等于实际查过资料。",
       "heroAlign": "",
       "parent": "cognition",
       "blocks": [
@@ -4646,7 +4646,7 @@ window.SITE_CONTENT = {
       "icon": "🔄",
       "label": "判断与复盘",
       "title": "我的判断怎样推进：不强行凑三次反转",
-      "description": "参数越大越好 → 配比才是关键；清洗是杂活 → 清洗是核心；loss 低就好 → loss 只是信号。",
+      "description": "记录初始预期、首轮样本不足、第二轮对未知处理的评价；不强行凑三次观点反转。",
       "heroAlign": "",
       "parent": "cognition",
       "blocks": [
@@ -4774,7 +4774,7 @@ window.SITE_CONTENT = {
       "icon": "🚫",
       "label": "常见误解",
       "title": "六条需要补充条件的判断",
-      "description": "每一条都配了\"错在哪\"和\"正确的说法\"。这些是查资料时最容易被打包带走的错误。",
+      "description": "检查六个容易过度概括的说法，并为每条补上本次依据和适用条件。",
       "heroAlign": "",
       "parent": "cognition",
       "blocks": [
@@ -4907,7 +4907,7 @@ window.SITE_CONTENT = {
       "icon": "⚖️",
       "label": "判断中的权衡",
       "title": "什么时候查证，什么时候可以估计？",
-      "description": "固定预算下，这三者互相挤压。理解权衡，比记住任何\"最佳配置\"都有用。",
+      "description": "区分事实查证、带假设的估算和个人猜测；给出金额不等于已有依据。",
       "heroAlign": "",
       "parent": "cognition",
       "blocks": [
@@ -5056,7 +5056,7 @@ window.SITE_CONTENT = {
       "icon": "🔧",
       "label": "排障方法",
       "title": "答案不完整时，先查哪里？",
-      "description": "把\"模型不行\"拆成可验证的假设。八种典型症状，对应八条排查路径。",
+      "description": "答案不完整时，先查输入、正文获取、统计范围与单位，再判断模型能力。",
       "heroAlign": "",
       "parent": "cognition",
       "blocks": [
@@ -5190,7 +5190,7 @@ window.SITE_CONTENT = {
       "icon": "🚧",
       "label": "能力边界",
       "title": "我实际参与到哪一步？",
-      "description": "哪些是我们真跑过的，哪些只读懂了论文，哪些完全没碰。写清楚边界，比假装全会更可信。",
+      "description": "区分本人参与、AI辅助执行和本次未开展的工作，写清每项结论的证据边界。",
       "heroAlign": "",
       "parent": "cognition",
       "blocks": [
@@ -5332,7 +5332,7 @@ window.SITE_CONTENT = {
       "icon": "❓",
       "label": "未解问题",
       "title": "本次还没弄清什么？",
-      "description": "涌现是不是真的、对齐税有多大、有效上下文有多长、中文配比怎么定。四条我们不敢下结论的。",
+      "description": "本次没测、暂时没查到、尚未学会的问题，以及下一步查证计划。",
       "heroAlign": "",
       "parent": "cognition",
       "blocks": [
@@ -5474,7 +5474,7 @@ window.SITE_CONTENT = {
       "icon": "🧩",
       "label": "四问模板",
       "title": "用四个问题组织一次可复查的比较",
-      "description": "是什么、怎么做、凭什么、还没弄清。每条知识都按这个模板写，就不会写成\"看起来懂\"。",
+      "description": "用是什么、怎么做、凭什么、还没弄清四问，组织两轮可复查的问答比较。",
       "heroAlign": "",
       "parent": "cognition",
       "blocks": [
