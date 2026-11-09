@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232980370,
+      "syncTs": 1794233885494,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -400,6 +400,54 @@ window.SITE_CONTENT = {
           ]
         },
         {
+          "type": "table",
+          "title": "「六段链路对应的供给方」",
+          "headers": [
+            "环节",
+            "主要供给方",
+            "提供什么",
+            "关系类型"
+          ],
+          "rows": [
+            [
+              "算力",
+              "NVIDIA、云厂商、数据中心",
+              "GPU、集群、电力",
+              "供给 / 瓶颈"
+            ],
+            [
+              "数据",
+              "Common Crawl、Hugging Face、各机构自建",
+              "原始网页、清洗语料、工具链",
+              "公共品 / 许可"
+            ],
+            [
+              "工具链",
+              "PyTorch、Megatron-LM、DeepSpeed、HF Transformers、vLLM",
+              "训练与推理解法",
+              "依赖（被复用）"
+            ],
+            [
+              "模型",
+              "OpenAI / Anthropic / Google（闭源）；Meta / DeepSeek / 阿里 / AllenAI（开放）",
+              "API、开放权重、全开放配方",
+              "竞争 / 采用"
+            ],
+            [
+              "评测",
+              "学术界、HELM、Arena 类平台",
+              "基准、分数、排名",
+              "话语权"
+            ],
+            [
+              "规则",
+              "欧盟等监管机构",
+              "合规义务、披露模板",
+              "改变成本"
+            ]
+          ]
+        },
+        {
           "type": "entries",
           "title": "① 先学会（教程与课程）",
           "mode": "card",
@@ -554,8 +602,60 @@ window.SITE_CONTENT = {
             {
               "name": "Papers with Code（论文 + 代码 + 榜单）",
               "url": "https://paperswithcode.com/"
+            },
+            {
+              "name": "Grattafiori 等. The Llama 3 Herd of Models（2024）",
+              "url": "https://arxiv.org/abs/2407.21783/"
+            },
+            {
+              "name": "DeepSeek-AI. DeepSeek-V3 Technical Report（2024）",
+              "url": "https://arxiv.org/abs/2412.19437 /"
+            },
+            {
+              "name": "Qwen Team. Qwen2.5 Technical Report（2024）",
+              "url": "https://arxiv.org/abs/2412.15115"
+            },
+            {
+              "name": "OLMo 2（2025）",
+              "url": "https://arxiv.org/abs/2501.00656/"
+            },
+            {
+              "name": "Lambert 等. Tulu 3（2024）",
+              "url": "https://arxiv.org/abs/2411.15124/"
+            },
+            {
+              "name": "Common Crawl · Get Started",
+              "url": "https://commoncrawl.org/get-started/"
+            },
+            {
+              "name": "European Commission · AI Act",
+              "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework\u0002ai/"
+            },
+            {
+              "name": "Llama 3.1 Community License（2024-07-23）",
+              "url": "https://github.com/meta-llama/llama\u0002models/blob/main/models/llama3_1/LICENSE/"
+            },
+            {
+              "name": "DeepSeek-V3 模型许可（LICENSE-MODEL）",
+              "url": "https://github.com/deepseek-ai/DeepSeek\u0002V3/blob/main/LICENSE-MODEL/"
+            },
+            {
+              "name": "Hugging Face Transformers（Apache-2.0）",
+              "url": "https://github.com/huggingface/transformers/"
             }
           ]
+        },
+        {
+          "type": "callout",
+          "tone": "green",
+          "title": "「推断标注」",
+          "text": "「合规会推高小团队成本」「披露模板会让数据来源更透明」——这两句都是我们的推断，目前没有量化研究支撑。按作\n业要求，推断必须标出来，不能混在事实里。"
+        },
+        {
+          "type": "callout",
+          "tone": "orange",
+          "title": "「待核实」",
+          "text": "① 各许可证的具体条款（商用限制、再分发、输出归属）我们只读了标题与开头，未逐条核对；② Arena 类人评平台的具\n体方法（题目怎么来、如何防刷）未核实；③ 电力与集群成本没有公开数据。"
         }
       ]
     },
@@ -775,10 +875,10 @@ window.SITE_CONTENT = {
             [
               "v0.5",
               "2026-11-09",
-              "三张地图初步完善，小组分工表格",
+              "三张地图初步完善，小组分工表格；生态+领域地图更新",
               "课程作业要求；认知地图；组长组员分工表格",
               "明确小组任务分工，提高作业完成效率",
-              "生态地图信息量有待提升，页面编辑操作界面便捷度有待提高",
+              "页面编辑操作界面便捷度有待提高",
               "小组分工已明确，各机管理员模式正常运行"
             ],
             [
@@ -818,7 +918,7 @@ window.SITE_CONTENT = {
               "很多问题。。"
             ]
           ],
-          "_ts": 1794232023602,
+          "_ts": 1794233252511,
           "colW": [
             14.285714285714286,
             14.285714285714286,
