@@ -340,7 +340,17 @@ window.LMCollab = (function () {
       /* ★ 修复153：块没有 id，结构不同时只能「整页取远端」。但这份远端内容**不比本机新**
          （过期包 / 云端落后）时，整页取远端等于用旧页顶掉本机刚加的块 —— 所以改成**保留本机这一页**。
          新内容照旧（staleP=false）走整页取远端。 */
-      if (staleP) { try { rp.blocks = JSON.parse(JSON.stringify(bp.blocks)); } catch (eSB) { /* noop */ } }
+      /* ★ 修复162：再加一道「远端到底动没动过这一页」的判据 ——
+         远端这页与共同祖先一模一样 = 远端没碰它，那结构差异只可能来自本机刚加的块，
+         此时**保留本机**（旧写法会因为 staleP=false 用远端旧结构盖掉本机新增）。
+         云端那页真的变了（17 块 vs 本机 6 块模板）才整页取远端。 */
+      let remoteTouched = true;
+      if (ap && Array.isArray(ap.blocks)) {
+        try { remoteTouched = JSON.stringify(ap.blocks) !== JSON.stringify(rp.blocks); }
+        catch (eRT) { remoteTouched = true; }
+      }
+      if (!staleP && remoteTouched) return;               /* 远端动过结构且不旧 → 取远端 */
+      try { rp.blocks = JSON.parse(JSON.stringify(bp.blocks)); } catch (eSB) { /* noop */ }
       return;
     }
     const ancOk = !!(ap && Array.isArray(ap.blocks) && ap.blocks.length === rp.blocks.length);
@@ -1117,6 +1127,7 @@ window.LMCollab = (function () {
     GH.pulledOnce = false; GH.coldAt = 0; GH.timer = 0; GH._409T = 0;
     GH.pullErr = null; GH.cloudMissing = false; GH.guardAt = 0;   /* ★ 修复161：手动「重新核对」从干净状态开始 */
     try { Object.keys(shaOf).forEach(function (k) { delete shaOf[k]; }); } catch (e0) { /* noop */ }
+    try { Object.keys(baseShaOf).forEach(function (k) { delete baseShaOf[k]; }); } catch (e0b) { /* noop */ }
     try { if (window.LMApp) LMApp.toast('🔄 正在重新核对云端版本…'); } catch (e1) { /* noop */ }
     try { ghPull(); } catch (e2) { /* noop */ }
     if (GH.token) { wantPush(); kickPush(1500); }   /* 有写权限才记账：访客没有东西要上传 */
@@ -1376,6 +1387,11 @@ window.LMCollab = (function () {
                guardAt: 0,          /* ★ 修复161：手动上传被拦的起点（有界等待 ≤6 秒，绝不永久锁死） */
                _mk: null };         /* 建数据分支的进行中 Promise（去重） */
   const shaOf = {};                  /* 分支 → 该文件 blob sha（乐观锁缓存，按分支分开） */
+  /* ★ 修复162：分支 →「本机这一版内容是**基于**云端哪个 sha」。
+     旧写法在推之前用 getSha() 取**最新** sha 再带上，等于先问「现在云端是哪一版」再拿它当锁——
+     锁永远对得上，所以任何一台停在旧内容上的设备都能整包覆盖别人刚写的东西（2026-11-09 三张地图被写回模板）。
+     现在只认「我读到的那一版」：云端若已被别人推过，PUT 会 409，走既有的「先拉取→块级合并→再推」路径。 */
+  const baseShaOf = {};
   /* 内容分支：默认数据分支；dataBranch:'' → 跟随 branch；未配置 → lm-data（判定在 store.js） */
   function ghDataRef() {
     try { return (window.LMStore && LMStore.dataRefOf) ? LMStore.dataRefOf(GH.cfg) : ((GH.cfg && GH.cfg.branch) || 'main'); }
@@ -1513,12 +1529,14 @@ window.LMCollab = (function () {
          真没权限的话 PUT 会明确报错，用户看到的是真实原因，而不是永远转圈。 */
       if (r.status === 404) {
         GH.pulledOnce = true; GH.cloudMissing = true; GH.pullErr = null;
+        /* ★ 修复162：云端没有文件 → 没有「基准版本」，首次上传走「不带 sha 直接建文件」 */
+        delete baseShaOf[ref];
         return null;
       }
       if (!r.ok) throw new Error('http ' + r.status + (ref ? '（' + ref + '）' : ''));
       if (useApi) { const et = r.headers.get('etag'); if (et) GH.etag = et; }
       return r.json().then(function (j) {
-        if (useApi) { shaOf[ref] = j.sha; return parseFileText(atobUh(j.content)); }
+        if (useApi) { shaOf[ref] = j.sha; baseShaOf[ref] = j.sha; return parseFileText(atobUh(j.content)); }
         return parseFileText(j);
       });
     }).then(function (c) {
@@ -1536,7 +1554,15 @@ window.LMCollab = (function () {
       const stale = (ts <= lastTs || ts <= GH.lastPullTs);
       if (!stale) {
         notePulled(ts);   /* ★ 修复142：版本戳封顶 + 记账「云端刚变过」+ 抬高本机发号器 */
-        if (applyRemote({ content: c, ts: ts, name: '云端（GitHub）' })) { if (cloudText) GH.syncedText = cloudText; }
+        /* ★ 修复162：本机还有「没推上去的改动」时，不能整包采纳云端 —— 那会把本机刚敲的字冲掉。
+           先做块级合并（两边都保住）；结构不同（比如本机还是旧的 6 块模板、云端已是 17 块）时
+           由 mergePageBlocks 判「远端动没动过这一页」，动过就以远端为准。
+           这里必须传 staleP=false：云端已经确认更新，结构冲突就该让更新的那份说话。 */
+        let cc = c;
+        if (GH.dirty) {
+          try { cc = mergeBlocks(JSON.parse(JSON.stringify(c)), false); } catch (eM3) { cc = c; }
+        }
+        if (applyRemote({ content: cc, ts: ts, name: '云端（GitHub）' })) { if (cloudText) GH.syncedText = cloudText; }
         return;
       }
       /* 时间戳不占优 ≠ 内容相同：多端并发或时钟错位时，云端可能带着本机没有的修改。
@@ -1904,11 +1930,16 @@ window.LMCollab = (function () {
       return fetchT(ghApi(), { method: 'PUT', headers: H, body: JSON.stringify(body) }, 30000);
     };
     const getSha = function (br) {
+      /* ★ 修复162：优先用「本机基于的那一版」的 sha，而不是云端最新 sha。
+         拿最新 sha 当锁 = 锁永远对得上 = 旧设备照样整包覆盖（09 号三张地图被写回模板就是这么发生的）。
+         用基准 sha 提交，云端若已前进 → 409 → 拉取合并后再推，谁都不会被静默顶掉。 */
+      if (baseShaOf[br]) return Promise.resolve(baseShaOf[br]);
       if (shaOf[br]) return Promise.resolve(shaOf[br]);
       return fetchT(ghApi() + '?ref=' + encodeURIComponent(br), {
         headers: { 'Authorization': 'Bearer ' + GH.token, 'Accept': 'application/vnd.github+json' }
       }, 15000).then(function (r) { return r.ok ? r.json().then(function (j) { return j.sha; }) : null; });
     };
+    let putRetried = false;            /* ★ 修复162：「带基准 sha 却 404」只重试一次 */
     const tryPut = function (br) {
       return getSha(br).then(function (sha) {
         const had = !!sha;
@@ -1920,8 +1951,18 @@ window.LMCollab = (function () {
                  绝不能原样返回 422：外层会把 422 当「别人先提交」每 6 秒重试，永远退化不下去 */
               if (!ok) return { ok: false, status: 0, _mkFail: true };
               delete shaOf[br];
+              delete baseShaOf[br];   /* ★ 修复162：新建的分支没有基准版本 */
               return getSha(br).then(function (s2) { return put(br, s2); });
             });
+          }
+          /* ★ 修复162：带着基准 sha 提交却 404 —— 文件被删过 / 分支被重建。
+             清掉基准，重新取一次真实 sha 再试（只一次，避免打转）；
+             注意 409 不走这里：那是「云端真的前进了」，必须交给外层拉取合并。 */
+          if (had && r.status === 404 && !putRetried) {
+            putRetried = true;
+            delete shaOf[br];
+            delete baseShaOf[br];
+            return tryPut(br);
           }
           return r;
         });
@@ -1936,10 +1977,21 @@ window.LMCollab = (function () {
         /* ★ 修复142：这一笔 PUT 根本没写进去 → 不能算「上次推送时刻」，否则重推先在防抖里再等 1.5–4 秒，
            两台设备交替编辑时就这样一次次叠加成「半分钟才动」。清掉它，重推立刻能过闸。 */
         GH.lastPush = 0;
-        if (!GH._409T) GH._409T = setTimeout(function () {
+        /* ★ 修复162：409/422 = 云端已被别人推过，本机基准落后。
+           必须等这一轮「拉取 + 块级合并」真的落地再重推，否则第二次还是拿旧内容去撞；
+           连续撞超过 6 次（拉取一直不成功：断网 / 限流 / 无权限）就退避，别打成死循环。 */
+        const retryPush = function () {
           GH._409T = null;
+          if (GH.inFlight) {
+            GH._409N = (+GH._409N || 0) + 1;
+            if (GH._409N > 6) { GH._409N = 0; pushFail(5000); return; }
+            GH._409T = setTimeout(retryPush, 600);
+            return;
+          }
+          GH._409N = 0;
           if (window.LMApp && validContent(LMApp.state.content)) ghPush(LMApp.state.content);
-        }, 900);
+        };
+        if (!GH._409T) GH._409T = setTimeout(retryPush, 900);
         return;
       }
       if (!r.ok) {
@@ -1986,6 +2038,7 @@ window.LMCollab = (function () {
       GH.lastPushTs = myTs;             /* ★ 修复140：记下已推上去的版本戳（退出键入时不必再序列化比对） */
       return r.json().then(function (j) {
         shaOf[ref] = j.content && j.content.sha;
+        baseShaOf[ref] = shaOf[ref];   /* ★ 修复162：推上去的这一版就是新的基准 */
         /* ★ 修复62 / 83：上传成功 → 只重拍「最近上传版」pushSnap，绝不再动 adminSnap */
         try {
           if (window.LMApp && validContent(LMApp.state.content)) {

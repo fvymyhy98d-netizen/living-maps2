@@ -199,7 +199,20 @@ T('上线/断线提示统一走设备状态机：上线 / 断线 / 已退出页�
 T('Toast 手机端不遮屏：宽度上限 min(86vw, 420px)，多行圆角 14px',
   fs.readFileSync(path.join(DIR, 'css/style.css'), 'utf8').indexOf('max-width:min(86vw,420px)') > 0);
 T('409 冲突尾随重推：拉最新后 0.9 秒重试一次（★ 修复142 从 6 秒收紧），且这一笔不算「上次推送时刻」',
-  col.indexOf('GH._409T') > 0 && col.indexOf('}, 900);') > 0 && col.indexOf('GH.lastPush = 0;') > 0);
+  col.indexOf('GH._409T') > 0 && col.indexOf('const retryPush = function () {') > 0
+    && col.indexOf('GH._409T = setTimeout(retryPush, 900);') > 0 && col.indexOf('GH.lastPush = 0;') > 0);
+
+/* ★ 修复162（2026-11-09 三张地图被旧设备写回模板）：跨设备防覆盖
+   根因：推送前用 getSha() 取「云端最新 sha」再带上 —— 锁永远对得上，任何旧内容都能整包覆盖。
+   现在只认「本机这一版基于哪个 sha」，云端前进就 409 → 拉取 → 块级合并 → 再推。 */
+T('★ 修复162 · 防旧设备覆盖：PUT 带「基准 sha」（不是最新 sha）· 本机有未推改动时先合并再采纳云端 · 409 等拉取落地再重推',
+  col.indexOf('const baseShaOf = {};') > 0
+    && col.indexOf('if (baseShaOf[br]) return Promise.resolve(baseShaOf[br]);') > 0
+    && col.indexOf('baseShaOf[ref] = j.sha;') > 0
+    && col.indexOf('baseShaOf[ref] = shaOf[ref];') > 0
+    && col.indexOf('if (GH.dirty) {') > 0
+    && col.indexOf('if (GH.inFlight) {') > 0
+    && col.indexOf('putRetried') > 0);
 
 /* ---------- 9) 并排组：行内拖动不跳 / 取消并排 ---------- */
 const edt2 = srcOf('js/editor.js');
@@ -5745,13 +5758,14 @@ console.log('\n【修复153】手机弹窗贴到「协作中」胶囊右侧（�
       && C.indexOf('本页不在 github.io 域名下，收不到云端更新') > 0);
 
   /* ⑭ 源码：过期包 / 云端落后时的**结构冲突**改为保留本机页（否则「不丢包」反而会用旧页顶掉新块） */
-  T('修复153 · 源码：staleP 一路传到 mergePageBlocks —— 结构冲突时保留本机页，只有更新的内容才整页取远端',
+  T('修复153/162 · 源码：staleP 一路传到 mergePageBlocks —— 结构冲突时保留本机页，只有「远端真的动过」才整页取远端',
     C.indexOf('const staleP = !msg.force && pts <= lastTs;') > 0
       && C.indexOf('doApply(c, pts, msg.name, staleP)') > 0
       && C.indexOf('doApply(p.content, p.ts, p.by, p.stale)') > 0
       && C.indexOf('mergePageBlocks(localById[rp.id], rp, !!staleP)') > 0
-      && C.indexOf('if (staleP) { try { rp.blocks = JSON.parse(JSON.stringify(bp.blocks)); } catch (eSB)') > 0
-      && C.indexOf('mergeBlocks(JSON.parse(JSON.stringify(c)), true)') > 0
+      /* ★ 修复162：结构冲突改为「远端动过这一页才取远端」，否则保留本机（本机新加的块不能丢） */
+      && C.indexOf('if (!staleP && remoteTouched) return;') > 0
+      && C.indexOf('mergeBlocks(JSON.parse(JSON.stringify(c)), false)') > 0
       && C.indexOf('mergeBlocks(c, true)') > 0);
 })();
 /* ---------- 修复159：访客界面开关「隐藏提问键」整条链路（管理员勾选 → 存进内容 → 同步到 GitHub → 访客看不到） ---------- */
@@ -5972,6 +5986,65 @@ console.log('【修复161】并排换位按「整行」· 手动上传闸门有�
       mg({ why: 'behind', now: 2000, inFlight: true, inFlightAt: 1900 }) === 'block'
         && mg({ why: 'behind', now: 40000, inFlight: true, inFlightAt: 2000, guardAt: 2000 }) === 'allow');
   }
+})();
+
+/* ---------- ★ 修复162：跨设备合并「真跑」（2026-11-09 三张地图被旧设备写回模板的根因回归） ---------- */
+(function () {
+  let M = null;
+  try {
+    const s = srcOf('js/collab.js');
+    const a = s.indexOf('function mergePageBlocks(');
+    const b = s.indexOf('/* ---------- 设备状态双向可见');
+    const prelude = 'let _base = null;\n'
+      + 'const TEXT_FIELDS = { text: 1, title: 1, description: 1 };\n'
+      + 'function mergePageFields() {}\n'
+      + 'function mergeTomb(a, b) { return Object.assign({}, a, b); }\n'
+      + 'function tombOf(c) { return (c && c.config && c.config.collab && c.config.collab.tomb) || {}; }\n'
+      + 'function pageStamp(p) { return +(p && p._ts) || 0; }\n';
+    if (a > 0 && b > a) M = new Function(prelude + s.slice(a, b)
+      + '\nreturn { m: mergeBlocks, setBase: function (x) { _base = x; } };')();
+  } catch (e) { M = null; }
+
+  const blk = function (t) { return { type: 'paragraph', text: t }; };
+  const pg = function (id, n, pre) {
+    const r = []; for (let i = 0; i < n; i++) r.push(blk(pre + i)); return { id: id, kind: 'map', title: id, blocks: r };
+  };
+  const oldApp = (typeof global.LMApp === 'undefined') ? null : global.LMApp;
+  const oldWin = (typeof global.window === 'undefined') ? null : global.window;
+  const use = function (content) {
+    global.LMApp = { state: { content: content } };
+    global.window = { LMApp: global.LMApp };
+  };
+
+  let ok1 = false, ok2 = false, ok3 = false;
+  try {
+    if (M) {
+      /* ① 本机还是 6 块课程模板（落后设备），云端已是 17 块新版 → 必须取云端，绝不能被旧模板盖回去 */
+      M.setBase({ pages: [pg('domain', 6, 'old')] });
+      use({ pages: [pg('domain', 6, 'old')] });
+      ok1 = M.m({ pages: [pg('domain', 17, 'new')] }, false).pages[0].blocks.length === 17;
+
+      /* ② 本机刚加了一块（7 块），云端这一页跟祖先一模一样（没动过）→ 必须保住本机的 7 块 */
+      M.setBase({ pages: [pg('domain', 6, 'x')] });
+      use({ pages: [pg('domain', 7, 'x')] });
+      ok2 = M.m({ pages: [pg('domain', 6, 'x')] }, false).pages[0].blocks.length === 7;
+
+      /* ③ 块数相同、两边各改一个不同的块 → 两边的改动都要保住 */
+      M.setBase({ pages: [{ id: 'p', blocks: [blk('a'), blk('b')] }] });
+      use({ pages: [{ id: 'p', blocks: [blk('a-mine'), blk('b')] }] });
+      const t3 = M.m({ pages: [{ id: 'p', blocks: [blk('a'), blk('b-theirs')] }] }, false)
+        .pages[0].blocks.map(function (x) { return x.text; }).join(',');
+      ok3 = t3 === 'a-mine,b-theirs';
+    }
+  } catch (e) { ok1 = ok2 = ok3 = false; }
+  try {
+    if (oldApp === null) delete global.LMApp; else global.LMApp = oldApp;
+    if (oldWin === null) delete global.window; else global.window = oldWin;
+  } catch (e) { /* noop */ }
+
+  T('★ 修复162 · 真跑 mergeBlocks：落后设备的 6 块模板 + 云端 17 块新版 → 取云端（不再被写回旧版）', ok1);
+  T('★ 修复162 · 真跑 mergeBlocks：本机新加一块、云端没动这页 → 保住本机的 7 块', ok2);
+  T('★ 修复162 · 真跑 mergeBlocks：同长度各改一块 → 两边的字都保住（a-mine,b-theirs）', ok3);
 })();
 
 /* 汇总与退出放到最后（9.61 里有 Promise 真跑，必须等它跑完再下结论） */
