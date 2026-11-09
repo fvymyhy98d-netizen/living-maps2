@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232451083,
+      "syncTs": 1794232448023,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2113,14 +2113,7 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "待深入学习",
-          "text": "知道优化器、warmup、梯度裁剪各解决什么；没调过超参",
-          "free": {
-            "x": 0,
-            "y": 91,
-            "w": 51.3,
-            "gw": null,
-            "ride": 0
-          }
+          "text": "知道优化器、warmup、梯度裁剪各解决什么；没调过超参"
         },
         {
           "type": "callout",
