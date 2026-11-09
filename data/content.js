@@ -4962,12 +4962,12 @@ window.SITE_CONTENT = {
           "title": "相关记录",
           "items": [
             {
-              "name": "Hugging Face TRL（DPO / PPO 的可运行实现）",
-              "url": "https://github.com/huggingface/trl"
+              "name": "四问模板：两轮比较的完整记录",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-method"
             },
             {
-              "name": "DeepSpeed（分布式训练的入门配置）",
-              "url": "https://github.com/microsoft/DeepSpeed"
+              "name": "判断与复盘：我的判断怎样推进",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise"
             }
           ],
           "_ts": 1794218991531
