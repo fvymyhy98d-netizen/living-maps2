@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794230353755,
+      "syncTs": 1794230360052,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -376,7 +376,7 @@ window.SITE_CONTENT = {
           ],
           "rows": [
             [
-              "",
+              "标题「六段链路对应的供给方」\n表头：环节 ｜ 主要供给方 ｜ 提供什么 ｜ 关系类型\n行 1：算力 ｜ NVIDIA、云厂商、数据中心 ｜ GPU、集群、电力 ｜ 供给 / 瓶颈\n行 2：数据 ｜ Common Crawl、Hugging Face、各机构自建 ｜ 原始网页、清洗语料、工具链 ｜ 公共品 / 许可\n行 3：工具链 ｜ PyTorch、Megatron-LM、DeepSpeed、HF Transformers、vLLM ｜ 训练与推理解法 ｜ 依赖（被复\n用）\n行 4：模型 ｜ OpenAI / Anthropic / Google（闭源）；Meta / DeepSeek / 阿里 / AllenAI（开放） ｜ API、开放权\n重、全开放配方 ｜ 竞争 / 采用\n行 5：评测 ｜ 学术界、HELM、Arena 类平台 ｜ 基准、分数、排名 ｜ 话语权\n行 6：规则 ｜ 欧盟等监管机构 ｜ 合规义务、披露模板 ｜ 改变成本",
               "",
               "",
               "",
@@ -471,7 +471,8 @@ window.SITE_CONTENT = {
               "",
               ""
             ]
-          ]
+          ],
+          "_ts": 1794230360044
         },
         {
           "type": "heading",
