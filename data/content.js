@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232137031,
+      "syncTs": 1794232151288,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1396,6 +1396,12 @@ window.SITE_CONTENT = {
           "tone": "blue",
           "title": "一句话解释",
           "text": "清洗的目标不是\"干净\"，是**\"每一 token 都在教模型有用的东西\"**。重复的文本会让模型背原文，噪声文本会让它学坏句式。"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "heading",
