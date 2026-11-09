@@ -53,14 +53,14 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794209442711,
+      "syncTs": 1794209614999,
       "roster": {},
       "tokenVault": {
         "v": 1,
         "iters": 210000,
-        "salt": "SoWaQIjCAeI7bt3cz50x3g==",
-        "iv": "OcRqZ7JTbi+YUU/l",
-        "ct": "7wtJA1x316mci+gWwJCdQJdOpPocdO4peb0seYJWnfBUdkTX2aEul5vfi0azcpwc0GuPj14GgyuMVLoJ/1REUPgIW0e5InZmKq7xlDHcB3lzpjBAEDs36skuJRJ8lTdHZO0YZbaONayFNon9SUBuXw6pBM2kyXkj6cAsJyTqOsPNfwu6w0aWC24Y9XqsEHjXLIfdv88CdYhEQ0DAJEjNrTGYjL7BXIxLd7AUDh3xgzRxJ8jzb8SaiP9Z9EQQ1W2OW2n2"
+        "salt": "9F+n/jiHHSSdTkKHJh8oWg==",
+        "iv": "FnJ8D/wYQ5aPej5f",
+        "ct": "inPmrNGwUtl+37kwU9zDzf4KV2pKOTBXFEIuYxOzz9CkixbMCVH6iG0EJgphshoO0OxZZGRmUlBs1SMA7zS0XZ0gkYae5NLolYajTfVaciiYnVdtN3prG62AXDfFDYwijDmPhShZF53pkifzLIKqfBl6BfAXJpFJupNrFy4i5WEe8SLIb1kE0xpNzLWgRbgwA9mprWZKvSTiXT3qxM1PpdzMlmY9KgyUipNyM9BZ9LA+nAu+WqYpTQyIMPKF/9eiWpu3V6afSjBr5GOZ54YNZ6a88oy1UkWzKKL4z5ANp0R4PG9b7R2E0cmaka4="
       },
       "tomb": {}
     },
@@ -687,7 +687,8 @@ window.SITE_CONTENT = {
       "blocks": [
         {
           "type": "paragraph",
-          "text": "本网站由小组成员共同维护。作业要求：整体结构、主要关系和重要判断共同讨论；每位成员能解释自己参与的内容。"
+          "text": "本网站由小组成员共同维护。整体结构、主要关系和重要判断我们共同讨论；每位成员能解释自己参与的内容。",
+          "_ts": 1794209614998
         },
         {
           "type": "table",
@@ -730,7 +731,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "gray",
           "title": "协作规范",
-          "text": "重要内容标明来源与时间；区分事实、他人观点与团队推断；AI 的回答不作为事实证据；不伪造来源、反馈或更新记录。"
+          "text": "重要内容标明来源与时间；\n区分事实、他人观点与团队推断；\nAI 的回答不作为事实证据；\n不伪造来源、反馈或更新记录。",
+          "_ts": 1794209591481
         }
       ],
       "heroAlign": ""
