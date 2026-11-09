@@ -4591,14 +4591,12 @@ window.SITE_CONTENT = {
           "seq": 2,
           "items": [
             {
-              "label": "Ouyang 等, InstructGPT（2022，arXiv:2203.02155）",
-              "url": "https://arxiv.org/abs/2203.02155",
-              "id": "r1"
+              "label": "DeepSeek-AI：《DeepSeek-V3技术报告》v1（2024-12-27）",
+              "url": "https://arxiv.org/html/2412.19437v1#S1"
             },
             {
-              "label": "Rafailov 等, DPO（2023，arXiv:2305.18290）",
-              "url": "https://arxiv.org/abs/2305.18290",
-              "id": "r2"
+              "label": "《人工智能前沿与创新》课程大作业要求：认知地图与资料规范",
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
             }
           ]
         },
