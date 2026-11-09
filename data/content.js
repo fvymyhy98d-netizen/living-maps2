@@ -604,7 +604,7 @@ window.SITE_CONTENT = {
               "url": "https://paperswithcode.com/"
             },
             {
-              "name": "Grattafiori 等. The Llama 3 Herd of Models（2024） ｜ https://arxiv.org/abs/2407.21783",
+              "name": "Grattafiori 等. The Llama 3 Herd of Models（2024） ｜ https://arxiv.org/abs/2407.21783/",
               "url": "#"
             },
             {
