@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219000294,
+      "syncTs": 1794219025306,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4987,7 +4987,7 @@ window.SITE_CONTENT = {
       "kind": "page",
       "icon": "❓",
       "label": "未解问题",
-      "title": "还没弄清的问题",
+      "title": "本次还没弄清什么？",
       "description": "涌现是不是真的、对齐税有多大、有效上下文有多长、中文配比怎么定。四条我们不敢下结论的。",
       "heroAlign": "",
       "parent": "cognition",
@@ -5114,7 +5114,8 @@ window.SITE_CONTENT = {
           "title": "说明",
           "text": "这一页所有\"没有定论\"的判断，都基于我们读到的公开文献（截至我们的检索时间），**不排除已有更新研究推翻了其中某条**。看到这一页时请自行核对最新进展。"
         }
-      ]
+      ],
+      "heroStyle": {}
     },
     {
       "id": "c-method",
