@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222433766,
+      "syncTs": 1794222461499,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4967,7 +4967,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "第四个约束：时间"
+          "text": "时间与查证范围也有限",
+          "_ts": 1794222461497
         },
         {
           "type": "paragraph",
