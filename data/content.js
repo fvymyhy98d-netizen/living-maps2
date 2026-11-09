@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217601296,
+      "syncTs": 1794217607205,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5162,7 +5162,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "table",
-          "title": "对应四种典型毛病",
+          "title": "一次比较需要交代的四件事",
           "headers": [
             "问题",
             "要写清什么",
@@ -5190,7 +5190,7 @@ window.SITE_CONTENT = {
               "每个条件仅运行一次，不能据此判断一般效果；我没有独立复核全部题目。"
             ]
           ],
-          "_ts": 1794217575365
+          "_ts": 1794217607203
         },
         {
           "type": "heading",
