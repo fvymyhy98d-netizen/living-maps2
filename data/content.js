@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794212816151,
+      "syncTs": 1794212852353,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -121,22 +121,6 @@ window.SITE_CONTENT = {
           "type": "heading",
           "level": 2,
           "text": "方法与技术路线（示例图表）"
-        },
-        {
-          "type": "chart",
-          "chartType": "bar",
-          "title": "三条技术路线的课堂关注热度（示意数据）",
-          "labels": [
-            "提示工程",
-            "检索增强 RAG",
-            "模型微调"
-          ],
-          "data": [
-            86,
-            72,
-            54
-          ],
-          "unit": "票"
         },
         {
           "type": "heading",
