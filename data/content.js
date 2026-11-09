@@ -370,7 +370,7 @@ window.SITE_CONTENT = {
           ],
           "rows": [
             [
-              "算力｜NVIDIA、云厂商、数据中心｜GPU、集群、电力｜供给 / 瓶颈"
+              "算力"
             ]
           ]
         },
