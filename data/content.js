@@ -5283,10 +5283,11 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "links": [
+            "c-revise",
             "c-open",
-            "n-align",
-            "c-revise"
-          ]
+            "c-method"
+          ],
+          "note": ""
         },
         {
           "type": "sources",
