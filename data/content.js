@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219111261,
+      "syncTs": 1794219116992,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5097,7 +5097,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "两篇对着读",
+          "title": "继续查证",
           "items": [
             {
               "name": "涌现能力（正面）",
@@ -5107,7 +5107,8 @@ window.SITE_CONTENT = {
               "name": "涌现是海市蜃楼吗（反面）",
               "url": "https://arxiv.org/abs/2304.15004"
             }
-          ]
+          ],
+          "_ts": 1794219116990
         },
         {
           "type": "callout",
