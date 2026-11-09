@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217829230,
+      "syncTs": 1794217834544,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5243,12 +5243,12 @@ window.SITE_CONTENT = {
               "id": "r1"
             },
             {
-              "label": "赵鑫等,《大语言模型》前言（对\"如何学习一个领域\"的讨论）",
+              "label": "《人工智能前沿与创新》课程大作业要求：认知地图与资料规范",
               "url": "https://llmbook-zh.github.io/",
               "id": "r2"
             }
           ],
-          "_ts": 1794217829228
+          "_ts": 1794217834542
         },
         {
           "type": "files",
