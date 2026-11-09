@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232392679,
+      "syncTs": 1794232394153,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1939,7 +1939,14 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "知道下一个 token 的交叉熵怎么算、困惑度怎么换算；没手算过"
+          "text": "知道下一个 token 的交叉熵怎么算、困惑度怎么换算；没手算过",
+          "free": {
+            "x": 0,
+            "y": 276,
+            "w": 94.4,
+            "gw": null,
+            "ride": 0
+          }
         },
         {
           "type": "heading",
