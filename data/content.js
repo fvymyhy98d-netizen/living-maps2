@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794223329083,
+      "syncTs": 1794224132878,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4585,9 +4585,9 @@ window.SITE_CONTENT = {
         {
           "type": "callout",
           "tone": "orange",
-          "title": "这条链路的真实形状",
-          "text": "问题→取得信息→核对依据→形成判断→发现缺口→再查证，是一个可以回访的过程。\n\n发现缺口后，可以返回前面的环节补资料或改问题，不是固定十二步必须反复从头训练。本次没有验证“所有模型项目都不能跳过某一步”的命题。",
-          "_ts": 1794222190887
+          "title": "发现缺口之后",
+          "text": "问题→取得信息→核对依据→形成判断→发现缺口→再查证，是一个可以回访的过程。发现缺口后，可以返回前面的环节补资料或改问题，不是固定的一套步骤必须从头重做。本次没有验证“所有模型项目都不能跳过某一步”的命题。",
+          "_ts": 1794224081933
         },
         {
           "type": "related",
@@ -4886,7 +4886,7 @@ window.SITE_CONTENT = {
             },
             {
               "name": "判断与复盘：我的判断怎样推进",
-              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise4"
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise"
             }
           ],
           "_ts": 1794219247300
@@ -4927,7 +4927,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "三种典型取舍"
+          "text": "三种任务下的取舍",
+          "_ts": 1794224018151
         },
         {
           "type": "table",
@@ -5139,10 +5140,11 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "links": [
-            "n-train",
-            "c-method",
-            "c-misconception"
-          ]
+            "c-causal",
+            "c-misconception",
+            "c-method"
+          ],
+          "note": ""
         },
         {
           "type": "sources",
@@ -5210,7 +5212,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "我们的实际分布"
+          "text": "本次实际参与程度",
+          "_ts": 1794224097040
         },
         {
           "type": "table",
@@ -5281,10 +5284,11 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "links": [
+            "c-revise",
             "c-open",
-            "n-align",
-            "c-revise"
-          ]
+            "c-method"
+          ],
+          "note": ""
         },
         {
           "type": "sources",
