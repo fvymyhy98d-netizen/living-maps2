@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222162122,
+      "syncTs": 1794222182533,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4559,7 +4559,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "一个反例：跳过评测会怎样"
+          "text": "一个反例：没有共同标准会怎样",
+          "_ts": 1794222182530
         },
         {
           "type": "paragraph",
