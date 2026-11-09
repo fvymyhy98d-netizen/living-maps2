@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232664556,
+      "syncTs": 1794232674494,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -3049,7 +3049,14 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "知道 prefill 吃算力、decode 吃带宽，以及 KV cache 的作用；没起过服务"
+          "text": "知道 prefill 吃算力、decode 吃带宽，以及 KV cache 的作用；没起过服务",
+          "free": {
+            "x": 0,
+            "y": 91,
+            "w": 94.4,
+            "gw": null,
+            "ride": 0
+          }
         },
         {
           "type": "callout",
