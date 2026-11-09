@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794230475317,
+      "syncTs": 1794230520873,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -416,7 +416,7 @@ window.SITE_CONTENT = {
           ],
           "rows": [
             [
-              "环节 ｜ 主要供给方 ｜ 提供什么 ｜ 关系类型"
+              "环节 ｜主要供给方 ｜ 提供什么 ｜ 关系类型"
             ],
             [
               "算力 ｜ NVIDIA、云厂商、数据中心 ｜ GPU、集群、电力 ｜ 供给 / 瓶颈"
@@ -436,7 +436,8 @@ window.SITE_CONTENT = {
             [
               "规则 ｜ 欧盟等监管机构 ｜ 合规义务、披露模板 ｜ 改变成本"
             ]
-          ]
+          ],
+          "_ts": 1794230520862
         },
         {
           "type": "entries",
