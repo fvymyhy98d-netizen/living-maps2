@@ -616,19 +616,19 @@ window.SITE_CONTENT = {
               "url": "https://arxiv.org/abs/2412.15115"
             },
             {
-              "name": "OLMo 2（2025） ｜https://arxiv.org/abs/2501.00656/",
-              "url": "#"
+              "name": "OLMo 2（2025）",
+              "url": "https://arxiv.org/abs/2501.00656/"
             },
             {
-              "name": "Lambert 等. Tulu 3（2024） ｜https://arxiv.org/abs/2411.15124",
-              "url": "#"
+              "name": "Lambert 等. Tulu 3（2024）",
+              "url": "https://arxiv.org/abs/2411.15124/"
             },
             {
-              "name": "Common Crawl · Get Started ｜https://commoncrawl.org/get-started",
-              "url": "#"
+              "name": "Common Crawl · Get Started",
+              "url": "https://commoncrawl.org/get-started/"
             },
             {
-              "name": "European Commission · AI Act ｜https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework\u0002ai",
+              "name": "European Commission · AI Act ｜https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework\u0002ai/",
               "url": "#"
             },
             {
