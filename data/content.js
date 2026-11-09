@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232628040,
+      "syncTs": 1794232642624,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2858,7 +2858,14 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "知道常见基准与几类偏差（样本量、few-shot、数据污染）；没跑过评测"
+          "text": "知道常见基准与几类偏差（样本量、few-shot、数据污染）；没跑过评测",
+          "free": {
+            "x": 0,
+            "y": 91,
+            "w": 94.4,
+            "gw": null,
+            "ride": 0
+          }
         },
         {
           "type": "callout",
