@@ -371,7 +371,39 @@ window.SITE_CONTENT = {
           "rows": [
             [
               "算力",
-              ""
+              "NVIDIA、云厂商、数据中心",
+              "GPU、集群、电力",
+              "供给 / 瓶颈"
+            ],
+            [
+              "数据",
+              "Common Crawl、Hugging Face、各机构自建",
+              "原始网页、清洗语料、工具链",
+              "公共品 / 许可"
+            ],
+            [
+              "工具链",
+              "PyTorch、Megatron-LM、DeepSpeed、HF Transformers、vLLM",
+              "训练与推理解法",
+              "依赖（被复用）"
+            ],
+            [
+              "模型",
+              "OpenAI / Anthropic / Google（闭源）；Meta / DeepSeek / 阿里 / AllenAI（开放）",
+              "API、开放权重、全开放配方",
+              "竞争 / 采用"
+            ],
+            [
+              "评测",
+              "学术界、HELM、Arena 类平台",
+              "基准、分数、排名",
+              "话语权"
+            ],
+            [
+              "规则",
+              "欧盟等监管机构",
+              "合规义务、披露模板",
+              "改变成本"
             ]
           ]
         },
