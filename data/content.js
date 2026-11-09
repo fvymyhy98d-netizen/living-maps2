@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219169816,
+      "syncTs": 1794219176999,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4416,7 +4416,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "判断一个说法靠不靠谱，看它有没有说清**\"在什么条件下成立\"**。凡是绝对化的表述，八成有问题。"
+          "text": "先检查来源和适用范围，再决定一句话能说到哪里。",
+          "_ts": 1794219176997
         },
         {
           "type": "table",
