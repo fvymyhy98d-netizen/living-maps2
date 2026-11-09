@@ -4509,12 +4509,12 @@ window.SITE_CONTENT = {
           "title": "相关记录",
           "items": [
             {
-              "name": "Chinchilla（推翻\"参数越大越好\"的那篇）",
-              "url": "https://arxiv.org/abs/2203.15556"
+              "name": "四问模板：两轮比较的完整记录",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-method"
             },
             {
-              "name": "\"涌现是海市蜃楼吗\"（对涌现的质疑）",
-              "url": "https://arxiv.org/abs/2304.15004"
+              "name": "判断与复盘：我的判断怎样推进",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise4"
             }
           ],
           "_ts": 1794219247300
