@@ -4495,19 +4495,12 @@ window.SITE_CONTENT = {
           "seq": 3,
           "items": [
             {
-              "label": "Wei 等, Emergent Abilities of Large Language Models（2022，arXiv:2206.07682）",
-              "url": "https://arxiv.org/abs/2206.07682",
-              "id": "r1"
+              "label": "DeepSeek-AI：《DeepSeek-V3技术报告》v1（2024-12-27）",
+              "url": "https://arxiv.org/html/2412.19437v1#S1"
             },
             {
-              "label": "Schaeffer 等, Are Emergent Abilities of Large Language Models a Mirage?（2023，arXiv:2304.15004）",
-              "url": "https://arxiv.org/abs/2304.15004",
-              "id": "r2"
-            },
-            {
-              "label": "Frantar 等, GPTQ（2022，arXiv:2210.17323）",
-              "url": "https://arxiv.org/abs/2210.17323",
-              "id": "r3"
+              "label": "《人工智能前沿与创新》课程大作业要求：认知地图与资料规范",
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
             }
           ]
         },
