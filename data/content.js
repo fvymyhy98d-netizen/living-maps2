@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222585795,
+      "syncTs": 1794222591480,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -555,7 +555,7 @@ window.SITE_CONTENT = {
       "icon": "🧭",
       "label": "认知地图",
       "title": "认知地图：我们怎么判断，依据是什么",
-      "description": "不是知识清单，是判断力的来源：因果链、认知修正、权衡、排障方法、能力边界。",
+      "description": "不是知识清单，而是判断依据：问题怎么拆，资料怎么核对，结果能说明什么，还有什么不知道。",
       "heroAlign": "",
       "blocks": [
         {
@@ -715,7 +715,8 @@ window.SITE_CONTENT = {
           ]
         }
       ],
-      "heroStyle": {}
+      "heroStyle": {},
+      "descStyle": {}
     },
     {
       "id": "updates",
