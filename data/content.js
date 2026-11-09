@@ -987,9 +987,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "了解初步通过显存量进行参数量的计算方法，运算训练时间成本的公式"
         },
         {
           "type": "heading",
