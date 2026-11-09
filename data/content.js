@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231711782,
+      "syncTs": 1794231752821,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -657,6 +657,12 @@ window.SITE_CONTENT = {
               "url": "https://github.com/huggingface/transformers/"
             }
           ]
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         }
       ]
     },
