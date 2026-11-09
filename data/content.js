@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232498424,
+      "syncTs": 1794232521916,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2462,6 +2462,12 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "预训练完的模型会续写，不会回答。**SFT（Supervised Fine-Tuning，监督微调）就是用少量高质量的\"问—答\"样本，把它从\"接话\"掰成\"答话\"。**"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
