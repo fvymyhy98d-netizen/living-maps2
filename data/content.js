@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219394800,
+      "syncTs": 1794219418764,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4142,7 +4142,7 @@ window.SITE_CONTENT = {
       "kind": "page",
       "icon": "🔗",
       "label": "因果链",
-      "title": "为什么这十二步不能换顺序",
+      "title": "从问题到判断：信息如何影响回答",
       "description": "每一步都在补上一步留下的具体缺陷。理解了\"洞\"和\"补丁\"，才算理解这条链路。",
       "heroAlign": "",
       "parent": "cognition",
@@ -4266,7 +4266,8 @@ window.SITE_CONTENT = {
           "title": "还没弄清",
           "text": "- 螺旋迭代该以什么频率进行（每周？每个里程碑？），我们没有实践出结论。\n- 小团队是否真的需要完整走完对齐，还是可以用提示词替代，取决于任务，我们只做了判断没有验证。"
         }
-      ]
+      ],
+      "heroStyle": {}
     },
     {
       "id": "c-revise",
