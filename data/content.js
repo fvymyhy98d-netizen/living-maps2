@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231788137,
+      "syncTs": 1794231791379,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -663,6 +663,12 @@ window.SITE_CONTENT = {
           "tone": "green",
           "title": "【推断标注】",
           "text": "「合规会推高小团队成本」「披露模板会让数据来源更透明」——这两句都是我们的推断，目前没有量化研究支撑。按作业要求，推断必须标出来，不能混在事实里。"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         }
       ]
     },
