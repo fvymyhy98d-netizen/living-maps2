@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794212916198,
+      "syncTs": 1794212985280,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -139,23 +139,6 @@ window.SITE_CONTENT = {
               "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
             }
           ]
-        },
-        {
-          "type": "sources",
-          "title": "本页来源",
-          "items": [
-            {
-              "label": "Vaswani 等, Attention Is All You Need (2017)",
-              "url": "https://arxiv.org/abs/1706.03762",
-              "id": "r1"
-            },
-            {
-              "label": "示例来源：请替换为你们实际查阅的资料",
-              "url": "#",
-              "id": "r2"
-            }
-          ],
-          "seq": 2
         },
         {
           "type": "entries",
