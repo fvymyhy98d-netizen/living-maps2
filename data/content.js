@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794228831815,
+      "syncTs": 1794228853940,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -112,6 +112,12 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "text": "**① 进模型之前：把文字变成数字。** 这四步是单向流水，顺序不能换。先按显卡定规模——不知道规模，就不知道该收多少数据；收了数据才谈清洗——脏东西不清掉，分词会把它永久固定进词表；分词放最后，因为词表大小要跟语料和规模匹配。做完这一段，你手上只有数字，还没有模型。"
+        },
+        {
+          "type": "paragraph",
+          "size": "normal",
+          "text": "",
+          "style": {}
         },
         {
           "type": "table",
