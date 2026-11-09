@@ -604,16 +604,16 @@ window.SITE_CONTENT = {
               "url": "https://paperswithcode.com/"
             },
             {
-              "name": "Grattafiori 等. The Llama 3 Herd of Models（2024） ｜ https://arxiv.org/abs/2407.21783/",
-              "url": "#"
+              "name": "Grattafiori 等. The Llama 3 Herd of Models（2024）",
+              "url": "https://arxiv.org/abs/2407.21783/"
             },
             {
-              "name": "DeepSeek-AI. DeepSeek-V3 Technical Report（2024） ｜ https://arxiv.org/abs/2412.19437",
-              "url": "#"
+              "name": "DeepSeek-AI. DeepSeek-V3 Technical Report（2024）",
+              "url": "https://arxiv.org/abs/2412.19437 /"
             },
             {
-              "name": "Qwen Team. Qwen2.5 Technical Report（2024） ｜https://arxiv.org/abs/2412.15115",
-              "url": "#"
+              "name": "Qwen Team. Qwen2.5 Technical Report（2024）",
+              "url": "https://arxiv.org/abs/2412.15115"
             },
             {
               "name": "OLMo 2（2025） ｜https://arxiv.org/abs/2501.00656",
