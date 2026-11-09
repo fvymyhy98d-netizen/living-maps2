@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218578358,
+      "syncTs": 1794218599779,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4294,7 +4294,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "修正一：从\"参数越大越好\"到\"配比才是关键\""
+          "text": "修正一：起点：我原来怎样想",
+          "_ts": 1794218599777
         },
         {
           "type": "paragraph",
