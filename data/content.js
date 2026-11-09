@@ -5100,12 +5100,16 @@ window.SITE_CONTENT = {
           "title": "继续查证",
           "items": [
             {
-              "name": "涌现能力（正面）",
-              "url": "https://arxiv.org/abs/2206.07682"
+              "name": "四问模板：两轮比较的完整记录",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-method"
             },
             {
-              "name": "涌现是海市蜃楼吗（反面）",
-              "url": "https://arxiv.org/abs/2304.15004"
+              "name": "领域：评测",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/n-eval"
+            },
+            {
+              "name": "生态：评测体系",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/e-eval"
             }
           ],
           "_ts": 1794219116990
