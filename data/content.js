@@ -459,190 +459,138 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "lead",
-          "text": "这张图回答一个问题：**如果要把一个大语言模型从零做出来，中间到底经过哪些环节？**\n十二个关键词分成四段，点任意一个进入条目页——那里有一句话解释、具体做法、真实数字和来源。"
+          "text": "领域地图回答三个问题：**这个领域有什么知识、方法和工具？它们怎样关联？以后在哪里学？**本页是示例，进入管理模式后点任意内容即可修改。"
         },
         {
           "type": "callout",
           "tone": "blue",
-          "title": "一句话",
-          "text": "这十二个环节不是十二个可选步骤，**是一条因果链**：每一个都在补上一个留下的缺陷。所以顺序换不了，也很难跳。"
+          "title": "研究边界",
+          "text": "我们聚焦语言模型的基本原理与使用，暂不展开分布式训练与多模态。后续根据课程进度补充。",
+          "style": {
+            "hl": "#ffc9de"
+          },
+          "_ts": 1793357765762
         },
         {
           "type": "heading",
           "level": 2,
-          "text": "关键词（点进去展开）"
-        },
-        {
-          "type": "entries",
-          "title": "① 进模型之前",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "n-scale",
-            "n-data",
-            "n-clean",
-            "n-token"
-          ]
-        },
-        {
-          "type": "entries",
-          "title": "② 模型长什么样",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "n-arch",
-            "n-loss"
-          ]
-        },
-        {
-          "type": "entries",
-          "title": "③ 它是怎么学会的",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "n-train",
-            "n-pretrain"
-          ]
-        },
-        {
-          "type": "entries",
-          "title": "④ 怎么才算好用",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "n-sft",
-            "n-align",
-            "n-eval",
-            "n-deploy"
-          ]
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "这十二步是怎么咬合的"
+          "text": "主要问题与典型任务",
+          "_ts": 1793455315676
         },
         {
           "type": "paragraph",
-          "text": "从终点往回看最清楚。你要的是「别人打开网页能用」，那就得先让它**答得对**——这是[评测](#/p/n-eval)要证明的事；要答得对，得先让它**愿意回答问题**，这是[对齐](#/p/n-align)和[监督微调](#/p/n-sft)干的事；而它之所以能被教会回答，是因为前面已经被喂成了一个**会续写的底座**，这就是[预训练](#/p/n-pretrain)。再往前，预训练需要能被稳定跑起来（[训练循环](#/p/n-train)）、需要正确的打分方式（[损失](#/p/n-loss)）、需要一台能处理语言的机器（[结构](#/p/n-arch)）、需要把文字切成它认识的单位（[分词](#/p/n-token)）、需要干净且够多的原料（[数据](#/p/n-data)、[清洗](#/p/n-clean)），最后落在最现实的一步：你的卡装不装得下（[定规模](#/p/n-scale)）。\n**每一环都在替下一环解决一个具体麻烦，而不是\"顺便多做一步\"。**"
+          "text": "语言模型试图解决的核心问题是：**让机器根据上下文预测和生成自然语言。**\n一个典型任务是\"问答\"：用户提问 → 模型理解问题 → 生成回答 → 评估回答质量。"
         },
         {
-          "type": "table",
-          "title": "一眼速查：每个环节出问题时，你会看到什么",
-          "headers": [
-            "环节",
-            "这一环在干什么",
-            "出问题时的典型症状"
+          "type": "heading",
+          "level": 2,
+          "text": "方法与技术路线（示例图表）"
+        },
+        {
+          "type": "chart",
+          "chartType": "bar",
+          "title": "三条技术路线的课堂关注热度（示意数据）",
+          "labels": [
+            "提示工程",
+            "检索增强 RAG",
+            "模型微调"
           ],
-          "rows": [
-            [
-              "定规模",
-              "用硬件预算反推模型大小",
-              "训到一半显存爆了，或者根本跑不完"
-            ],
-            [
-              "数据",
-              "决定模型见过什么样的世界",
-              "生成内容偏科、口音奇怪、全是广告"
-            ],
-            [
-              "清洗",
-              "把重复、噪声、脏话剔掉",
-              "模型开始背原文、复读、说胡话"
-            ],
-            [
-              "分词",
-              "把文字变成整数序列",
-              "中文特别费 token，一句话要切开几十个碎片"
-            ],
-            [
-              "结构",
-              "决定信息怎么在序列里流动",
-              "长句后半段接不上前半段，指代全乱"
-            ],
-            [
-              "损失",
-              "定义什么叫\"预测对了\"",
-              "训练不收敛，或者收敛了但模型只会复读"
-            ],
-            [
-              "训练",
-              "让参数真的动起来",
-              "loss 卡住不动、突然飙升、梯度爆炸"
-            ],
-            [
-              "预训练",
-              "在大量文本上学语言规律",
-              "能生成通顺句子，但完全不听指令"
-            ],
-            [
-              "监督微调",
-              "教它\"回答问题\"这个格式",
-              "回答格式对了，内容还是错的；或学了新的忘了旧的"
-            ],
-            [
-              "对齐",
-              "让答案符合人的偏好",
-              "答案变长了、变客气了，但信息量没变"
-            ],
-            [
-              "评测",
-              "证明它真的行",
-              "分数很高，一换题就崩；或者分数根本不可复现"
-            ],
-            [
-              "推理部署",
-              "让真实用户用得上",
-              "第一个问题等四十秒，第二个人来了直接卡死"
-            ]
-          ]
+          "data": [
+            86,
+            72,
+            54
+          ],
+          "unit": "票"
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "课程与学习路径"
+        },
+        {
+          "type": "paragraph",
+          "text": "**前置基础：**高等数学（概率与矩阵）→ **核心覆盖：**人工智能导论、机器学习 → **实践应用：**本课程大作业 → **自主拓展：**经典论文与开源项目。\n\n以上为示例，请对照你们专业的培养方案逐条核实，无法确认的先标\"待核实\"。"
         },
         {
           "type": "files",
-          "title": "顺着这条线往下读",
+          "title": "学习资料与附件",
           "items": [
             {
-              "name": "Datawhale · Happy-LLM（中文，八章几乎对应这十二步）",
-              "url": "https://github.com/datawhalechina/happy-llm"
+              "name": "课程大作业要求：三张活地图",
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
             },
             {
-              "name": "《大语言模型》赵鑫等（人大，免费在线，理论最成体系）",
-              "url": "https://llmbook-zh.github.io/"
-            },
-            {
-              "name": "Karpathy · nanoGPT（几百行跑通 GPT）",
-              "url": "https://github.com/karpathy/nanoGPT"
-            },
-            {
-              "name": "Stanford CS336（从零构建语言模型，课程材料全公开）",
-              "url": "https://stanford-cs336.github.io/spring2025/"
+              "name": "MDN · Web 开发入门（做本站用的技术）",
+              "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
             }
           ]
         },
         {
           "type": "sources",
           "title": "本页来源",
-          "seq": 3,
           "items": [
             {
-              "label": "Karpathy, nanoGPT（GPT 的最小可运行实现）",
-              "url": "https://github.com/karpathy/nanoGPT",
+              "label": "Vaswani 等, Attention Is All You Need (2017)",
+              "url": "https://arxiv.org/abs/1706.03762",
               "id": "r1"
             },
             {
-              "label": "赵鑫等,《大语言模型》（中国人民大学出版社，在线版）",
-              "url": "https://llmbook-zh.github.io/",
+              "label": "示例来源：请替换为你们实际查阅的资料",
+              "url": "#",
               "id": "r2"
-            },
-            {
-              "label": "Hugging Face, LLM Course（含中文版）",
-              "url": "https://huggingface.co/learn/llm-course",
-              "id": "r3"
             }
-          ]
+          ],
+          "seq": 2
+        },
+        {
+          "type": "entries",
+          "title": "下级条目",
+          "mode": "card",
+          "cols": 3,
+          "note": ""
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "核心概念"
+        },
+        {
+          "type": "table",
+          "title": "核心概念速览（示例）",
+          "headers": [
+            "概念",
+            "一句话解释",
+            "相关工具 / 模型"
+          ],
+          "rows": [
+            [
+              "Token / 分词",
+              "把文字切成模型能处理的最小单位",
+              "tiktoken、SentencePiece"
+            ],
+            [
+              "Transformer",
+              "目前主流的模型结构，核心是注意力机制",
+              "GPT 系列、LLaMA 系列"
+            ],
+            [
+              "预训练",
+              "先在海量文本上学习\"下一个词\"的规律",
+              "各类基座模型"
+            ],
+            [
+              "微调 / RAG",
+              "用少量数据或外部知识让模型适配具体任务",
+              "LoRA、向量数据库"
+            ]
+          ],
+          "free": {
+            "x": 1.7,
+            "y": 1177,
+            "w": 94.4,
+            "ride": 0
+          },
+          "_ts": 1793415612554
         }
       ]
     },
@@ -658,164 +606,93 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "lead",
-          "text": "**生态地图不是\"人物和机构名单\"，重点是讲清具体关系**：谁依赖谁、谁资助谁、谁采用了谁的成果。\n领域地图讲的是\"要做什么\"，这张图讲的是**\"谁在做、用什么做、去哪找\"**。同一个环节往往对应一个开源项目、一篇论文、一家机构——把这些对上号，查资料的速度完全不一样。"
-        },
-        {
-          "type": "callout",
-          "tone": "blue",
-          "title": "一句话",
-          "text": "这个生态有个特点：**几乎每一个环节都有成熟的开源工具**。所以\"我要造模型\"这件事，八成不是从零写代码，而是选用哪些零件、怎么拼。"
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "关键词（点进去展开）"
-        },
-        {
-          "type": "entries",
-          "title": "① 先学会（教程与课程）",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "e-open-course",
-            "e-community"
-          ]
-        },
-        {
-          "type": "entries",
-          "title": "② 模型与数据从哪来",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "e-models",
-            "e-data-tools",
-            "e-tokenizer"
-          ]
-        },
-        {
-          "type": "entries",
-          "title": "③ 怎么训、怎么调",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "e-train-fw",
-            "e-posttrain"
-          ]
-        },
-        {
-          "type": "entries",
-          "title": "④ 怎么服务、怎么证明",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "e-infer",
-            "e-eval",
-            "e-papers"
-          ]
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "这张图怎么用"
-        },
-        {
-          "type": "paragraph",
-          "text": "假设你现在卡在[训练不收敛](#/p/n-train)。在这张图里对应三件事：去[教程](#/p/e-open-course)里找别人的训练脚本对照超参；去[训练框架](#/p/e-train-fw)的 issue 区搜 `loss nan`；去[论文](#/p/e-papers)里找同规模模型的配置表。\n**每个环节都同时有\"学\"和\"用\"两条入口**——教程负责让你看懂，工具负责让你跑通，论文负责让你知道边界在哪。"
+          "text": "生态地图不是\"人物和机构名单\"，重点是讲清楚**具体关系**：谁依赖谁、谁资助谁、谁采用了谁的成果。",
+          "_ts": 1794210681820
         },
         {
           "type": "table",
-          "title": "一张对照表：环节 → 生态位 → 代表项目",
+          "title": "重要参与者（示例）",
           "headers": [
-            "环节",
-            "对应生态位",
-            "代表项目 / 机构"
+            "参与者",
+            "类型",
+            "主要贡献",
+            "与领域地图的关联"
           ],
           "rows": [
             [
-              "分词",
-              "分词器实现",
-              "tiktoken（OpenAI）、SentencePiece（Google）、HF Tokenizers"
+              "OpenAI",
+              "企业",
+              "GPT 系列模型、API 服务",
+              "Transformer 结构的规模化应用"
             ],
             [
-              "结构",
-              "模型实现",
-              "nanoGPT、HF Transformers、LLaMA / Qwen 官方仓库"
+              "Meta",
+              "企业",
+              "LLaMA 开源模型",
+              "让研究者能低成本获得基座模型"
             ],
             [
-              "训练",
-              "分布式训练框架",
-              "Megatron-LM（NVIDIA）、DeepSpeed（微软）、ColossalAI"
+              "Hugging Face",
+              "平台社区",
+              "模型与数据集托管、Transformers 库",
+              "几乎所有微调实践的入口"
             ],
             [
-              "数据",
-              "数据处理流水线",
-              "Data-Juicer（阿里）、text-dedup、HF Datasets"
-            ],
-            [
-              "微调",
-              "后训练工具链",
-              "LLaMA-Factory、ms-swift（阿里）、TRL（Hugging Face）"
-            ],
-            [
-              "推理",
-              "推理服务引擎",
-              "vLLM、SGLang、llama.cpp、Ollama"
-            ],
-            [
-              "评测",
-              "评测框架与榜单",
-              "OpenCompass、lm-evaluation-harness、C-Eval"
-            ],
-            [
-              "学习",
-              "系统教程",
-              "Datawhale 系列、Karpathy 课程、CS336、d2l"
+              "高校实验室",
+              "学术",
+              "算法创新、论文与评测",
+              "提出新方法，企业再工程化"
             ]
-          ]
+          ],
+          "_ts": 1793579138652
+        },
+        {
+          "type": "chart",
+          "chartType": "pie",
+          "title": "某开源社区模型来源构成（示意数据）",
+          "labels": [
+            "社区微调",
+            "企业开源",
+            "高校发布"
+          ],
+          "data": [
+            62,
+            28,
+            10
+          ],
+          "unit": "个"
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "具体关系举例"
+        },
+        {
+          "type": "paragraph",
+          "text": "- **依赖：**多数微调实践 **依赖** Hugging Face 提供的模型权重与工具库；\n- **采用：**企业产品 **采用** 开源基座模型再自行训练；\n- **资助：**云厂商 **资助 / 提供算力** 给高校实验室；\n- **竞争：**闭源 API 服务与开源模型在成本和隐私上互相竞争。"
+        },
+        {
+          "type": "callout",
+          "tone": "orange",
+          "title": "推断标注",
+          "text": "上述关系为课堂讨论后的**团队推断**，正式使用前请逐条补充公开来源核实；无法核实的保留\"推断\"标记。"
         },
         {
           "type": "sources",
           "title": "本页来源",
-          "seq": 3,
           "items": [
             {
-              "label": "Hugging Face, LLM Course",
-              "url": "https://huggingface.co/learn/llm-course",
+              "label": "Hugging Face 官网",
+              "url": "https://huggingface.co",
               "id": "r1"
             },
             {
-              "label": "Datawhale, Happy-LLM（中文系统教程）",
-              "url": "https://github.com/datawhalechina/happy-llm",
+              "label": "示例来源：请替换",
+              "url": "#",
               "id": "r2"
-            },
-            {
-              "label": "Stanford CS336: Language Modeling from Scratch",
-              "url": "https://stanford-cs336.github.io/spring2025/",
-              "id": "r3"
             }
-          ]
-        },
-        {
-          "type": "files",
-          "title": "直接开始",
-          "items": [
-            {
-              "name": "Hugging Face（模型、数据集、课程的总入口）",
-              "url": "https://huggingface.co/"
-            },
-            {
-              "name": "ModelScope 魔搭（国内可直连，中文模型多）",
-              "url": "https://modelscope.cn/"
-            },
-            {
-              "name": "Papers with Code（论文 + 代码 + 榜单）",
-              "url": "https://paperswithcode.com/"
-            }
-          ]
+          ],
+          "seq": 2
         }
       ]
     },
@@ -831,119 +708,59 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "lead",
-          "text": "前两张图讲\"世界是什么样\"，这张图讲**\"我们怎么理解它、哪里理解错了、还差多远\"**。\n它是三张图里唯一会随着学习不断被推翻重写的一张。"
-        },
-        {
-          "type": "callout",
-          "tone": "blue",
-          "title": "一句话",
-          "text": "这张图记录的不是结论，是**判断的依据**：为什么相信这个、什么时候改的、改成了什么、还有哪里不敢下结论。"
+          "text": "认知地图聚焦**思考方法、分析案例与成长习惯**：我们怎样理解一个问题，依据什么判断，遇到新证据后怎样调整。"
         },
         {
           "type": "heading",
           "level": 2,
-          "text": "关键词（点进去展开）"
-        },
-        {
-          "type": "entries",
-          "title": "① 怎么理解这条链路",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "c-causal",
-            "c-tradeoff",
-            "c-method"
-          ]
-        },
-        {
-          "type": "entries",
-          "title": "② 我们改过什么",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "c-revise",
-            "c-misconception",
-            "c-debug"
-          ]
-        },
-        {
-          "type": "entries",
-          "title": "③ 边界在哪",
-          "mode": "card",
-          "cols": 2,
-          "note": "",
-          "only": [
-            "c-boundary",
-            "c-open"
-          ]
-        },
-        {
-          "type": "heading",
-          "level": 2,
-          "text": "这张图为什么最重要"
-        },
-        {
-          "type": "paragraph",
-          "text": "领域地图可以抄，生态地图可以搜，**认知地图抄不了**——它记录的是\"我们原来以为 X，后来发现是 Y，因为 Z\"。\n课程作业里那句\"展示一次真实的认识修正\"，说的就是这件事：**你是不是真的想过，看你会不会改主意。**"
+          "text": "我们的分析方法"
         },
         {
           "type": "table",
-          "title": "三张图的分工",
+          "title": "方法与实例",
           "headers": [
-            "地图",
-            "回答",
-            "更新方式"
+            "方法",
+            "应用例子",
+            "当前判断"
           ],
           "rows": [
             [
-              "领域地图",
-              "这个领域有什么",
-              "读到新东西就加"
+              "系统拆解是不是",
+              "一次回答错误，是模型、提示词还是知识缺失？",
+              "先查输入与提示，再怀疑模型（推断）"
             ],
             [
-              "生态地图",
-              "谁在做、用什么做",
-              "工具换代就更新"
+              "对照比较",
+              "两个模型的比较是否用了同一组题目？",
+              "只有条件一致，比较才有意义"
             ],
             [
-              "认知地图",
-              "我们怎么判断，哪里想错了",
-              "**被事实推翻时改写**"
+              "反例检查",
+              "什么情况下\"模型很聪明\"不成立？",
+              "长尾知识与实时信息上容易失败"
             ]
-          ]
+          ],
+          "_ts": 1793449238076
         },
         {
-          "type": "sources",
-          "title": "本页来源",
-          "seq": 2,
-          "items": [
-            {
-              "label": "赵鑫等,《大语言模型》第 1 章：大模型的发展与基本概念",
-              "url": "https://llmbook-zh.github.io/",
-              "id": "r1"
-            },
-            {
-              "label": "Hoffmann 等, Chinchilla（2022，arXiv:2203.15556）",
-              "url": "https://arxiv.org/abs/2203.15556",
-              "id": "r2"
-            }
-          ]
+          "type": "heading",
+          "level": 2,
+          "text": "一次真实的认识修正（示例）"
         },
         {
-          "type": "files",
-          "title": "对照阅读",
-          "items": [
-            {
-              "name": "斯坦福 CS336 课程主页（看它怎么组织\"从零到系统\"的认知顺序）",
-              "url": "https://stanford-cs336.github.io/spring2025/"
-            },
-            {
-              "name": "Happy-LLM 第 1 章（中文的发展脉络梳理）",
-              "url": "https://github.com/datawhalechina/happy-llm"
-            }
-          ]
+          "type": "callout",
+          "tone": "green",
+          "title": "认识更新",
+          "text": "**我们原来以为：**模型越大回答一定越准。\n**带来变化的资料：**课堂演示中，小模型配合好的检索反而答对了。\n**现在如何理解：**回答质量 = 模型能力 × 上下文质量，二者缺一不可。\n**仍然不知道：**检索质量怎样量化评估——已列入待学习清单。"
+        },
+        {
+          "type": "heading",
+          "level": 2,
+          "text": "成长习惯"
+        },
+        {
+          "type": "paragraph",
+          "text": "- 先问问题再选工具；区分**事实**与**推断**；\n- 从任务困难反查知识缺口，连接到领域地图的课程路径；\n- 做小规模尝试并保留输入输出；每周检查一次地图并留下记录。"
         }
       ]
     },
