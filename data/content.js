@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217744820,
+      "syncTs": 1794217829230,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5238,7 +5238,7 @@ window.SITE_CONTENT = {
           "seq": 2,
           "items": [
             {
-              "label": "Kwon 等, PagedAttention / vLLM（2023，arXiv:2309.06180）",
+              "label": "DeepSeek-AI：《DeepSeek-V3技术报告》v1，第1节及表1（2024-12-27）",
               "url": "https://arxiv.org/abs/2309.06180",
               "id": "r1"
             },
@@ -5247,7 +5247,8 @@ window.SITE_CONTENT = {
               "url": "https://llmbook-zh.github.io/",
               "id": "r2"
             }
-          ]
+          ],
+          "_ts": 1794217829228
         },
         {
           "type": "files",
