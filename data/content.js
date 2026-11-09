@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794213031934,
+      "syncTs": 1794213029021,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -119,6 +119,20 @@ window.SITE_CONTENT = {
           "text": "语言模型试图解决的核心问题是：**让机器根据上下文预测和生成自然语言。**\n一个典型任务是\"问答\"：用户提问 → 模型理解问题 → 生成回答 → 评估回答质量。"
         },
         {
+          "type": "files",
+          "title": "学习资料与附件",
+          "items": [
+            {
+              "name": "课程大作业要求：三张活地图",
+              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
+            },
+            {
+              "name": "MDN · Web 开发入门（做本站用的技术）",
+              "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
+            }
+          ]
+        },
+        {
           "type": "entries",
           "title": "下级条目",
           "mode": "card",
@@ -137,20 +151,6 @@ window.SITE_CONTENT = {
             "n-align",
             "n-eval",
             "n-deploy"
-          ]
-        },
-        {
-          "type": "files",
-          "title": "学习资料与附件",
-          "items": [
-            {
-              "name": "课程大作业要求：三张活地图",
-              "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
-            },
-            {
-              "name": "MDN · Web 开发入门（做本站用的技术）",
-              "url": "https://developer.mozilla.org/zh-CN/docs/Learn_web_development/Getting_started"
-            }
           ]
         }
       ]
