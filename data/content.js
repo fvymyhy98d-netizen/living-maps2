@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232217759,
+      "syncTs": 1794232250651,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1562,6 +1562,12 @@ window.SITE_CONTENT = {
           "size": "lead",
           "text": "**分词就是把文字切成小块，再把每块换成一个整数**，这个整数叫 token（词元）。模型不认识汉字，只认识数字，分词器（tokenizer）就是这道翻译。\n它决定两件事：一句话要花多少 token（直接等于花多少钱、占多少上下文），以及模型眼里\"最小的语义单位\"有多粗。",
           "_ts": 0
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
