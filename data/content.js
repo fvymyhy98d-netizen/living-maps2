@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219241649,
+      "syncTs": 1794219247302,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4506,7 +4506,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "files",
-          "title": "延伸阅读",
+          "title": "相关记录",
           "items": [
             {
               "name": "Chinchilla（推翻\"参数越大越好\"的那篇）",
@@ -4516,7 +4516,8 @@ window.SITE_CONTENT = {
               "name": "\"涌现是海市蜃楼吗\"（对涌现的质疑）",
               "url": "https://arxiv.org/abs/2304.15004"
             }
-          ]
+          ],
+          "_ts": 1794219247300
         },
         {
           "type": "callout",
