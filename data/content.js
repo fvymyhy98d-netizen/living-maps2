@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794213031934,
+      "syncTs": 1794213110214,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -169,6 +169,13 @@ window.SITE_CONTENT = {
           "size": "lead",
           "text": "生态地图不是\"人物和机构名单\"，重点是讲清楚**具体关系**：谁依赖谁、谁资助谁、谁采用了谁的成果。",
           "_ts": 1794210681820
+        },
+        {
+          "type": "entries",
+          "mode": "card",
+          "cols": 3,
+          "note": "",
+          "title": "下级条目"
         },
         {
           "type": "table",
