@@ -5140,10 +5140,11 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "links": [
-            "n-train",
-            "c-method",
-            "c-misconception"
-          ]
+            "c-causal",
+            "c-misconception",
+            "c-method"
+          ],
+          "note": ""
         },
         {
           "type": "sources",
