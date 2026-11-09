@@ -4988,10 +4988,12 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "links": [
-            "n-scale",
             "c-causal",
-            "n-data"
-          ]
+            "c-boundary",
+            "c-open",
+            "c-method"
+          ],
+          "note": ""
         },
         {
           "type": "sources",
