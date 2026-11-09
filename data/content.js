@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232178404,
+      "syncTs": 1794232183902,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1399,7 +1399,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
+          "tone": "orange",
           "title": "待深入学习",
           "text": "只读到去重、去噪、过滤的常见做法，没跑过清洗流程"
         },
