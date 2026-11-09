@@ -4789,12 +4789,12 @@ window.SITE_CONTENT = {
           "title": "实际工具与记录",
           "items": [
             {
-              "name": "PyTorch 性能与调试指南",
-              "url": "https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html"
+              "name": "四问模板：两轮比较的完整记录",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-method"
             },
             {
-              "name": "Weights & Biases（记录 loss 曲线与超参对比）",
-              "url": "https://wandb.ai/site"
+              "name": "能力边界：本人参与、AI辅助与未开展的工作",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-boundary"
             }
           ],
           "_ts": 1794219381667
