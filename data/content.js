@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222831891,
+      "syncTs": 1794222832871,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -691,21 +691,6 @@ window.SITE_CONTENT = {
           ]
         },
         {
-          "type": "files",
-          "title": "继续阅读",
-          "items": [
-            {
-              "name": "四问模板：两轮比较的完整记录",
-              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-method"
-            },
-            {
-              "name": "判断与复盘：我的判断怎样推进",
-              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise"
-            }
-          ],
-          "_ts": 1794222791932
-        },
-        {
           "type": "sources",
           "title": "本页来源",
           "seq": 2,
@@ -719,6 +704,21 @@ window.SITE_CONTENT = {
               "url": "https://ai-course-assignment.app.workbuddy.host/#assignment"
             }
           ]
+        },
+        {
+          "type": "files",
+          "title": "继续阅读",
+          "items": [
+            {
+              "name": "四问模板：两轮比较的完整记录",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-method"
+            },
+            {
+              "name": "判断与复盘：我的判断怎样推进",
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise"
+            }
+          ],
+          "_ts": 1794222791932
         }
       ],
       "heroStyle": {},
