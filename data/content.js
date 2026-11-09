@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232298072,
+      "syncTs": 1794232314944,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1734,6 +1734,12 @@ window.SITE_CONTENT = {
           "size": "lead",
           "text": "**模型结构，就是这些参数怎么摆、信息怎么在里面流动。** 现在几乎所有大语言模型都用同一种结构：Transformer，2017 年 Google 那篇《Attention Is All You Need》提出来的。\n它要算的事情只有一件：给定前文，下一个词最可能是什么。所谓\"结构设计\"，全是为了把这个计算做得又准又快。",
           "_ts": 0
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
