@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231850722,
+      "syncTs": 1794231856709,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -989,7 +989,7 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "了解初步通过",
+          "text": "读过\"用显存反推参数量\"的方法，也知道训练时间和成本大致怎么估；没有自己算过一遍。",
           "free": {
             "x": 69.2,
             "y": 154,
@@ -998,7 +998,7 @@ window.SITE_CONTENT = {
             "ride": 0,
             "h": 182
           },
-          "_ts": 1794231850720
+          "_ts": 1794231856707
         },
         {
           "type": "heading",
