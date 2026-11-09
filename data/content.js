@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232400218,
+      "syncTs": 1794232436463,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -2108,6 +2108,12 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "模型写好了、损失定好了，接下来是把参数真的调起来。**这一步最枯燥，也最容易卡住——多数\"训不动\"的夜晚都发生在这里。**"
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
