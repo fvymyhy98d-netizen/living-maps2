@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794228383563,
+      "syncTs": 1794228448768,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -800,6 +800,15 @@ window.SITE_CONTENT = {
               "添加反馈与建议（作业要求），上线workbuddy（看错要求了呜呜）",
               "内容不充实",
               "步入正轨"
+            ],
+            [
+              "",
+              "",
+              "",
+              "",
+              "",
+              "",
+              ""
             ]
           ],
           "colW": [
