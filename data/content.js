@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231449890,
+      "syncTs": 1794231518696,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -3414,6 +3414,12 @@ window.SITE_CONTENT = {
               "开源"
             ]
           ]
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "paragraph",
