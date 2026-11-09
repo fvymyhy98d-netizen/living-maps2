@@ -2856,9 +2856,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "知道常见基准与几类偏差（样本量、few-shot、数据污染）；没跑过评测"
         },
         {
           "type": "callout",
