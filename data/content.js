@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794221239634,
+      "syncTs": 1794222125134,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4511,7 +4511,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "每一步的存在，都是因为上一步留下了一个具体的洞。**你能跳过的只有\"做得多深\"，跳不过\"有没有做\"。**"
+          "text": "回答受已有知识、输入资料、推理和外部工具共同影响。答对了，不足以证明它刚刚搜索过。",
+          "_ts": 1794222125131
         },
         {
           "type": "heading",
