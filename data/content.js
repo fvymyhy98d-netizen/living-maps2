@@ -295,7 +295,17 @@ window.SITE_CONTENT = {
           "mode": "card",
           "cols": 3,
           "note": "",
-          "title": "下级条目"
+          "title": "下级条目",
+          "only": [
+            "c-causal",
+            "c-revise",
+            "c-misconception",
+            "c-tradeoff",
+            "c-debug",
+            "c-boundary",
+            "c-open",
+            "c-method"
+          ]
         },
         {
           "type": "heading",
