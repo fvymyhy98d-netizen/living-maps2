@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218818598,
+      "syncTs": 1794218867426,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4845,7 +4845,7 @@ window.SITE_CONTENT = {
       "kind": "page",
       "icon": "🚧",
       "label": "能力边界",
-      "title": "我们知道到哪为止",
+      "title": "我实际参与到哪一步？",
       "description": "哪些是我们真跑过的，哪些只读懂了论文，哪些完全没碰。写清楚边界，比假装全会更可信。",
       "heroAlign": "",
       "parent": "cognition",
@@ -5000,7 +5000,8 @@ window.SITE_CONTENT = {
           "title": "这张表会变",
           "text": "随着继续做，等级会往上走。**这张表的价值不在现在，在于每次更新时你能看到自己挪了多远。**"
         }
-      ]
+      ],
+      "heroStyle": {}
     },
     {
       "id": "c-open",
