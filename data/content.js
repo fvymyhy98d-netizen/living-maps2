@@ -2626,8 +2626,8 @@ window.SITE_CONTENT = {
         {
           "type": "callout",
           "tone": "blue",
-          "title": "",
-          "text": ""
+          "title": "待深入学习",
+          "text": "只读到 RLHF 三阶段与 DPO 的区别，没跑过任何对齐"
         },
         {
           "type": "callout",
