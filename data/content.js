@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232397246,
+      "syncTs": 1794232400218,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1942,7 +1942,7 @@ window.SITE_CONTENT = {
           "text": "知道下一个 token 的交叉熵怎么算、困惑度怎么换算；没手算过",
           "free": {
             "x": 0,
-            "y": 276,
+            "y": 130,
             "w": 50.3,
             "gw": null,
             "ride": 0
