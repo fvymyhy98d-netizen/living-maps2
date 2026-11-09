@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217557679,
+      "syncTs": 1794217562745,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5180,7 +5180,7 @@ window.SITE_CONTENT = {
             ],
             [
               "凭什么",
-              "把转述当事实",
+              "原始输入输出、资料来源和核对标准",
               "没有来源，或来源是二手博客"
             ],
             [
@@ -5189,7 +5189,7 @@ window.SITE_CONTENT = {
               "什么都懂，没有任何边界"
             ]
           ],
-          "_ts": 1794217557676
+          "_ts": 1794217562742
         },
         {
           "type": "heading",
