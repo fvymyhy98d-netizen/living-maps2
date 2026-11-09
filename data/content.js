@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222125134,
+      "syncTs": 1794222140357,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4517,7 +4517,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "从结果往回推，链条立刻清楚"
+          "text": "从判断往回推",
+          "_ts": 1794222140355
         },
         {
           "type": "paragraph",
