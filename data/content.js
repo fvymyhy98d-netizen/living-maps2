@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222718784,
+      "syncTs": 1794222748770,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -656,7 +656,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "这张图为什么最重要"
+          "text": "这张图做什么",
+          "_ts": 1794222748767
         },
         {
           "type": "paragraph",
