@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231668691,
+      "syncTs": 1794231671900,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -989,7 +989,14 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "orange",
           "title": "已初步理解",
-          "text": "了解初步通过显存量进行参数量的计算方法，运算训练时间成本的公式"
+          "text": "了解初步通过显存量进行参数量的计算方法，运算训练时间成本的公式",
+          "free": {
+            "x": 0,
+            "y": 154,
+            "w": 94.4,
+            "gw": null,
+            "ride": 0
+          }
         },
         {
           "type": "heading",
