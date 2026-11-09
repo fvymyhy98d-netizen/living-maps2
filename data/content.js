@@ -183,7 +183,21 @@ window.SITE_CONTENT = {
           "title": "下级条目",
           "mode": "card",
           "cols": 3,
-          "note": ""
+          "note": "",
+          "only": [
+            "n-scale",
+            "n-data",
+            "n-clean",
+            "n-token",
+            "n-arch",
+            "n-loss",
+            "n-train",
+            "n-pretrain",
+            "n-sft",
+            "n-align",
+            "n-eval",
+            "n-deploy"
+          ]
         },
         {
           "type": "heading",
