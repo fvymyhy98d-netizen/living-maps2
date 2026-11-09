@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219299181,
+      "syncTs": 1794219301977,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4695,7 +4695,8 @@ window.SITE_CONTENT = {
           "type": "callout",
           "tone": "blue",
           "title": "一句话",
-          "text": "排障的核心不是知道答案，是**把\"模型不行\"拆成\"这一步的输入是什么、输出应该是什么、实际是什么\"**。三步一比，问题就定位了。"
+          "text": "先区分“缺资料、没取到资料、误读范围、算错或单位错”，不要一遇到问题就归为模型能力不行。",
+          "_ts": 1794219301975
         },
         {
           "type": "heading",
