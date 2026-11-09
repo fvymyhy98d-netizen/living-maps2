@@ -3047,9 +3047,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "知道 prefill 吃算力、decode 吃带宽，以及 KV cache 的作用；没起过服务"
         },
         {
           "type": "callout",
