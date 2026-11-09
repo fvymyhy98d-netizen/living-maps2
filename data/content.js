@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232341652,
+      "syncTs": 1794232371585,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1934,6 +1934,12 @@ window.SITE_CONTENT = {
           "title": "一句话解释",
           "text": "交叉熵（cross-entropy：cross 是交叉，entropy 来自信息论）衡量\"模型给正确答案分配的概率有多低\"。概率给得越低，罚得越重；训到理想状态，就是模型看到前文就能把下一个词的概率压到接近 1。",
           "_ts": 0
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "heading",
