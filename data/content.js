@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794219128012,
+      "syncTs": 1794219165994,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4401,7 +4401,7 @@ window.SITE_CONTENT = {
       "kind": "page",
       "icon": "🚫",
       "label": "常见误解",
-      "title": "十条听起来对、实际上错的判断",
+      "title": "六条需要补充条件的判断",
       "description": "每一条都配了\"错在哪\"和\"正确的说法\"。这些是查资料时最容易被打包带走的错误。",
       "heroAlign": "",
       "parent": "cognition",
@@ -4546,7 +4546,8 @@ window.SITE_CONTENT = {
           "title": "待核实",
           "text": "- \"有效上下文远小于标称值\"这个结论在不同模型上差异很大，我们只见过零散评测，没有系统数据。\n- \"对齐税\"的具体幅度，公开研究的实验设置差异太大，不能直接比较。"
         }
-      ]
+      ],
+      "heroStyle": {}
     },
     {
       "id": "c-tradeoff",
