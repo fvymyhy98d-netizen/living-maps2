@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217453409,
+      "syncTs": 1794217528344,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5164,7 +5164,7 @@ window.SITE_CONTENT = {
           "title": "对应四种典型毛病",
           "headers": [
             "问题",
-            "防的毛病",
+            "要写清什么",
             "不合格的样子"
           ],
           "rows": [
@@ -5188,7 +5188,8 @@ window.SITE_CONTENT = {
               "过度自信",
               "什么都懂，没有任何边界"
             ]
-          ]
+          ],
+          "_ts": 1794217528342
         },
         {
           "type": "heading",
