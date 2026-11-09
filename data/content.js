@@ -2465,9 +2465,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "知道 SFT 的数据格式与只算回答部分的规则；没跑过"
         },
         {
           "type": "callout",
