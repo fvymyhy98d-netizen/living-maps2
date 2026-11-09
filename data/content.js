@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794218815956,
+      "syncTs": 1794218818598,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4305,8 +4305,8 @@ window.SITE_CONTENT = {
         {
           "type": "heading",
           "level": 2,
-          "text": "修正二：首轮结果：我提出样本不足",
-          "_ts": 1794218610633
+          "text": "首轮结果：我提出样本不足",
+          "_ts": 1794218818596
         },
         {
           "type": "paragraph",
