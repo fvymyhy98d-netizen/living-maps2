@@ -5254,11 +5254,11 @@ window.SITE_CONTENT = {
           "items": [
             {
               "name": "判断与复盘：我的判断怎样推进",
-              "url": "#/p/demo-rag"
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-revise"
             },
             {
               "name": "能力边界：本人参与、AI辅助与未开展的工作",
-              "url": "https://github.com/datawhalechina/happy-llm"
+              "url": "https://fvymyhy98d-netizen.github.io/living-maps2/#/p/c-boundary"
             }
           ],
           "_ts": 1794217968444
