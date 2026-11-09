@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232072744,
+      "syncTs": 1794232087978,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1191,7 +1191,12 @@ window.SITE_CONTENT = {
           "tone": "orange",
           "title": "已初步理解",
           "text": "知道语料来源、配比和 token 总量决定上限；没有自己配过语料",
-          "hAlign": "left"
+          "free": {
+            "x": 0,
+            "y": 154,
+            "w": 94.4,
+            "gw": null
+          }
         },
         {
           "type": "callout",
