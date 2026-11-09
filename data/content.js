@@ -2111,9 +2111,9 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "待深入学习",
+          "text": "知道优化器、warmup、梯度裁剪各解决什么；没调过超参"
         },
         {
           "type": "callout",
