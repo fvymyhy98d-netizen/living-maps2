@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232799797,
+      "syncTs": 1794232818596,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1111,6 +1111,12 @@ window.SITE_CONTENT = {
           "text": "典型任务落点：这一档的规格写在一份配置里——26M 参数、词表 6400 左右、层数与隐层维度由它反推。判断有没有做对，把 12 × 层数 × 隐层维度² 代进去，看能否对上 26M，再估一次显存够不够。这一步的产出是后面所有环节的工作量基数。",
           "style": {},
           "_ts": 1794232803068
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
