@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222324945,
+      "syncTs": 1794222329618,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4899,7 +4899,8 @@ window.SITE_CONTENT = {
         {
           "type": "paragraph",
           "size": "lead",
-          "text": "所有\"该怎么配\"的问题，本质都是同一个问题：**你手上有限的资源，往哪里倾斜。**"
+          "text": "能给出一个数，不等于这个数有依据。不同任务可以接受不同程度的不确定性，但要把事实、带假设的估算和个人猜测分开。",
+          "_ts": 1794222329616
         },
         {
           "type": "callout",
