@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794222245608,
+      "syncTs": 1794222324945,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -4891,7 +4891,7 @@ window.SITE_CONTENT = {
       "kind": "page",
       "icon": "⚖️",
       "label": "三角权衡",
-      "title": "规模、数据、算力：三个只能选两个",
+      "title": "什么时候查证，什么时候可以估计？",
       "description": "固定预算下，这三者互相挤压。理解权衡，比记住任何\"最佳配置\"都有用。",
       "heroAlign": "",
       "parent": "cognition",
@@ -5030,7 +5030,8 @@ window.SITE_CONTENT = {
           "title": "还没弄清",
           "text": "- 中文语料上的最优配比，我们没有实验数据，只能引用英文结论。\n- \"实验周转速度\"对最终效果的影响，缺少量化研究，我们只有直观感受。"
         }
-      ]
+      ],
+      "heroStyle": {}
     },
     {
       "id": "c-debug",
