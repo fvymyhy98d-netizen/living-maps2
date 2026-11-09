@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794232018350,
+      "syncTs": 1794232217759,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -96,7 +96,7 @@ window.SITE_CONTENT = {
           "type": "paragraph",
           "size": "lead",
           "text": "这张图回答一个问题：**如果要把一个大语言模型从零做出来，中间到底经过哪些环节？**\n十二个关键词分成四段，点任意一个进入条目页——那里有一句话解释、具体做法、真实数字和来源。",
-          "_ts": 1794230187530
+          "_ts": 1794227782175
         },
         {
           "type": "callout",
@@ -360,54 +360,6 @@ window.SITE_CONTENT = {
           "text": "这个生态有个特点：**几乎每一个环节都有成熟的开源工具**。所以\"我要造模型\"这件事，八成不是从零写代码，而是选用哪些零件、怎么拼。"
         },
         {
-          "type": "table",
-          "title": "「六段链路对应的供给方」",
-          "headers": [
-            "环节",
-            "主要供给方",
-            "提供什么",
-            "关系类型"
-          ],
-          "rows": [
-            [
-              "算力",
-              "NVIDIA、云厂商、数据中心",
-              "GPU、集群、电力",
-              "供给 / 瓶颈"
-            ],
-            [
-              "数据",
-              "Common Crawl、Hugging Face、各机构自建",
-              "原始网页、清洗语料、工具链",
-              "公共品 / 许可"
-            ],
-            [
-              "工具链",
-              "PyTorch、Megatron-LM、DeepSpeed、HF Transformers、vLLM",
-              "训练与推理解法",
-              "依赖（被复用）"
-            ],
-            [
-              "模型",
-              "OpenAI / Anthropic / Google（闭源）；Meta / DeepSeek / 阿里 / AllenAI（开放）",
-              "API、开放权重、全开放配方",
-              "竞争 / 采用"
-            ],
-            [
-              "评测",
-              "学术界、HELM、Arena 类平台",
-              "基准、分数、排名",
-              "话语权"
-            ],
-            [
-              "规则",
-              "欧盟等监管机构",
-              "合规义务、披露模板",
-              "改变成本"
-            ]
-          ]
-        },
-        {
           "type": "heading",
           "level": 2,
           "text": "关键词（点进去展开）"
@@ -445,13 +397,7 @@ window.SITE_CONTENT = {
               "推理服务 + 评测 + 论文",
               "跑得快、扛得住、拿得出证据"
             ]
-          ],
-          "colW": [
-            33.333333333333336,
-            33.333333333333336,
-            33.333333333333336
-          ],
-          "_ts": 0
+          ]
         },
         {
           "type": "entries",
@@ -572,13 +518,6 @@ window.SITE_CONTENT = {
           ]
         },
         {
-          "type": "callout",
-          "tone": "blue",
-          "title": "口径说明",
-          "text": "三家在同一个量级上收敛。注意口径：Llama 3.1 报告里的「约 15T」指的是多语语料总量，405B 旗舰模型的训练量写的\n是 15.6T；Qwen2.5 报告给的是 18T；DeepSeek-V3 报告给的是 14.8T。我们推断收敛的原因有三：公开语料洗完可用\n的总量有限、重复跑多个 epoch 的收益递减、更大的 token 预算意味着更长的训练时间。这是推断，不是任何一篇论文的结论，所以只写在这里，不写进上面的表格。",
-          "_ts": 1794231711777
-        },
-        {
           "type": "sources",
           "title": "本页来源",
           "seq": 3,
@@ -615,60 +554,8 @@ window.SITE_CONTENT = {
             {
               "name": "Papers with Code（论文 + 代码 + 榜单）",
               "url": "https://paperswithcode.com/"
-            },
-            {
-              "name": "Grattafiori 等. The Llama 3 Herd of Models（2024）",
-              "url": "https://arxiv.org/abs/2407.21783/"
-            },
-            {
-              "name": "DeepSeek-AI. DeepSeek-V3 Technical Report（2024）",
-              "url": "https://arxiv.org/abs/2412.19437/"
-            },
-            {
-              "name": "Qwen Team. Qwen2.5 Technical Report（2024）",
-              "url": "https://arxiv.org/abs/2412.15115/"
-            },
-            {
-              "name": "OLMo 2（2025）",
-              "url": "https://arxiv.org/abs/2501.00656/"
-            },
-            {
-              "name": "Lambert 等. Tulu 3（2024）",
-              "url": "https://arxiv.org/abs/2411.15124/"
-            },
-            {
-              "name": "Common Crawl · Get Started",
-              "url": "https://commoncrawl.org/get-started/"
-            },
-            {
-              "name": "European Commission · AI Act",
-              "url": "https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework\u0002ai/"
-            },
-            {
-              "name": "Llama 3.1 Community License（2024-07-23）",
-              "url": "https://github.com/meta-llama/llama\u0002models/blob/main/models/llama3_1/LICENSE/"
-            },
-            {
-              "name": "DeepSeek-V3 模型许可（LICENSE-MODEL）",
-              "url": "https://github.com/deepseek-ai/DeepSeek\u0002V3/blob/main/LICENSE-MODEL/"
-            },
-            {
-              "name": "Hugging Face Transformers（Apache-2.0）",
-              "url": "https://github.com/huggingface/transformers/"
             }
           ]
-        },
-        {
-          "type": "callout",
-          "tone": "green",
-          "title": "【推断标注】",
-          "text": "「合规会推高小团队成本」「披露模板会让数据来源更透明」——这两句都是我们的推断，目前没有量化研究支撑。按作业要求，推断必须标出来，不能混在事实里。"
-        },
-        {
-          "type": "callout",
-          "tone": "orange",
-          "title": "【待核实】",
-          "text": "① 各许可证的具体条款（商用限制、再分发、输出归属）我们只读了标题与开头，未逐条核对；② Arena 类人评平台的具体方法（题目怎么来、如何防刷）未核实；③ 电力与集群成本没有公开数据。"
         }
       ]
     },
@@ -867,14 +754,15 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
           "title": "版本号规则（作业要求）",
-          "text": "版本号从 **v0.1** 起按时间**倒序**排列（新的在上面），**只追加、不覆盖历史记录**。每行写清：版本号、日期、更新对象、依据、修改内容与原因、尚存问题 / 下一步、检查结果（未做的写「待填写 / 待测试」，不要写成已完成）。",
-          "_ts": 1794227553403
+          "_ts": 1794227553403,
+          "tone": "blue",
+          "text": "版本号从 **v0.1** 起按时间**倒序**排列（新的在上面），**只追加、不覆盖历史记录**。每行写清：版本号、日期、更新对象、依据、修改内容与原因、尚存问题 / 下一步、检查结果（未做的写「待填写 / 待测试」，不要写成已完成）。"
         },
         {
           "type": "table",
           "title": "更新日志",
+          "_ts": 1794229043437,
           "headers": [
             "版本",
             "日期",
@@ -888,10 +776,10 @@ window.SITE_CONTENT = {
             [
               "v0.5",
               "2026-11-09",
-              "三张地图初步完善，小组分工表格，生态地图内容+领域地图内容",
+              "三张地图初步完善，小组分工表格",
               "课程作业要求；认知地图；组长组员分工表格",
-              "明确小组任务分工，提高作业完成效率；生态地图内容完善",
-              "页面编辑操作界面便捷度有待提高",
+              "明确小组任务分工，提高作业完成效率",
+              "生态地图信息量有待提升，页面编辑操作界面便捷度有待提高",
               "小组分工已明确，各机管理员模式正常运行"
             ],
             [
@@ -931,7 +819,6 @@ window.SITE_CONTENT = {
               "很多问题。。"
             ]
           ],
-          "_ts": 1794232023602,
           "colW": [
             14.285714285714286,
             14.285714285714286,
@@ -1100,15 +987,18 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
-          "title": "一句话解释",
-          "text": "**显存决定上限，算力决定时长，数据量决定这个规模值不值。** 三个约束里最硬的是显存——它不跟你商量，超了就报错。"
-        },
-        {
-          "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": ""
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "读过\"用显存反推参数量\"的方法，也知道训练时间和成本大致怎么估；没有自己算过一遍。",
+          "free": {
+            "x": 0,
+            "y": 156,
+            "w": 49.3,
+            "gw": null,
+            "ride": 0,
+            "h": 182
+          },
+          "_ts": 1794231856707
         },
         {
           "type": "heading",
@@ -1295,6 +1185,19 @@ window.SITE_CONTENT = {
           "size": "lead",
           "text": "**数据就是模型在训练中读过的全部文本**，也叫语料（corpus）。模型不会凭空知道世界，它见到的每一个字都来自这里。\n所以这一步定的是上限：语料的覆盖面决定它知道什么，语料的口音决定它说话像谁，语料里广告的比例决定它会不会变成推销员。后面无论怎么调，都突破不了这个上限。",
           "_ts": 0
+        },
+        {
+          "type": "callout",
+          "tone": "orange",
+          "title": "已初步理解",
+          "text": "知道语料来源、配比和 token 总量决定上限；没有自己配过语料",
+          "free": {
+            "x": 0,
+            "y": 161,
+            "w": 52.8,
+            "gw": null,
+            "ride": 0
+          }
         },
         {
           "type": "callout",
@@ -1493,6 +1396,19 @@ window.SITE_CONTENT = {
           "tone": "blue",
           "title": "一句话解释",
           "text": "清洗的目标不是\"干净\"，是**\"每一 token 都在教模型有用的东西\"**。重复的文本会让模型背原文，噪声文本会让它学坏句式。"
+        },
+        {
+          "type": "callout",
+          "tone": "orange",
+          "title": "待深入学习",
+          "text": "只读到去重、去噪、过滤的常见做法，没跑过清洗流程",
+          "free": {
+            "x": 0,
+            "y": 129,
+            "w": 51.1,
+            "gw": null,
+            "ride": 0
+          }
         },
         {
           "type": "heading",
