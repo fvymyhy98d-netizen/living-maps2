@@ -1737,7 +1737,7 @@ window.SITE_CONTENT = {
         },
         {
           "type": "callout",
-          "tone": "blue",
+          "tone": "orange",
           "title": "已初步理解",
           "text": "读过各组件的职责与参数分布；没改过结构做对比"
         },
