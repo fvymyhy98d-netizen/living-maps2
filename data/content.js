@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794212907466,
+      "syncTs": 1794212916198,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -177,44 +177,6 @@ window.SITE_CONTENT = {
             "n-eval",
             "n-deploy"
           ]
-        },
-        {
-          "type": "table",
-          "title": "核心概念速览（示例）",
-          "headers": [
-            "概念",
-            "一句话解释",
-            "相关工具 / 模型"
-          ],
-          "rows": [
-            [
-              "Token / 分词",
-              "把文字切成模型能处理的最小单位",
-              "tiktoken、SentencePiece"
-            ],
-            [
-              "Transformer",
-              "目前主流的模型结构，核心是注意力机制",
-              "GPT 系列、LLaMA 系列"
-            ],
-            [
-              "预训练",
-              "先在海量文本上学习\"下一个词\"的规律",
-              "各类基座模型"
-            ],
-            [
-              "微调 / RAG",
-              "用少量数据或外部知识让模型适配具体任务",
-              "LoRA、向量数据库"
-            ]
-          ],
-          "free": {
-            "x": 1.7,
-            "y": 918,
-            "w": 94.4,
-            "ride": 0
-          },
-          "_ts": 1793415612554
         }
       ]
     },
