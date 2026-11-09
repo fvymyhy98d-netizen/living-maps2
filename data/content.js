@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231546960,
+      "syncTs": 1794231548414,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -984,6 +984,12 @@ window.SITE_CONTENT = {
           "size": "lead",
           "text": "**定规模，就是先决定这一次训多大的模型**——参数量是几百万，还是几十亿。它排在第一位，因为后面每一步的工作量都由它决定：需要多少语料、几张卡、训多久。\n判断依据不是\"我想让它多聪明\"，而是\"我手上的显卡允许我碰多大\"。这是两个完全不同的问法，第二个才有答案。",
           "_ts": 0
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "heading",
