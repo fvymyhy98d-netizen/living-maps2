@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794217872318,
+      "syncTs": 1794217902629,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -5255,7 +5255,7 @@ window.SITE_CONTENT = {
           "title": "继续阅读",
           "items": [
             {
-              "name": "本站「示例 · RAG」页（四问模板的原始打样）",
+              "name": "判断与复盘：我的判断怎样推进",
               "url": "#/p/demo-rag"
             },
             {
@@ -5263,7 +5263,7 @@ window.SITE_CONTENT = {
               "url": "https://github.com/datawhalechina/happy-llm"
             }
           ],
-          "_ts": 1794217872315
+          "_ts": 1794217902627
         },
         {
           "type": "callout",
