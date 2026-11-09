@@ -53,7 +53,7 @@ window.SITE_CONTENT = {
       "githubUrl": ""
     },
     "collab": {
-      "syncTs": 1794231899933,
+      "syncTs": 1794232004255,
       "roster": {},
       "tokenVault": {
         "v": 1,
@@ -1185,6 +1185,12 @@ window.SITE_CONTENT = {
           "size": "lead",
           "text": "**数据就是模型在训练中读过的全部文本**，也叫语料（corpus）。模型不会凭空知道世界，它见到的每一个字都来自这里。\n所以这一步定的是上限：语料的覆盖面决定它知道什么，语料的口音决定它说话像谁，语料里广告的比例决定它会不会变成推销员。后面无论怎么调，都突破不了这个上限。",
           "_ts": 0
+        },
+        {
+          "type": "callout",
+          "tone": "blue",
+          "title": "",
+          "text": ""
         },
         {
           "type": "callout",
