@@ -992,13 +992,6 @@ window.SITE_CONTENT = {
           "text": ""
         },
         {
-          "type": "callout",
-          "tone": "blue",
-          "title": "",
-          "text": "",
-          "_ts": 1794231525577
-        },
-        {
           "type": "heading",
           "level": 2,
           "text": "先算显存：每个参数要占 16 字节"
