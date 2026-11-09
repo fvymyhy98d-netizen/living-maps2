@@ -370,7 +370,8 @@ window.SITE_CONTENT = {
           ],
           "rows": [
             [
-              "算力"
+              "算力",
+              ""
             ]
           ]
         },
