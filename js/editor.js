@@ -1752,7 +1752,10 @@ window.LMEditor = (function () {
       + '<div class="set-grp"><div class="set-hd">data/sem.json 是什么？（★ 语义层）</div>'
       + '<p class="modal-note">同一次重训还会产出<b>语义层</b>：从你的内容里自动挖出完整词'
       + '（如「大语言模型」）、学会词与词的概念关联、算出每页主题。<br>'
-      + '它让关键词不再是「样核 / 工有」这类碎片，也让换个说法的提问能找回原文。'
+      + '它让关键词不再是「样核 / 工有」这类碎片，也让换个说法的提问能找回原文。<br>'
+      + '★ 现在还多学三样：<b>内置中文词组</b>（不再只靠相邻两字硬切）、'
+      + '<b>128 维词向量权重</b>（用余弦判断意思接不接近，而不只是数字面重合）、'
+      + '<b>英文术语归一</b>（transformers / GPUs 也能对上站内写法）。<br>'
       + '同样<b>不生成任何文字</b> —— 只是把更多站内原句送进候选池。</p></div>'
       + '<div class="set-grp"><div class="set-hd">现在什么状态？</div>'
       + '<p class="modal-note" id="trNow" style="white-space:pre-line">' + nowTxt + '</p></div>'
@@ -1809,8 +1812,10 @@ window.LMEditor = (function () {
         out.textContent = [
           '语料 ' + r.chars + ' 字 · ' + r.order + '-gram · 上下文 ' + r.contexts + ' 个 · 条目 ' + r.entries,
           '产物 ' + (r.bytes / 1024).toFixed(1) + ' KB · 困惑度 ' + r.ppl.toFixed(2) + ' · 耗时 ' + r.ms + ' ms',
-          r.sem ? ('语义层：完整词 ' + r.sem.words + ' 个 · 概念关联 ' + r.sem.relWords + ' 词 · '
-            + (r.sem.bytes / 1024).toFixed(1) + ' KB') : '',
+          r.sem ? ('语义层：完整词 ' + r.sem.words + ' 个（内置词组 ' + (r.sem.lexWords || 0)
+            + ' · 英文术语 ' + (r.sem.enWords || 0) + '） · 概念关联 ' + r.sem.relWords + ' 词') : '',
+          r.sem && r.sem.vecWords ? ('词向量：' + r.sem.vecWords + ' 词 × ' + r.sem.vecDim
+            + ' 维 · 产物共 ' + (r.sem.bytes / 1024).toFixed(1) + ' KB') : '',
           r.semUploadError ? ('⚠️ 语义层上传失败（小模型已成功）：' + r.semUploadError) : '',
           upLine
         ].filter(Boolean).join('\n');
