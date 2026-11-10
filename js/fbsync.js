@@ -17,6 +17,11 @@
 W.LMFB = (function () {
   'use strict';
   const FILE_PATH = 'data/feedback.json';
+  /* ★ 修复：站点不一定跑在 *.github.io 上（WorkBuddy 托管 / 自定义域名 / 本地预览）。
+     旧逻辑只从 hostname 里认 `xxx.github.io/仓库名` —— 换个域名就推不出 owner/repo，
+     公开反馈（含「已删除」墓碑）整份读不到，只剩云表里那条旧记录，于是删掉的留言又冒出来。
+     这里兜底成站点自己的仓库，保证任何域名下读到的都是同一份 data/feedback.json。 */
+  const DEFAULT_REPO = { owner: 'fvymyhy98d-netizen', repo: 'living-maps2' };
   /* ★ 新增：讨论区的跨站镜像文件（由 tools/mirror-feedback.js 从云表 lm_discuss 推送）。
      为什么单独一个文件而不塞进 content.js：讨论区天天变，写 content.js 会触发 Pages 重建；
      独立文件只动数据分支，且前端能直接公开读取。 */
@@ -239,7 +244,7 @@ W.LMFB = (function () {
         if (m && seg) { owner = m[1]; repo = seg.replace(/\.git$/, ''); }
       } catch (e2) { /* noop */ }
     }
-    if (!owner || !repo) return null;
+    if (!owner || !repo) { owner = DEFAULT_REPO.owner; repo = DEFAULT_REPO.repo; }
     try { if (S && S.dataRefOf && cfg) ref = S.dataRefOf(cfg); } catch (e3) { ref = ''; }
     if (!ref) ref = 'lm-data';
     return { owner: owner, repo: repo, ref: ref };
