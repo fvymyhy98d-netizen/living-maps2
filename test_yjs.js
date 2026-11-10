@@ -64,7 +64,11 @@ T('lib 引入顺序：collab.js → yjs → y-protocols → mqtt → y-indexeddb
 T('ycollab.js 从本地 lib/ 加载（不再有 CDN 镜像表）', src.indexOf("'lib/yjs.js'") > 0 && src.indexOf('MIRRORS') < 0 && src.indexOf('jsdelivr') < 0);
 T('ycollab.js 不再内置 Metered 信令（信令一律来自 yjs-config.js）', src.indexOf('metered') < 0);
 const cfg = srcOf('js/yjs-config.js');
-T('yjs-config.js 保留 STUN + TURN 配置', cfg.indexOf('stun:') > 0 && cfg.indexOf('turn:') > 0);
+/* ★ 修复165：免费公共 TURN（openrelay / staticauth / cloudflare 免密）2026 全线停服或需账号，
+   实测 ICE 收集全部 701，留在配置里只会拖慢建连。断言随设计更新：STUN 必须在，
+   失效 TURN 不得作为实际 iceServers 条目回来；说明性注释里仍可出现 turn: 字样。 */
+T('yjs-config.js 保留可用 STUN；失效公共 TURN 已从配置移除（★165）',
+  cfg.indexOf('stun:') > 0 && cfg.indexOf("urls: 'turn:") < 0 && cfg.indexOf('修复165') > 0);
 T('yjs-config.js 含 MQTT broker 池配置（跨供应商主备）', cfg.indexOf('mqtt:') > 0 && cfg.indexOf('brokers') > 0);
 
 /* ---------- 3) 硬性顺序校验 ---------- */
