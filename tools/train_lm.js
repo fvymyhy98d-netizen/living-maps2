@@ -88,8 +88,10 @@ function main() {
      所以两边产出的 data/sem.json 逐字节一致，不会各训一套慢慢漂移。 */
   const sr = LMSE.build(text, contentOf());
   fs.writeFileSync(path.join(DIR, 'data/sem.json'), JSON.stringify(sr.payload), 'utf8');
-  console.log('语义层：完整词 ' + sr.words + ' 个 · 概念关联 ' + sr.relWords + ' 词 · 页面主题 '
-    + sr.topics + ' 页 · ' + (sr.bytes / 1024).toFixed(1) + ' KB → data/sem.json');
+  console.log('语义层：完整词 ' + sr.words + ' 个（内置词组 ' + sr.lexWords + ' · 英文术语 ' + sr.enWords
+    + '） · 概念关联 ' + sr.relWords + ' 词 · 页面主题 ' + sr.topics + ' 页');
+  console.log('词向量：' + sr.vecWords + ' 词 × ' + sr.vecDim + ' 维（int8 量化） · 共 '
+    + (sr.bytes / 1024).toFixed(1) + ' KB → data/sem.json');
 }
 
 module.exports = { corpus: corpus, checkOnly: checkOnly, main: main };
