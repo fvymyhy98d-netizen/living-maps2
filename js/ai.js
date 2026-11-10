@@ -600,6 +600,42 @@ W.LMAI = (function () {
     return out.slice(0, limit || 40);
   }
   /* 语义候选与字面候选合并：同一句加分，新句子补进候选池（不删任何原候选） */
+  /* ★ 修复166：句向量召回 —— 字面一个词都对不上、但意思接近的原句也要能被找到。
+     sem.json 里存的是量化后的词向量；这里只算一次查询向量，再和缓存好的全站句向量点积。
+     ★ 只把「原文句子」送进候选池，绝不生成文字；没有向量层时整段等于不存在。 */
+  let vecSentCache = null;
+  function vectorHits(index, q, limit) {
+    const SE = W.LMSE;
+    if (!SE || !SE.ready || !SE.ready() || typeof SE.sentVec !== 'function') return [];
+    const qv = SE.sentVec(q);
+    if (!qv) return [];
+    const se = sentIndex(index);
+    if (!se) return [];
+    if (!vecSentCache || vecSentCache.src !== index) {
+      const rows = [];
+      se.docs.forEach(function (d) {
+        d.sents.forEach(function (si) {
+          const v = SE.sentVec(si.s);
+          if (v) rows.push({ d: d, si: si, v: v });
+        });
+      });
+      vecSentCache = { src: index, rows: rows };
+    }
+    const out = [];
+    vecSentCache.rows.forEach(function (r) {
+      let dot = 0;
+      for (let i = 0; i < qv.length; i++) dot += qv[i] * r.v[i];
+      if (dot < 0.46) return;
+      out.push({
+        s: r.si.s, i: r.si.i, pageId: r.d.pageId, title: r.d.title,
+        cover: Math.max(0, dot), score: Math.round((1.1 + 2.4 * dot) * 100) / 100,
+        sem: true, vec: true
+      });
+    });
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out.slice(0, limit || 16);
+  }
+
   function mergeSemantic(base, sem) {
     const map = {};
     base.forEach(function (x) { map[x.pageId + '|' + x.s] = x; });
@@ -652,7 +688,12 @@ W.LMAI = (function () {
     /* ★ 修复164：语义召回只做"补充候选 + 给已命中句加分"，放在字面/直搜之后，
        保证精确命中的原句仍排前面；没有语义层时 semanticHits 返回空，这一行等于不存在。 */
     const sem = semanticHits(index, q, 40);
-    if (sem.length) ranked = mergeSemantic(ranked, sem);
+    /* ★ 修复166：句向量召回叠加（去重后并入同一批候选，不删任何原候选） */
+    const vec = vectorHits(index, q, 16);
+    const extra = sem.slice(), seenSem = {};
+    sem.forEach(function (x) { seenSem[x.pageId + '|' + x.s] = 1; });
+    vec.forEach(function (x) { if (!seenSem[x.pageId + '|' + x.s]) extra.push(x); });
+    if (extra.length) ranked = mergeSemantic(ranked, extra);
     /* ★ 修复113：PRF 二次打分 —— 只用「已经命中的原句」里的词加重权重，候选集一个字都不变 */
     const q2 = prfExpand(index, q, ranked);
     if (q2 !== q && ranked.length) {
