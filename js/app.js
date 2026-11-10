@@ -3388,7 +3388,19 @@ window.LMApp = (function () {
     try { r = LMLM.buildModel(text, o.order || 4); }
     catch (e1) { return Promise.reject(e1); }
     LMLM.fromJSON(r.payload);       /* 当场生效：本标签页立刻用上新模型，不用刷新 */
+    /* ★ 修复164：同一份语料顺带训语义层（完整词 / 概念关联 / 页面主题）。
+       语义模块没加载就跳过，重训小模型这件事本身照常成功。 */
+    let semJson = null, semInfo = null;
+    try {
+      if (window.LMSE && typeof LMSE.build === 'function') {
+        const sr = LMSE.build(text, (state.content && state.content.pages) || []);
+        LMSE.fromJSON(sr.payload);
+        semJson = JSON.stringify(sr.payload);
+        semInfo = { words: sr.words, relWords: sr.relWords, bytes: sr.bytes };
+      }
+    } catch (eSem) { semJson = null; semInfo = null; }
     const info = {
+      sem: semInfo, semPayload: semJson ? JSON.parse(semJson) : null,
       chars: r.chars, order: r.order, bytes: r.bytes, contexts: r.contexts,
       entries: r.entries, minCount: r.minCount, cap: r.cap, ms: r.ms,
       payload: r.payload,   /* 产物本体：调用方可以拿去下载 / 自己落盘 */
@@ -3417,6 +3429,16 @@ window.LMApp = (function () {
       /* lm.json 写发布分支（必须和页面同源，Pages 才送得到）；会让 Pages 重新发布，几十秒 */
       return LMStore.saveFileToRepo(cfg, branch, 'data/lm.json', json,
         '小模型重训（网站后台）' + new Date().toLocaleString('zh-CN'));
+    }).then(function () {
+      /* ★ 修复164：语义层也必须写发布分支（页面同源才读得到）。
+         单独容错：它传不上去不该让已经成功的 lm.json 重训显示成"失败"。 */
+      if (!semJson) return true;
+      return LMStore.saveFileToRepo(cfg, branch, 'data/sem.json', semJson,
+        '语义层重训（网站后台）' + new Date().toLocaleString('zh-CN'))
+        .catch(function (eS) {
+          info.semUploadError = (eS && eS.message) ? eS.message : String(eS);
+          return false;
+        });
     }).then(function () {
       try { if (window.LMCollab && LMCollab.dropGhSha) LMCollab.dropGhSha(); } catch (e0) { /* noop */ }
       info.uploaded = true; info.branch = branch;
