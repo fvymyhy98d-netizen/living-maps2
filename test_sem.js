@@ -42,8 +42,8 @@ T('CLI 与网页重训共用 js/sem.js', fs.readFileSync(path.join(DIR, 'tools/t
 T('index.html 已引入 sem.js 且 ai/app/editor 版本已升',
   (function () {
     const h = fs.readFileSync(path.join(DIR, 'index.html'), 'utf8');
-    return /js\/sem\.js\?v=\d+/.test(h) && /js\/ai\.js\?v=169/.test(h)
-      && /js\/app\.js\?v=169/.test(h) && /js\/editor\.js\?v=169/.test(h);
+    return /js\/sem\.js\?v=\d+/.test(h) && /js\/ai\.js\?v=170/.test(h)
+      && /js\/app\.js\?v=170/.test(h) && /js\/editor\.js\?v=170/.test(h);
   })());
 
 /* ---------- 2. 词质量 ---------- */
@@ -54,8 +54,12 @@ const SEM = require(path.join(DIR, 'js/sem.js'));
 });
 T('截图里的碎片词全部被过滤',
   ['样核', '工有', '或分', '改了'].every(function (w) { return payload.words.indexOf(w) < 0; }));
-T('词表里没有纯数字和整句标题',
-  payload.words.every(function (w) { return !/^\d+$/.test(w) && w.length <= 8 && /[\u4e00-\u9fa5]/.test(w); }));
+T('词表里没有纯数字和整句标题（★ 允许英文术语）',
+  payload.words.every(function (w) {
+    if (/^\d+$/.test(w)) return false;
+    if (/[\u4e00-\u9fa5]/.test(w)) return w.length <= 8;
+    return /^[a-z][a-z0-9+#._-]{2,23}$/.test(w);
+  }));
 
 /* ---------- 3. 降级（语义层没加载时，一切照旧） ---------- */
 console.log('\n[3] 未加载语义层：整层降级');
@@ -114,6 +118,55 @@ qs.concat(['数据从哪来', '注意力是怎么算的', '这块板子长什么
 T('所有引文逐字出自站内原文', bad === 0, '共 ' + tot + ' 条，非原文 ' + bad + ' 条');
 T('语义层不提供任何生成文字的接口',
   typeof SEM.build === 'function' && !('generate' in SEM) && !('answer' in SEM));
+
+/* ---------- 7. ★ 修复166：中文词组 / 词向量权重 / 英文支持 ---------- */
+console.log('\n[7] 词组 · 词向量 · 英文');
+T('产物为 v2 且带 int8 量化词向量',
+  payload.v === 2 && !!payload.vec && payload.vec.words.length > 500
+  && payload.vec.d >= 64 && payload.vec.b.length > 10000,
+  payload.vec ? payload.vec.words.length + '词×' + payload.vec.d + '维' : '无 vec');
+T('内置中文词组进词典（不再只靠相邻两字硬切）',
+  ['方法', '成本', '原因', '步骤', '聪明'].every(function (w) { return payload.words.indexOf(w) >= 0; }));
+T('英文术语进词典',
+  payload.words.filter(function (w) { return /^[a-z]/.test(w); }).length > 50
+  && ['token', 'gpu', 'llm'].some(function (w) { return payload.words.indexOf(w) >= 0; }),
+  payload.words.filter(function (w) { return /^[a-z]/.test(w); }).slice(0, 8).join(','));
+T('英文词形归一（复数 / 大小写 / GPUs）',
+  SEM.enNorm('Transformers') === 'transformer' && SEM.enNorm('datasets') === 'dataset'
+  && SEM.enNorm('GPUs') === 'gpu' && SEM.enNorm('tokens') === 'token');
+T('英文查询能切到站内写法',
+  SEM.cut('Transformers 用了多少 GPUs').indexOf('gpu') >= 0,
+  SEM.cut('Transformers 用了多少 GPUs').join(','));
+T('词向量：语义相关词对比无关词对更接近',
+  SEM.wordSim('成本', '费用') > SEM.wordSim('成本', '留言') + 0.2,
+  '成本|费用=' + SEM.wordSim('成本', '费用').toFixed(3)
+  + ' 成本|留言=' + SEM.wordSim('成本', '留言').toFixed(3));
+T('句向量：相关原句与无关原句有明确区分',
+  SEM.textSim('显卡和算力有什么关系', '显卡的算力决定训练速度')
+  > SEM.textSim('显卡和算力有什么关系', '留言板怎么用') + 0.25,
+  SEM.textSim('显卡和算力有什么关系', '显卡的算力决定训练速度').toFixed(3)
+  + ' vs ' + SEM.textSim('显卡和算力有什么关系', '留言板怎么用').toFixed(3));
+T('中英硬桥：rag → 检索增强',
+  SEM.expandWords('rag 怎么做的', 6).indexOf('检索增强') >= 0,
+  SEM.expandWords('rag 怎么做的', 6).join(','));
+T('口语硬桥：多少钱 → 成本 / 费用',
+  SEM.expandWords('一个模型要多少钱', 8).some(function (w) { return w === '成本' || w === '费用'; }),
+  SEM.expandWords('一个模型要多少钱', 8).join(','));
+T('ai.js 已接句向量召回，且只在语义层就绪时启用',
+  (function () {
+    const s = fs.readFileSync(path.join(DIR, 'js/ai.js'), 'utf8');
+    return s.indexOf('function vectorHits') > 0 && s.indexOf('SE.sentVec') > 0
+      && s.indexOf('typeof SE.sentVec !== \'function\'') > 0;
+  })());
+T('v1 产物（无 vec）可降级加载，向量能力自动关闭',
+  (function () {
+    const v1 = Object.assign({}, payload, { v: 1 });
+    delete v1.vec;
+    const ok = !!SEM.fromJSON(v1) && SEM.wordSim('成本', '费用') === 0
+      && SEM.textSim('显卡', '算力') === 0;
+    SEM.fromJSON(payload);            /* 恢复，别影响后续断言 */
+    return ok;
+  })());
 
 console.log('\n结果：' + pass + ' 通过, ' + fail + ' 失败');
 process.exit(fail ? 1 : 0);
