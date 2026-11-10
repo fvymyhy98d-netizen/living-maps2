@@ -1705,7 +1705,7 @@ window.LMEditor = (function () {
       + row([
         ['hist', '🕘', '历史版本', '查看 / 回到之前的修改'],
         ['backup', '💾', '备份 / 恢复', '导出或导入整站内容 JSON'],
-        ['trainlm', '🧠', '重训小模型', '用当前内容重训站内小模型并提交 data/lm.json']
+        ['trainlm', '🧠', '重训小模型', '用当前内容重训：字符模型 data/lm.json + 语义层 data/sem.json']
       ]) + '</div>'
       + '<div class="set-grp"><div class="set-hd">账号</div>'
       + row([['password', '🔑', '修改密码', '改管理密码；忘记时仍可用团队密码登录']]) + '</div>'
@@ -1746,9 +1746,14 @@ window.LMEditor = (function () {
     modal('<h3>🧠 重训站内小模型</h3>'
       /* —— 三个问题，直接答清楚 —— */
       + '<div class="set-grp"><div class="set-hd">data/lm.json 是什么？</div>'
-      + '<p class="modal-note">一个 <b>20KB 左右的「字词搭配统计表」</b>，由你网站的内容统计出来。<br>'
+      + '<p class="modal-note">一个<b>「字词搭配统计表」</b>，由你网站的内容统计出来。<br>'
       + '它只做两件事：<b>给检索结果重排</b>、<b>纠正站内没有的英文词</b>。'
       + '它<b>不生成任何文字</b>（答案永远逐字来自你的原文），所以加内容后不重训也不会答错，只是语感略旧。</p></div>'
+      + '<div class="set-grp"><div class="set-hd">data/sem.json 是什么？（★ 语义层）</div>'
+      + '<p class="modal-note">同一次重训还会产出<b>语义层</b>：从你的内容里自动挖出完整词'
+      + '（如「大语言模型」）、学会词与词的概念关联、算出每页主题。<br>'
+      + '它让关键词不再是「样核 / 工有」这类碎片，也让换个说法的提问能找回原文。'
+      + '同样<b>不生成任何文字</b> —— 只是把更多站内原句送进候选池。</p></div>'
       + '<div class="set-grp"><div class="set-hd">现在什么状态？</div>'
       + '<p class="modal-note" id="trNow" style="white-space:pre-line">' + nowTxt + '</p></div>'
       + '<div class="set-grp"><div class="set-hd">什么时候需要「下载 lm.json」？</div>'
@@ -1760,7 +1765,8 @@ window.LMEditor = (function () {
       + '<b>加了一批新内容</b>（尤其带英文术语）→ 训一次就好。忘了也不影响答题，只影响英文纠错和排序手感。</p>'
       + (canUp
         ? '<p class="modal-note">点「重训并上传」会依次：① 把当前内容同步到云端（顺带刷新新访客的首屏快照）'
-          + ' → ② 用这份内容重训 → ③ 提交 <code>data/lm.json</code>。几秒完成，Pages 重新发布约 1-2 分钟。</p>'
+          + ' → ② 用这份内容重训两个模型 → ③ 提交 <code>data/lm.json</code> 与 <code>data/sem.json</code>。'
+          + '几秒完成，Pages 重新发布约 1-2 分钟。</p>'
         : '<p class="modal-note">⚠️ 现在没配云端（仓库名 / Token）：只能在本标签页试算，刷新就没了。'
           + '想自动生效，先去「☁️ 同步到 GitHub」填 Token。</p>') + '</div>'
       + '<div id="trOut" class="modal-note" style="min-height:18px;white-space:pre-line"></div>'
@@ -1803,8 +1809,11 @@ window.LMEditor = (function () {
         out.textContent = [
           '语料 ' + r.chars + ' 字 · ' + r.order + '-gram · 上下文 ' + r.contexts + ' 个 · 条目 ' + r.entries,
           '产物 ' + (r.bytes / 1024).toFixed(1) + ' KB · 困惑度 ' + r.ppl.toFixed(2) + ' · 耗时 ' + r.ms + ' ms',
+          r.sem ? ('语义层：完整词 ' + r.sem.words + ' 个 · 概念关联 ' + r.sem.relWords + ' 词 · '
+            + (r.sem.bytes / 1024).toFixed(1) + ' KB') : '',
+          r.semUploadError ? ('⚠️ 语义层上传失败（小模型已成功）：' + r.semUploadError) : '',
           upLine
-        ].join('\n');
+        ].filter(Boolean).join('\n');
       };
       go.addEventListener('click', function () {
         const old = go.textContent;
