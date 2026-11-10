@@ -3396,7 +3396,12 @@ window.LMApp = (function () {
         const sr = LMSE.build(text, (state.content && state.content.pages) || []);
         LMSE.fromJSON(sr.payload);
         semJson = JSON.stringify(sr.payload);
-        semInfo = { words: sr.words, relWords: sr.relWords, bytes: sr.bytes };
+        semInfo = {
+          words: sr.words, relWords: sr.relWords, bytes: sr.bytes,
+          /* ★ 修复166：词组 / 词向量 / 英文的训练统计，给弹窗展示用 */
+          vecWords: sr.vecWords, vecDim: sr.vecDim,
+          lexWords: sr.lexWords, enWords: sr.enWords
+        };
       }
     } catch (eSem) { semJson = null; semInfo = null; }
     const info = {
