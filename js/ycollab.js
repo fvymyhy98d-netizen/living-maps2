@@ -273,8 +273,9 @@
     try {
       var TCB = window.LMYjsTCB;
       if (!TCB || !TCB.isReady()) { stub('信令库（MQTT）加载失败，已降级：本机互连 + 云端照常'); return; }
-      /* ★ 网状 Mesh：信令只牵线——MQTT 只传 SDP/ICE 握手，文档数据 P2P 直连，
-         直连失败自动 TURN 兜底。awareness 与 y-webrtc 同形状，以下逻辑无需感知切换 */
+      /* ★ 网状 Mesh：信令只牵线——MQTT 只传 SDP/ICE 握手，文档数据 P2P 直连。
+         ★ 修复165：公共 TURN 已停服，直连打不通时 awareness 走 MQTT 中继（修复163）、
+         内容走 GitHub 轮询；不再把「第三方 TURN 还活着」当作前提。 */
       provider = TCB.start({
         brokers: (CFG.mqtt && CFG.mqtt.brokers) || [],   /* EMQX/HiveMQ 公共 Broker 池（房间哈希确定性选台） */
         channel: CFG.room || 'living-maps-v1',
@@ -345,7 +346,7 @@
         confirmPrune: function () { pruneConfirmed = true; }
       };
       try { if (window.LMCollab && LMCollab.paintChip) LMCollab.paintChip(); } catch (e7) { /* noop */ }
-      toast('🟢 实时协同已就绪（Yjs Mesh）：自动直连 / TURN 兜底 / 离线可用');
+      toast('🟢 实时协同已就绪：自动直连 · MQTT 中继在线状态 · 云端兜底内容');
     } catch (eBoot) {
       /* 初始化失败不再静默吞掉异常：Console 记录完整堆栈 + toast 显示具体原因，
          并允许有限次自动重试（偶发时序问题一次失败不该永久降级） */
