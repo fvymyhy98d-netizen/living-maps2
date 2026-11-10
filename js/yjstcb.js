@@ -10,8 +10,9 @@
      presence topic（15s 心跳 + MQTT LWT 遗言自动报退 + 45s 超时清扫三保险）。
    架构（README 三·补12）：
    ▸ 信令只"牵线"：只传 SDP Offer/Answer 与 ICE 候选（握手完毕即闲置），文档内容绝不经过服务器；
-   ▸ 数据 P2P 网状 Mesh：原生 RTCPeerConnection DataChannel，每台设备与其他每台直连，
-     直连失败自动 TURN 兜底（iceServers 来自 yjs-config.js）；
+     ▸ 数据 P2P 网状 Mesh：原生 RTCPeerConnection DataChannel，每台设备与其他每台直连；
+     ★ 修复165：免费公共 TURN 已停服且不再可靠，iceServers 只留 STUN；直连打不通时
+     在线状态走 MQTT 中继（修复163）、内容走 GitHub 轮询，不依赖任何第三方 TURN 服务；
    ▸ 同步：新 DataChannel 建立时双方互发全量 Y update（CRDT 幂等收敛），
      之后 doc.on('update') 增量广播 —— 无需状态向量协商，5 人小房间完全够用；
    ▸ 在线/光标：y-protocols Awareness（超时剔除 + 心跳续约）。
