@@ -150,6 +150,20 @@ W.LMAI = (function () {
     if (!index || !index.docs) return [];
     const d0 = index.docs.filter(function (d) { return d.id === id; })[0];
     if (!d0) return [];
+    /* ★ 修复164：页面主题向量算相似度 —— 靠"讲同一件事"而不是"恰好有一样的两个字"。
+       原来的 2-gram 余弦常给出「讨论区 13%」这种字面碰巧重合、语义毫不相干的结果。 */
+    if (W.LMSE && W.LMSE.ready && W.LMSE.ready() && W.LMSE.topicVec(id)) {
+      try {
+        const sr = index.docs.filter(function (d) { return d.id !== id; })
+          .map(function (d) {
+            return { id: d.id, label: d.label, kind: d.kind, score: Math.round(W.LMSE.topicSim(id, d.id) * 1000) / 1000 };
+          })
+          .filter(function (x) { return x.score > 0.02; })
+          .sort(function (a, b) { return b.score - a.score; })
+          .slice(0, k || 3);
+        if (sr.length) return sr;
+      } catch (e) { /* 降级 */ }
+    }
     return index.docs
       .filter(function (d) { return d.id !== id; })
       .map(function (d) {
@@ -165,6 +179,15 @@ W.LMAI = (function () {
     if (!index || !index.docs) return [];
     const d = index.docs.filter(function (x) { return x.id === id; })[0];
     if (!d) return [];
+    /* ★ 修复164：语义层就绪时，用「完整词 + tf-idf」出关键词。
+       老逻辑挑的是 2-gram 里权重最高的，于是「这样核对」→「样核」这类碎片全冒出来了。
+       语义层没加载（Node 单测 / 断网 / 旧缓存）就整段跳过，行为与以前完全一致。 */
+    if (W.LMSE && W.LMSE.ready && W.LMSE.ready()) {
+      try {
+        const sk = W.LMSE.keywords(d.text, k || 8);
+        if (sk && sk.length) return sk;
+      } catch (e) { /* 降级 */ }
+    }
     const scored = Object.keys(d.tf).map(function (t) {
       return { t: t, s: weight(d.tf, index.idf, t) };
     }).sort(function (a, b) { return b.s - a.s; });
@@ -527,6 +550,71 @@ W.LMAI = (function () {
     out.sort(function (a, b) { return b.score - a.score; });
     return out.slice(0, limit || 8);
   }
+  /* ---------- ⑧.5 ★ 修复164：词级语义召回（解决"换个说法就一问三不知"） ----------
+     原通道把中文切成相邻两字，用户问「训练要喂多少东西」时，查询词和正文里的
+     「预训练 / 语料」一个都对不上 → BM25 零命中。这里另开一条**独立**通道：
+       ① 用语义层词典把问句切成完整词（「训练」「多少」「东西」）
+       ② 用概念关联表补几个站里常一起出现的词（「语料」「数据集」）
+       ③ 用同一份词典把句子切成词集合，按命中权重打分
+     候选句子依然全部来自 sentIndex() 的**原文原句**，只是被"多找出来"一些；
+     答案文字一个字都不生成。语义层没加载 → 直接返回空，原流程毫发无损。 */
+  let semSentCache = null;
+  function semanticHits(index, q, limit) {
+    const SE = W.LMSE;
+    if (!SE || !SE.ready || !SE.ready()) return [];
+    const se = sentIndex(index);
+    if (!se) return [];
+    const base = SE.cut(q);
+    const ext = SE.expandWords(q, 6);
+    const qw = {};
+    base.forEach(function (w) { qw[w] = 1; });
+    ext.forEach(function (w) { qw[w] = Math.max(qw[w] || 0, 0.55); });
+    const keys = Object.keys(qw);
+    if (!keys.length) return [];
+    /* 词级句子索引按 index 缓存（与 sentIndex 同样的换内容自动重建） */
+    if (!semSentCache || semSentCache.src !== index) {
+      const rows = [];
+      se.docs.forEach(function (d) {
+        d.sents.forEach(function (si) {
+          const set = {};
+          SE.cut(si.s).forEach(function (w) { set[w] = 1; });
+          if (Object.keys(set).length) rows.push({ d: d, si: si, set: set });
+        });
+      });
+      semSentCache = { src: index, rows: rows };
+    }
+    const out = [];
+    semSentCache.rows.forEach(function (r) {
+      let hit = 0, wsum = 0;
+      keys.forEach(function (w) { if (r.set[w]) { hit++; wsum += qw[w]; } });
+      if (!hit) return;
+      const cover = hit / keys.length;
+      if (cover < 0.18) return;
+      const score = Math.round((1.2 + 2.6 * wsum / keys.length + 0.25 * hit) * 100) / 100;
+      out.push({
+        s: r.si.s, i: r.si.i, pageId: r.d.pageId, title: r.d.title,
+        cover: cover, score: score, sem: true
+      });
+    });
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out.slice(0, limit || 40);
+  }
+  /* 语义候选与字面候选合并：同一句加分，新句子补进候选池（不删任何原候选） */
+  function mergeSemantic(base, sem) {
+    const map = {};
+    base.forEach(function (x) { map[x.pageId + '|' + x.s] = x; });
+    sem.forEach(function (x) {
+      const key = x.pageId + '|' + x.s;
+      const old = map[key];
+      if (old) {
+        old.score = Math.round((old.score + 0.45 * x.score) * 100) / 100;
+        old.cover = Math.max(old.cover, x.cover);
+      } else map[key] = x;
+    });
+    return Object.keys(map).map(function (k) { return map[k]; })
+      .sort(function (a, b) { return b.score - a.score; });
+  }
+
   /* ★ 本地问答主入口：类型判断 → 对比/表格 → 按页聚合成"有结构的回答" */
   function askSmart(index, q, k) {
     const want = k || 3;
@@ -561,6 +649,10 @@ W.LMAI = (function () {
        解决「主要问题」这类**整个查询被停用词表吃掉**的情况（tokens 为空 → BM25 必然 0 条），
        以及用户直接问页里某个小标题原文的情况。 */
     if (!ranked.length) ranked = literalHits(index, q, 12);
+    /* ★ 修复164：语义召回只做"补充候选 + 给已命中句加分"，放在字面/直搜之后，
+       保证精确命中的原句仍排前面；没有语义层时 semanticHits 返回空，这一行等于不存在。 */
+    const sem = semanticHits(index, q, 40);
+    if (sem.length) ranked = mergeSemantic(ranked, sem);
     /* ★ 修复113：PRF 二次打分 —— 只用「已经命中的原句」里的词加重权重，候选集一个字都不变 */
     const q2 = prfExpand(index, q, ranked);
     if (q2 !== q && ranked.length) {
@@ -617,6 +709,29 @@ W.LMAI = (function () {
       /* ★ 修复115：加载失败（断网/文件 404）允许下次再试，以前一次失败就永久放弃 */
       if (p && typeof p.then === 'function') p.then(function (ok) { if (!ok) lmTried = false; }, function () { lmTried = false; });
     } catch (e) { lmTried = false; }
+  }
+
+  /* ★ 修复164：语义层懒加载 —— 同样只在第一次打开面板时拉 data/sem.json。
+     拉不到就整层降级（关键词/相关条目/问答全部照旧），不会报错、不挡路。
+     加载成功后重绘一次面板，让关键词和相关条目立刻换成"完整词"版本；
+     用户一旦开始打字就不重绘，免得打断输入。 */
+  let semTried = false;
+  function ensureSem() {
+    if (semTried) return;
+    semTried = true;
+    try {
+      if (!W.LMSE || typeof W.LMSE.load !== 'function') return;
+      const p = W.LMSE.load('data/sem.json');
+      if (p && typeof p.then === 'function') {
+        p.then(function (ok) {
+          if (!ok) { semTried = false; return; }
+          try {
+            const inp = panel && panel.querySelector('.lm-ai-input');
+            if ((!inp || !inp.value) && typeof renderPanel === 'function') renderPanel();
+          } catch (e0) { /* noop */ }
+        }, function () { semTried = false; });
+      }
+    } catch (e) { semTried = false; }
   }
   /* ★ 修复117：把「引文里对上你问题的字」标出来 —— 只做高亮，不改一个字（可核对性↑） */
   function hiText(raw, q) {
@@ -1213,6 +1328,7 @@ W.LMAI = (function () {
     if (!panel) return;
     const body = panel.querySelector('.lm-ai-body');
     ensureLM();                 /* ★ 修复112：面板一开就懒加载小模型（非阻塞） */
+    ensureSem();                /* ★ 修复164：同一时机加载语义层（完整词 / 概念关联 / 页面主题） */
     if (!body) return;
     const badge = panel.querySelector('.lm-ai-badge');
     if (badge) badge.textContent = bridgeSeen ? '已装扩展 · 全自动' : '不用 API · 不存 Key';
