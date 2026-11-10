@@ -5,16 +5,21 @@
  *   ① 给 BM25 的候选句子重排（只改先后，不改字）
  *   ② 把问句里"站内词表没有的英文词"映射到站内最接近的词（纠错）
  *
+ * ★ 修复164：同一次训练还会产出**语义层** data/sem.json ——
+ *   无监督新词发现（完整词）+ 概念共现关联表 + 页面主题向量。
+ *   它让关键词是「大语言模型」而不是「样核」，让换了个说法的提问也能召回原文。
+ *
  * 用法：
- *   node tools/train_lm.js          # 默认 3-gram，自动裁剪到 <380KB
- *   node tools/train_lm.js 4        # 4-gram（更大更慢，一般不必）
- * 产物：data/lm.json
+ *   node tools/train_lm.js          # 默认 4-gram，自动裁剪
+ *   node tools/train_lm.js 4        # 显式指定 4-gram
+ * 产物：data/lm.json（字符 n-gram） + data/sem.json（语义层）
  */
 const fs = require('fs');
 const path = require('path');
 const DIR = path.join(__dirname, '..');
 const ai = require(path.join(DIR, 'js/ai.js'));
 const LMLM = require(path.join(DIR, 'js/lm.js'));   /* ★ 修复115：训练完立刻用运行时打分，给出可量化的困惑度 */
+const LMSE = require(path.join(DIR, 'js/sem.js'));  /* ★ 修复164：语义层（与网页重训按钮共用 build） */
 
 const MAX_BYTES = LMLM.MAX_BYTES;   /* ★ 修复145：体积上限只有一份定义（js/lm.js） */
 
@@ -22,15 +27,23 @@ const MAX_BYTES = LMLM.MAX_BYTES;   /* ★ 修复145：体积上限只有一份�
 function checkOnly() {
   const text = corpus();
   const file = path.join(DIR, 'data/lm.json');
+  const semFile = path.join(DIR, 'data/sem.json');
   if (!fs.existsSync(file)) { console.log('✗ 还没有 data/lm.json —— 先跑 node tools/train_lm.js'); return 1; }
+  if (!fs.existsSync(semFile)) { console.log('✗ 还没有 data/sem.json（语义层）—— 先跑 node tools/train_lm.js'); return 1; }
   const j = JSON.parse(fs.readFileSync(file, 'utf8'));
-  if (j.chars === text.length) { console.log('✓ 已同步（语料 ' + text.length + ' 字 · 模型 ' + j.order + '-gram）'); return 0; }
-  console.log('✗ 语料变了：模型记的是 ' + j.chars + ' 字，现在 ' + text.length + ' 字 → 建议重训 node tools/train_lm.js');
+  const s = JSON.parse(fs.readFileSync(semFile, 'utf8'));
+  if (j.chars === text.length && s.chars === text.length) {
+    console.log('✓ 已同步（语料 ' + text.length + ' 字 · ' + j.order + '-gram'
+      + ' · 语义层 ' + (s.words || []).length + ' 词）');
+    return 0;
+  }
+  console.log('✗ 语料变了：n-gram 记 ' + j.chars + ' 字 / 语义层记 ' + s.chars
+    + ' 字，现在 ' + text.length + ' 字 → 建议重训 node tools/train_lm.js');
   return 2;
 }
 
 
-function corpus() {
+function contentOf() {
   const file = path.join(DIR, 'data/content.js');
   if (!fs.existsSync(file)) throw new Error('找不到 data/content.js');
   const src = fs.readFileSync(file, 'utf8');
@@ -38,8 +51,10 @@ function corpus() {
   try { new Function('window', 'var module={};' + src)(win); } catch (e) {
     throw new Error('data/content.js 解析失败：' + e.message);
   }
-  const pages = (win.SITE_CONTENT && win.SITE_CONTENT.pages) || [];
-  return pages.map(function (p) { return ai.pageText(p); }).join('\n');
+  return (win.SITE_CONTENT && win.SITE_CONTENT.pages) || [];
+}
+function corpus() {
+  return contentOf().map(function (p) { return ai.pageText(p); }).join('\n');
 }
 
 /* 统计 / 裁剪 / 体积计算都已搬到 js/lm.js（buildModel）—— 网页管理条「🧠 重训小模型」用的是同一份，
@@ -68,6 +83,13 @@ function main() {
   console.log('困惑度：全量 ' + ppl(text).toFixed(2)
     + (hold ? ' · 留出尾段 ' + ppl(hold).toFixed(2) + '（该段也参与了训练，数字偏乐观）' : '')
     + ' · 耗时 ' + (Date.now() - t0) + ' ms');
+
+  /* ★ 修复164：语义层 —— CLI 与网页「🧠 重训小模型」调的是同一个 LMSE.build，
+     所以两边产出的 data/sem.json 逐字节一致，不会各训一套慢慢漂移。 */
+  const sr = LMSE.build(text, contentOf());
+  fs.writeFileSync(path.join(DIR, 'data/sem.json'), JSON.stringify(sr.payload), 'utf8');
+  console.log('语义层：完整词 ' + sr.words + ' 个 · 概念关联 ' + sr.relWords + ' 词 · 页面主题 '
+    + sr.topics + ' 页 · ' + (sr.bytes / 1024).toFixed(1) + ' KB → data/sem.json');
 }
 
 module.exports = { corpus: corpus, checkOnly: checkOnly, main: main };
